@@ -1,0 +1,27 @@
+Phone
+    xor Screen
+        Big
+            Height
+                1080
+            Width
+                1920
+        Small
+            Height
+                768
+            Width
+                1024
+    Camera
+        Wide
+        Telephoto
+            Parent : Phone.Screen.Big
+                Dependency : Big
+            Megapixels
+    MP3
+    Buttons
+        QWERTY
+            Parent : Phone.Screen.Small
+        Numerical
+            Parent : Phone.Screen.Small
+        Control
+
+

@@ -1,0 +1,10 @@
+telematicsSystem # example of comment
+    xor channel
+        single
+        dual
+
+    extraDisplay ?
+
+    xor size
+        small
+        large
