@@ -13,7 +13,7 @@ class Main(threading.Thread):
         self.file_manager = FileManager()
 
     def run(self):
-        filecopy = self.file_manager.open_file(filepath="cardinalities.clf")
+        filecopy = self.file_manager.open_file(filepath="complex.clf")
         print(filecopy)
         tokens = self.lexer.split(text=filecopy)
         tokens = self.parser.preprocessing(tokens)

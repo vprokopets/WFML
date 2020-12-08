@@ -8,8 +8,9 @@ class Parser():
 
     def preprocessing(self, tokens):
         tokens = self.find_all_parent_child_relations(tokens)
-        tokens = self.find_dependencies(tokens)
-        tokens = self.cardinality_decompose(tokens)
+        # TODO Update functions to new lexical rules
+        # tokens = self.find_dependencies(tokens)
+        # tokens = self.cardinality_decompose(tokens)
         return tokens
 
     def filter_by_depth(self, tokens, depth):
@@ -111,3 +112,6 @@ class Parser():
                         break
                 token['token'] = decompose
         return tokens
+
+    def constraints_decompose(self, tokens):
+        pass
