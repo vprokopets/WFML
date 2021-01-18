@@ -1,0 +1,104 @@
+{
+    "General": {
+        "NumberOfWorkers": 3,
+        "result_storage": "'./Results/'"
+    },
+    "SelectionAlgorithm": {},
+    "DixonOD": {
+        "isEnabled": "true",
+        "MinActiveNumberOfTasks": 3,
+        "MaxActiveNumberOfTasks": 10000
+    },
+    "GrubbsOD": {
+        "isEnabled": "true",
+        "MinActiveNumberOfTasks": 3,
+        "MaxActiveNumberOfTasks": 10000
+    },
+    "ChauvenetOD": {
+        "isEnabled": "true",
+        "MinActiveNumberOfTasks": 3,
+        "MaxActiveNumberOfTasks": 10000
+    },
+    "QuartilesOD": {
+        "isEnabled": "true",
+        "MinActiveNumberOfTasks": 3,
+        "MaxActiveNumberOfTasks": 10000
+    },
+    "MadOD": {
+        "isEnabled": "true",
+        "MinActiveNumberOfTasks": 3,
+        "MaxActiveNumberOfTasks": 10000
+    },
+    "DefaultRepeater": {
+        "MinTasksPerConfiguration": 10,
+        "MaxTasksPerConfiguration": 10
+    },
+    "AcceptableErrorBasedRepeater": {
+        "MaxFailedTasksPerConfiguration": 5,
+        "BaseAcceptableErrors": 5,
+        "ConfidenceLevels": 0.95,
+        "DevicesScaleAccuracies": 10,
+        "DevicesAccuracyClasses": 10,
+        "ExperimentAwareness": {
+            "isEnabled": "true",
+            "MaxAcceptableErrors": 50,
+            "RatiosMax": 10
+        },
+        "MinTasksPerConfiguration": 2,
+        "MaxTasksPerConfiguration": 10
+    },
+    "StopConditionTriggerLogic": {
+        "Expression": "'(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased'",
+        "InspectionParameters": {
+            "RepetitionPerion": 1,
+            "TimeUnit": "seconds"
+        }
+    },
+    "QuantityBasedSC": {
+        "Parameters": {
+            "MaxConfigs": 15
+        },
+        "Name": "QuantityBased",
+        "Type": "QuantityBased",
+        "threshold": null
+    },
+    "GuaranteedSC": {
+        "Name": "Guaranteed",
+        "Type": "Guaranteed",
+        "threshold": null
+    },
+    "BadConfigurationBasedSC": {
+        "Parameters": {
+            "MaxBadConfigurations": 10
+        },
+        "Name": "'BadConfigurationBased'",
+        "Type": "'BadConfigurationBased'",
+        "threshold": null
+    },
+    "ImprovementBasedSC": {
+        "Parameters": {
+            "MaxConfigsWithoutImprovement": 5
+        },
+        "Name": "'ImprovementBased'",
+        "Type": "'ImprovementBased'",
+        "threshold": null
+    },
+    "TimeBasedSC": {
+        "Parameters": {
+            "MaxRunTime": 10,
+            "TimeUnit": "minutes"
+        },
+        "Name": "'TimeBased'",
+        "Type": "'TimeBased'",
+        "threshold": null
+    },
+    "DefaultStopCondition": {
+        "Name": null,
+        "Type": null,
+        "threshold": null
+    },
+    "NewStopCondition": {
+        "threshold": 10
+    },
+    "RequiredClafer": {}
+}

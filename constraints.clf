@@ -1,4 +1,3 @@
-a
-b
-[if a == b then a else b]
-assert [a == b]
+A
+    ifB
+# abstract xor A : B -> C ++ D 1..* = CD

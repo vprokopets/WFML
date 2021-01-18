@@ -1,0 +1,244 @@
+Model: clafers*=Module;
+
+Declaration: EnumDecl | ElementDecl;
+
+EnumDecl: "enum" PosIdent "=" EnumId;
+ElementDecl: Element;
+
+Module: Declaration;
+
+Clafer: Abstract? TempModifier? GCard? PosIdent Super? Reference? Card? Init? Transition? Elements?;
+Constraint: "[" Exp "]";
+Assertion: "assert" "[" Exp "]";
+
+Goal: GoalMinDeprecated | GoalMaxDeprecated | GoalMinimize | GoalMaximize;
+GoalMinDeprecated: "<<" "min" Exp ">>";
+GoalMaxDeprecated: "<<" "max" Exp ">>";
+GoalMinimize: "<<" "minimize" Exp ">>";
+GoalMaximize: "<<" "maximize" Exp ">>";
+
+TempModifier: Initial | Final | FinalRef | FinalTarget;
+Initial: "initial";
+Final: "final";
+FinalRef: "finalref";
+FinalTarget: "finaltarget";
+
+Transition: TransitionEmpty | TransitionFilled;
+TransitionEmpty: "";
+TransitionFilled: TransArrow Exp;
+
+Abstract: AbstractEmpty | AbstractFilled;
+AbstractEmpty: "";
+AbstractFilled: "abstract";
+
+Elements: ElementsEmpty | ElementsList;
+ElementsEmpty: "";
+ElementsList: "{" Element "}";
+
+Element: Subclafer | ClaferUse | Subconstraint | Subgoal | SubAssertion;
+Subclafer: Clafer;
+ClaferUse: "`" Name Card Elements;
+Subconstraint: Constraint;
+Subgoal: Goal;
+SubAssertion: Assertion;
+
+Super: SuperEmpty | SuperSome;
+SuperEmpty: "";
+SuperSome: ":" Exp26;
+
+Reference: ReferenceEmpty | ReferenceSet | ReferenceBag;
+ReferenceEmpty: "";
+ReferenceSet: "->" Exp23;
+ReferenceBag: "->>" Exp23;
+
+Init: InitEmpty | InitSome;
+InitEmpty: "";
+InitSome: InitHow Exp;
+
+InitHow: InitConstant | InitDefault;
+InitConstant: "=";
+InitDefault: ":=";
+
+GCard: GCardEmpty | GCardXor | GCardOr | GCardMux | GCardOpt | GCardInterval;
+GCardEmpty: "";
+GCardXor: "xor";
+GCardOr: "or";
+GCardMux: "mux";
+GCardOpt: "opt";
+GCardInterval: NCard;
+
+
+Card: CardEmpty | CardLone | CardSome | CardAny | CardNum | CardInterval;
+CardEmpty: "";
+CardLone: "?";
+CardSome: "+";
+CardAny: "*";
+CardNum: PosInteger;
+CardInterval: NCard;
+
+NCard: PosInteger ".." ExInteger;
+
+ExInteger: ExIntegerAst | ExIntegerNum;
+ExIntegerAst: "*";
+ExIntegerNum: PosInteger;
+
+Name: Path;
+Path: ModId;
+
+
+// Transition expressions are right associative and has lowest precedence
+Exp: TransitionExp;
+TransitionExp: Exp1 TransArrow Exp;
+
+Exp1: EDeclAllDisj | EDeclAll | EDeclQuantDisj| EDeclQuant | EImpliesElse | LetExp;
+EDeclAllDisj: "all" "disj" Decl "|" Exp1;
+EDeclAll: "all" Decl "|" Exp1;
+EDeclQuantDisj: Quant "disj" Decl "|" Exp1;
+EDeclQuant: Quant Decl "|" Exp1;
+EImpliesElse: "if" Exp1 "then" Exp1 "else" Exp1;
+LetExp: "let" VarBinding "in" Exp1;
+
+Exp2: TmpPatNever | TmpPatSometime | TmpPatLessOrOnce | TmpPatAlways | TmpPatPrecede | TmpPatFollow | TmpInitially | TmpFinally;
+TmpPatNever: "never" Exp3 PatternScope;
+TmpPatSometime: "sometime" Exp3 PatternScope;
+TmpPatLessOrOnce: "lonce" Exp3 PatternScope;
+TmpPatAlways: "always" Exp3 PatternScope;
+TmpPatPrecede: Exp3 "must" "precede" Exp3 PatternScope;
+TmpPatFollow: Exp3 "must" "follow" Exp3 PatternScope;
+TmpInitially: "initially" Exp3;
+TmpFinally: "finally" Exp3;
+
+Exp3: EIff;
+EIff: Exp3 "<=>" Exp4;
+
+Exp4: EImplies;
+EImplies: Exp4 "=>" Exp5;
+
+Exp5: EOr;
+EOr: Exp5 "||" Exp6;
+
+Exp6: EXor;
+EXor: Exp6 "xor" Exp7;
+
+Exp7: EAnd;
+EAnd: Exp7 "&&" Exp8;
+
+Exp8: LtlU | TmpUntil;
+LtlU: Exp8 "U" Exp9;
+TmpUntil: Exp8 "until" Exp9;
+
+Exp9: LtlW | TmpWUntil;
+LtlW: Exp9 "W" Exp10;
+TmpWUntil: Exp9 "weakuntil" Exp10;
+
+Exp10: LtlF | TmpEventually | LtlG | TmpGlobally | LtlX | TmpNext;
+LtlF: "F" Exp10;
+TmpEventually: "eventually" Exp10;
+LtlG: "G" Exp10;
+TmpGlobally: "globally" Exp10;
+LtlX: "X" Exp10;
+TmpNext: "next" Exp10;
+
+Exp11: ENeg;
+ENeg: "!" Exp11;
+
+Exp15: ELt| EGt | EEq | ELte | EGte | ENeq | EIn | ENin;
+ELt: Exp15 "<" Exp16;
+EGt: Exp15 ">" Exp16;
+EEq: Exp15 "=" Exp16;
+ELte: Exp15 "<=" Exp16;
+EGte: Exp15 ">=" Exp16;
+ENeq: Exp15 "!=" Exp16;
+EIn: Exp15 "in" Exp16;
+ENin: Exp15 "not" "in" Exp16;
+
+Exp16: EQuantExp;
+EQuantExp: Quant Exp20;
+
+Exp17: EAdd | ESub;
+EAdd: Exp17 "+" Exp18;
+ESub: Exp17 "-" Exp18;
+
+Exp18: EMul | EDiv | ERem;
+EMul: Exp18 "*" Exp19;
+EDiv: Exp18 "/" Exp19;
+ERem: Exp18 "%" Exp19;
+
+Exp19: EGMax | EGMin;
+EGMax: "max" Exp20;
+EGMin: "min" Exp20;
+
+Exp20: ESum | EProd | ECard | EMinExp;
+ESum: "sum" Exp21;
+EProd: "product" Exp21;
+ECard: "#" Exp21;
+EMinExp: "-" Exp21;
+
+Exp21: EDomain;
+EDomain: Exp21 "<:" Exp22;
+
+Exp22: ERange;
+ERange: Exp22 ":>" Exp23;
+
+Exp23: EUnion | EUnionCom;
+EUnion: Exp23 "++" Exp24;
+EUnionCom: Exp23 ","  Exp24;
+
+Exp24: EDifference;
+EDifference: Exp24 "--" Exp25;
+
+Exp25: EIntersection;
+EIntersection: Exp25 "**"  Exp26;
+
+Exp26: EIntersectionDeprecated | EJoin;
+EIntersectionDeprecated: Exp26 "&" Exp27;
+EJoin: Exp26 "."  Exp27;
+
+Exp27: ClaferId | EInt | EDouble | EReal | EStr;
+ClaferId: Name;
+EInt: PosInteger;
+EDouble: PosDouble;
+EReal: PosReal;
+EStr: PosString;
+
+
+TransGuard: Exp1;
+
+TransArrow: SyncTransArrow | GuardedSyncTransArrow | NextTransArrow | GuardedNextTransArrow;
+SyncTransArrow: "-->>";
+GuardedSyncTransArrow: "-[" TransGuard "]->>";
+NextTransArrow: "-->";
+GuardedNextTransArrow: "-[" TransGuard "]->";
+
+PatternScope: PatScopeBefore | PatScopeAfter | PatScopeBetweenAnd | PatScopeAfterUntil | PatScopeEmpty;
+PatScopeBefore: "before" Exp11;
+PatScopeAfter: "after" Exp11;
+PatScopeBetweenAnd: "between" Exp11 "and" Exp11;
+PatScopeAfterUntil: "after" Exp11 "until" Exp11;
+PatScopeEmpty: "";
+
+Decl: LocId ":" Exp21;
+
+VarBinding: LocId "=" Name;
+
+Quant: QuantNo | QuantNot | QuantLone | QuantOne | QuantSome;
+QuantNo: "no";
+QuantNot: "not";
+QuantLone: "lone";
+QuantOne: "one";
+QuantSome: "some";
+
+EnumId: EnumIdIdent;
+EnumIdIdent: PosIdent;
+
+ModId: ModIdIdent;
+ModIdIdent: PosIdent;
+
+LocId: LocIdIdent;
+LocIdIdent: PosIdent;
+
+PosInteger: /[^, ]*/;
+PosDouble: /[^, ]*/;
+PosReal: /[^, ]*/;
+PosString: /[^, ]*/;
+PosIdent: /.*/;

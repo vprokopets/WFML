@@ -1,0 +1,39 @@
+
+abstract Feature
+    cost -> integer
+    mass -> integer
+
+abstract ComfortFeature : Feature
+    comfort -> integer
+
+abstract FuelFeature : ComfortFeature
+    fuel -> integer
+
+abstract Car
+    ABS : ComfortFeature
+        [cost2]
+        [mass1]
+        [comfort1]
+    xor ifTransmission
+        Automatic : FuelFeature
+            [fuel2]
+            [mass1]
+            [comfort2]
+            [cost4]
+        Manual : FuelFeature
+            [fuel0]
+            [mass1]
+            [comfort1]
+            [cost3]
+
+    total_cost -> integersumFeaturecost
+    total_comfort -> integersumComfortFeaturecost
+    total_fuel -> integersumFuelFeaturecost
+    total_mass -> integersumFuelFeaturemass
+
+optimalCar : Car
+
+<< min optimalCartotal_cost >>
+<< min optimalCartotal_fuel >>
+<< max optimalCartotal_comfort >>
+<< min optimalCartotal_mass >>
