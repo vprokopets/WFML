@@ -1,31 +1,31 @@
 {
     "General": {
         "NumberOfWorkers": 3,
-        "result_storage": "'./Results/'"
+        "result_storage": "./Results/"
     },
-    "SelectionAlgorithm": {},
+    "SelectionAlgorithm": "MersenneTwister",
     "DixonOD": {
-        "isEnabled": "true",
+        "isEnabled": true,
         "MinActiveNumberOfTasks": 3,
         "MaxActiveNumberOfTasks": 10000
     },
     "GrubbsOD": {
-        "isEnabled": "true",
+        "isEnabled": true,
         "MinActiveNumberOfTasks": 3,
         "MaxActiveNumberOfTasks": 10000
     },
     "ChauvenetOD": {
-        "isEnabled": "true",
+        "isEnabled": true,
         "MinActiveNumberOfTasks": 3,
         "MaxActiveNumberOfTasks": 10000
     },
     "QuartilesOD": {
-        "isEnabled": "true",
+        "isEnabled": true,
         "MinActiveNumberOfTasks": 3,
         "MaxActiveNumberOfTasks": 10000
     },
     "MadOD": {
-        "isEnabled": "true",
+        "isEnabled": true,
         "MinActiveNumberOfTasks": 3,
         "MaxActiveNumberOfTasks": 10000
     },
@@ -40,7 +40,7 @@
         "DevicesScaleAccuracies": 10,
         "DevicesAccuracyClasses": 10,
         "ExperimentAwareness": {
-            "isEnabled": "true",
+            "isEnabled": true,
             "MaxAcceptableErrors": 50,
             "RatiosMax": 10
         },
@@ -48,7 +48,7 @@
         "MaxTasksPerConfiguration": 10
     },
     "StopConditionTriggerLogic": {
-        "Expression": "'(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased'",
+        "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased",
         "InspectionParameters": {
             "RepetitionPerion": 1,
             "TimeUnit": "seconds"
@@ -71,16 +71,16 @@
         "Parameters": {
             "MaxBadConfigurations": 10
         },
-        "Name": "'BadConfigurationBased'",
-        "Type": "'BadConfigurationBased'",
+        "Name": "BadConfigurationBased",
+        "Type": "BadConfigurationBased",
         "threshold": null
     },
     "ImprovementBasedSC": {
         "Parameters": {
             "MaxConfigsWithoutImprovement": 5
         },
-        "Name": "'ImprovementBased'",
-        "Type": "'ImprovementBased'",
+        "Name": "ImprovementBased",
+        "Type": "ImprovementBased",
         "threshold": null
     },
     "TimeBasedSC": {
@@ -88,8 +88,8 @@
             "MaxRunTime": 10,
             "TimeUnit": "minutes"
         },
-        "Name": "'TimeBased'",
-        "Type": "'TimeBased'",
+        "Name": "TimeBased",
+        "Type": "TimeBased",
         "threshold": null
     },
     "DefaultStopCondition": {

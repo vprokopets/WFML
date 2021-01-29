@@ -2,12 +2,12 @@ Model: elements*=Element;
 
 Element: Clafer | Goal | Constraint | Assertion;
 
-Constraint: "[" name=Expression "]";
-Assertion: "assert" "[" name=Expression "]";
+Constraint: "[" name=prec23 "]";
+Assertion: "assert" "[" name=prec23 "]";
 Goal: 
     "<<"
     gtype=Goaltype
-    name=Expression 
+    name=prec23 
     ">>"
 ;
 
@@ -29,7 +29,7 @@ Gcard: INT+[/\..|,/] | "xor " | "or " | "mux " | "opt " | Cardinterval;
 Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
 Super: ":" prec0;
 Reference: "->" prec3 | "->>" prec3;
-Init: "=" Expression | ":=" Expression;
+Init: "=" prec23 | ":=" prec23;
 Nested: 
     "{"
     /\s*/
@@ -38,18 +38,20 @@ Nested:
 ;
 Cardinterval: INT ".." (INT | "*");
 
-Expression: expressions+=prec20[eolterm];
+prec23:   (op='if')* op=prec22 ('then' op=prec22 'else' op=prec22)*; 
+prec22:   op=prec21  (op=op22   op=prec21)*;
+prec21:   op=prec20  (op=op21   op=prec20)*;
 prec20:   op=prec19  (op=op20   op=prec19)*;
 prec19:   op=prec18  (op=op19   op=prec18)*;
 prec18:   op=prec17  (op=op18   op=prec17)*;
 prec17:   op=prec16  (op=op17   op=prec16)*;
 prec16:   op=prec15  (op=op16   op=prec15)*;
-prec15:   op=prec14  (op=op15   op=prec14)*;
-prec14:   op=prec13  (op=op14   op=prec13)*;
-prec13:   (op=op13)*  op=prec12;
+prec15:   (op=op15)*  op=prec14;
+prec14:   (op=op14)*  op=prec13;
+prec13:   op=prec12  (op=op13   op=prec12)*;
 prec12:   (op=op12)*  op=prec11;
 prec11:   op=prec10  (op=op11   op=prec10)*;
-prec10:   (op=op10)*  op=prec9;
+prec10:   op=prec9  (op=op10   op=prec9)*;
 prec9:   op=prec8  (op=op9   op=prec8)*;
 prec8:   op=prec7  (op=op8   op=prec7)*;
 prec7:   (op=op7)*  op=prec6;
@@ -60,20 +62,22 @@ prec3:   op=prec2  (op=op3   op=prec2)*;
 prec2:   op=prec1  (op=op2   op=prec1)*;
 prec1:   op=prec0  (op=op1   op=prec0)*;
 prec0:   op=term   (op=op0   op=term)*;
-term:    op=NUMBER | op = ID | op = Quote | ('(' op=prec20 ')');
+term:    op=NUMBER | op = BOOL | op=ComplexName | op = ID | op = Quote | op = List | ('(' op=prec23 ')');
 
 
-op20: '<=>'                                                     ;
-op19: '=>'                                                      ;
-op18: '||'                                                      ;
-op17: 'xor'                                                     ;
-op16: '&&'                                                      ;
-op15: 'U' | 'until'                                             ;
-op14: 'W' | 'weakuntil'                                         ;
-op13: 'F' | 'eventually' | 'G' | 'globally' | 'X' | 'next'      ;
-op12: '!'                                                       ;
-op11:  '<' | '>' | '==' | '<=' | '>=' | '!=' | 'in' | 'not in'  ;
-op10:  Quant                                                    ;
+op22: '<=>'                                                     ;
+op21: '=>'                                                      ;
+op20: '||'                                                      ;
+op19: 'xor'                                                     ;
+op18: '&&'                                                      ;
+op17: 'U' | 'until'                                             ;
+op16: 'W' | 'weakuntil'                                         ;
+op15: 'F' | 'eventually' | 'G' | 'globally' | 'X' | 'next'      ;
+op14: '!'                                                       ;
+op13:  '<' | '>' | '==' | '<=' | '>=' | '!=' | 'in' | 'not in'  ;
+op12:  Quant                                                    ;
+op11: 'requires' | 'excludes'                                   ;
+op10: '='                                                       ;
 op9:  '+' | '-'                                                 ;
 op8:  '*' | '/' | '%'                                           ;
 op7:  'min' | 'max'                                             ;
@@ -82,10 +86,12 @@ op5:  '<:'                                                      ;
 op4:  ':>'                                                      ;
 op3:  ',' | '++'                                                ;
 op2:  '--'                                                      ;
-op1:  '**' | 'requires' | 'excludes'                            ;
-op0:  '.' | '&' | '='                                           ;
+op1:  '**'                                                      ;
+op0:  '..' | '&'                                                 ;
 
-Quote: /'.+'/;
+Quote: /'.+'/ | /".+"/;
+List: /\{.+\}/;
+ComplexName: /(\w+\.)+\w+/;
 
 Quant: QuantNo | QuantNot | QuantLone | QuantOne | QuantSome;
 QuantNo: "no";

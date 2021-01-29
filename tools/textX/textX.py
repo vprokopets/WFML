@@ -1,12 +1,16 @@
 import json
 
 from os.path import join, dirname
-from textx import metamodel_from_str
+from textx import metamodel_from_file, get_location
 from textx.export import metamodel_export, model_export
 
 # Global variable namespace
 global_namespace = {}
-
+keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
+            'if', 'in', 'lone', 'max', 'maximize', 'min',
+            'minimize', 'mux', 'no', 'not', 'one', 'opt',
+            'or', 'product', 'some', 'sum', 'then', 'xor']
+exception_flag = False
 
 class Expression(object):
     def __init__(self, **kwargs):
@@ -33,53 +37,182 @@ class ExpressionElement(object):
 
         super(ExpressionElement, self).__init__()
 
+class prec23(ExpressionElement):
+    @property
+    def value(self):
+        global exception_flag
+        self.exception_flag = False
+
+        for operator, statement, true_exp, else_exp in zip(self.op[0::4], self.op[1::4], self.op[2::4], self.op[3::4]):
+            if operator == 'if':
+                print("Level 23 IF THEN ELSE statement.")
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = statement.value
+                if self.exception_flag is True:
+                    exception_flag = False
+                if ret:
+                    ret = true_exp.value
+                elif not ret:
+                    ret = else_exp.value
+                else:
+                    if self.exception_flag is True:
+                        ol = self._tx_position_end - self._tx_position
+                        msg = ''.join(('Expression operation IF returned not boolean',
+                                       ' was not satisfied.\n',
+                                       f'Error position: Line {get_location(self)["line"]},',
+                                       f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                       f' Filename {get_location(self)["filename"]}\n'))
+                        raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+class prec22(ExpressionElement):
+    @property
+    def value(self):
+        global exception_flag
+        self.exception_flag = False
+
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            if operation == '&&':
+                print("Level 22 boolean IFF operation")
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = self.op[0].value
+                ret = (ret % 2 == 0) == (ret % operand.value == 0)
+                if not ret and self.exception_flag is True:
+                    ol = self._tx_position_end - self._tx_position
+                    msg = ''.join((f'Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
+                                   ' was not satisfied.\n',
+                                   f'Error position: Line {get_location(self)["line"]},',
+                                   f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                   f' Filename {get_location(self)["filename"]}\n'))
+                    raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+class prec21(ExpressionElement):
+    @property
+    def value(self):
+        global exception_flag
+        self.exception_flag = False
+
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            if operation == '=>':
+                print("Level 21 boolean IMPLIES operation")
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = self.op[0].value
+                ret = not(ret) or operand.value
+                if not ret and self.exception_flag is True:
+                    ol = self._tx_position_end - self._tx_position
+                    msg = ''.join((f'Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
+                                   ' was not satisfied.\n',
+                                   f'Error position: Line {get_location(self)["line"]},',
+                                   f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                   f' Filename {get_location(self)["filename"]}\n'))
+                    raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
 
 class prec20(ExpressionElement):
     @property
     def value(self):
-        ret = self.op[0].value
+        global exception_flag
+        self.exception_flag = False
+
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '<=>':
-                pass
+            if operation == '||':
+                print("Level 20 boolean OR operation")
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = self.op[0].value
+                ret = ret or operand.value
+                if not ret and self.exception_flag is True:
+                    ol = self._tx_position_end - self._tx_position
+                    msg = ''.join((f'Expression operation OR ({self.op[0].value} {operation} {operand.value})',
+                                   ' was not satisfied.\n',
+                                   f'Error position: Line {get_location(self)["line"]},',
+                                   f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                   f' Filename {get_location(self)["filename"]}\n'))
+                    raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
         return ret
 
 class prec19(ExpressionElement):
     @property
     def value(self):
-        ret = self.op[0].value
+        global exception_flag
+        self.exception_flag = False
+
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '=>':
-                pass
+            if operation == 'xor':
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                print("Level 19 boolean XOR operation")
+                ret = self.op[0].value
+                ret = bool(ret) ^ bool(operand.value)
+
+                if not ret and self.exception_flag is True:
+                    ol = self._tx_position_end - self._tx_position
+                    msg = ''.join((f'Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
+                                   ' was not satisfied.\n',
+                                   f'Error position: Line {get_location(self)["line"]},',
+                                   f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                   f' Filename {get_location(self)["filename"]}\n'))
+                    raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
         return ret
 
 class prec18(ExpressionElement):
     @property
     def value(self):
-        ret = self.op[0].value
+        global exception_flag
+        self.exception_flag = False
+
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '||':
-                pass
+            if operation == '&&':
+                print("Level 18 boolean AND operation")
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = self.op[0].value
+                ret = ret and operand.value
+                if not ret and self.exception_flag is True:
+                    ol = self._tx_position_end - self._tx_position
+                    msg = ''.join((f'Expression operation AND ({self.op[0].value} {operation} {operand.value})',
+                                   ' was not satisfied.\n',
+                                   f'Error position: Line {get_location(self)["line"]},',
+                                   f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                                   f' Filename {get_location(self)["filename"]}\n'))
+                    raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
         return ret
 
 class prec17(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == 'xor':
-                pass
-        return ret
-
-class prec16(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '&&':
-                pass
-        return ret
-
-class prec15(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
@@ -88,7 +221,7 @@ class prec15(ExpressionElement):
                 pass
         return ret
 
-class prec14(ExpressionElement):
+class prec16(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
@@ -97,7 +230,7 @@ class prec14(ExpressionElement):
                 pass
         return ret
 
-class prec13(ExpressionElement):
+class prec15(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
@@ -109,38 +242,73 @@ class prec13(ExpressionElement):
             pass
         return ret
 
-class prec12(ExpressionElement):
+class prec14(ExpressionElement):
     @property
     def value(self):
-        ret = self.op[0].value
-        if ret == '!':
-            pass
+        global exception_flag
+        self.exception_flag = False
+        for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            if operation == '!':
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                print("Level 14 boolean NO operation")
+                ret = not(operand.value)
+                if not ret and self.exception_flag is True:
+                    raise Exception(f'Expression operation {operation} {operand.value} was not satisfied.')
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
+
         return ret
 
-class prec11(ExpressionElement):
+class prec13(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
+        global exception_flag
+        self.exception_flag = False
+
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
+
+            if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in']:
+                if exception_flag is False:
+                    exception_flag = True
+                    self.exception_flag = True
+                ret = self.op[0].value
             if operation == '<':
-                pass
+                ret = ret < operand.value
             elif operation == '>':
-                pass
+                ret = ret > operand.value
             elif operation == '==':
-                pass
+                ret = ret == operand.value
             elif operation == '>=':
-                pass
+                ret = ret <= operand.value
             elif operation == '<=':
-                pass
+                ret = ret >= operand.value
             elif operation == '!=':
-                pass
+                ret = ret != operand.value
             elif operation == 'in':
-                pass
+                ret = ret in operand.value
             elif operation == 'not in':
-                pass
+                ret = ret not in operand.value
+        if ret is False and self.exception_flag is True:
+            ol = self._tx_position_end - self._tx_position
+            msg = ''.join((f'Expression operation ({self.op[0].value} {operation} {operand.value})',
+                           ' was not satisfied.\n',
+                           f'Error position: Line {get_location(self)["line"]},',
+                           f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                           f' Filename {get_location(self)["filename"]}\n'))
+            raise Exception(msg)
+        if self.exception_flag is True:
+            exception_flag = False
+        if len(self.op) == 1:
+            ret = self.op[0].value
         return ret
 
-class prec10(ExpressionElement):
+
+class prec12(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
@@ -156,105 +324,11 @@ class prec10(ExpressionElement):
             pass
         return ret
 
-class prec9(ExpressionElement):
+class prec11(ExpressionElement):
     @property
     def value(self):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            right_value = operand.value
-            if operation == '+':
-                print(f"Level 9 addition operation: {ret} {operation} {right_value}")
-                ret += right_value
-            elif operation == '-':
-                print(f"Level 9 subtraction operation: {ret} {operation} {right_value}")
-                ret -= right_value
-        return ret
-
-class prec8(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            right_value = operand.value
-            if operation == '*':
-                print(f"Level 8 multiplication operation: {ret} {operation} {right_value}")
-                ret *= right_value
-            elif operation == '/':
-                print(f"Level 8 division operation: {ret} {operation} {right_value}")
-                ret /= right_value
-            elif operation == '%':
-                print(f"Level 9 remainder operation: {ret} {operation} {right_value}")
-                ret %= right_value
-        return ret
-
-class prec7(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        if ret == 'min':
-            pass
-        elif ret == 'max':
-            pass
-        return ret
-
-class prec6(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        if ret == 'sum':
-            pass
-        elif ret == 'product':
-            pass
-        elif ret == '#':
-            pass
-        return ret
-
-class prec5(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '<:':
-                pass
-        return ret
-
-class prec4(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == ':>':
-                pass
-        return ret
-
-class prec3(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == ',':
-                pass
-            elif operation == '++':
-                pass
-        return ret
-
-class prec2(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '--':
-                pass
-        return ret
-
-class prec1(ExpressionElement):
-    @property
-    def value(self):
-        ret = self.op[0].value
-        global model
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '**':
-                pass
             if operation == 'requires':
                 flag_left = False
                 flag_right = False
@@ -278,6 +352,199 @@ class prec1(ExpressionElement):
                 if flag_left is True and flag_right is True:
                     raise Exception(f'Clafers {ret} and {operand.value} could not exist at the same time.')
         return ret
+class prec10(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == '=':
+                check = self.op[0].update
+                print(f"Level 0 assignment operation: {check} {operation} {right_value}")
+                import ast
+                import re
+                if re.match(r'(\w+\.)+\w+', check):
+                    path = check.split('.')
+                    res = global_namespace
+                    for index in range(0, len(path)):
+                        if index < len(path) - 1:
+                            res = res.get(path[index])
+                        else:
+                            check = path[index]
+                    try:
+                        res[check] = right_value if type(right_value) != str else ast.literal_eval(right_value)
+                    except ValueError:
+                        res[check] = right_value
+                else:
+                    try:
+                        global_namespace[check] = right_value if type(right_value) != str else ast.literal_eval(right_value)
+                    except ValueError:
+                        global_namespace[check] = right_value
+            else:
+                raise Exception(f'Parameter {ret} is not defined.')
+        return ret
+class prec9(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == '+':
+                print(f"Level 9 addition operation: {ret} {operation} {right_value}")
+                ret += right_value
+            elif operation == '-':
+                print(f"Level 9 subtraction operation: {ret} {operation} {right_value}")
+                ret -= right_value
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec8(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == '*':
+                print(f"Level 8 multiplication operation: {ret} {operation} {right_value}")
+                ret *= right_value
+            elif operation == '/':
+                print(f"Level 8 division operation: {ret} {operation} {right_value}")
+                ret /= right_value
+            elif operation == '%':
+                print(f"Level 9 remainder operation: {ret} {operation} {right_value}")
+                ret %= right_value
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec7(ExpressionElement):
+    @property
+    def value(self):
+        for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            if operation == 'min':
+                print(f"Level 8 min operation: {operation}")
+                ret = min(operand.value)
+            elif operation == 'max':
+                print(f"Level 8 max operation: {operation}")
+                ret = max(operand.value)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec6(ExpressionElement):
+    @property
+    def value(self):
+        for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            if operation == 'sum':
+                print(f"Level 7 sum operation: {operation}")
+                ret = sum(operand.value)
+            elif operation == 'product':
+                print(f"Level 7 product operation: {operation}")
+                from functools import reduce
+                ret = reduce((lambda x, y: x * y), operand.value)
+            elif operation == '#':
+                print(f"Level 7 count operation: {operation}")
+                ret = len(operand.value)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec5(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            if operation == '<:':
+                pass
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec4(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            if operation == ':>':
+                pass
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec3(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == ',' or operation == '++':
+                if type(ret) == list and type(right_value) == list:
+                    ret = list(set(ret) | set(right_value))
+                elif type(ret) != list:
+                    raise Exception(f'Parameter {ret} is not list.')
+                elif type(right_value) != list:
+                    raise Exception(f'Parameter {right_value} is not list.')
+
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec2(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == '--' and type(ret) == list and type(right_value) == list:
+                ret = list(set(ret) - set(right_value))
+            elif operation == '--' and type(ret) != list:
+                raise Exception(f'Parameter {ret} is not list.')
+            elif operation == '--' and type(right_value) != list:
+                raise Exception(f'Parameter {right_value} is not list.')
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
+
+class prec1(ExpressionElement):
+    @property
+    def value(self):
+        ret = self.op[0].value
+        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+            right_value = operand.value
+            if operation == '**' and type(ret) == list and type(right_value) == list:
+                ret = list(set(ret) & set(right_value))
+            elif operation == '**' and type(ret) != list:
+                raise Exception(f'Parameter {ret} is not list.')
+            elif operation == '**' and type(right_value) != list:
+                raise Exception(f'Parameter {right_value} is not list.')
+
+        return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
 
 class prec0(ExpressionElement):
     @property
@@ -285,16 +552,24 @@ class prec0(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation == '=' and ret in global_namespace:
-                print(f"Level 0 assignment operation: {ret} {operation} {right_value}")
-                global_namespace[ret] = right_value
-            else:
-                raise Exception(f'Parameter {ret} is not defined.')
-            if operation == '.':
-                pass
-            if operation == '&':
-                pass
+
+            if operation == '..' and type(ret) == list and type(right_value) == list:
+                ret = ret + right_value
+            elif operation == '..' and type(ret) != list:
+                raise Exception(f'Parameter {ret} is not list.')
+            elif operation == '..' and type(right_value) != list:
+                raise Exception(f'Parameter {right_value} is not list.')
+            if operation == '&' and type(ret) == list and type(right_value) == list:
+                ret = list(set(ret) & set(right_value))
+            elif operation == '&' and type(ret) != list:
+                raise Exception(f'Parameter {ret} is not list.')
+            elif operation == '&' and type(right_value) != list:
+                raise Exception(f'Parameter {right_value} is not list.')
         return ret
+
+    @property
+    def update(self):
+        return self.op[0].update
 
 
 class term(ExpressionElement):
@@ -310,12 +585,51 @@ class term(ExpressionElement):
         elif op in global_namespace and global_namespace[op] is not None:
             print("Namespace")
             return global_namespace[op]
-        elif type(op) is str:
+        elif type(op) is bool:
+            return op
+        elif type(op) is str and op not in keywords:
             print(f"String object: {op}")
+            import re
+            if re.match(r'\{.+\}', op):
+                op = op.replace('{', '').replace('}', '').replace(' ', '')
+                print("List object")
+                op = op.split(',')
+                for index, element in enumerate(op):
+                    try:
+                        op[index] = int(element)
+                    except ValueError:
+                        try:
+                            op[index] = float(element)
+                        except ValueError:
+                            if element in global_namespace and global_namespace[element] is not None:
+                                op[index] = global_namespace[element]
+                print(op)
+            elif re.match(r'(\w+\.)+\w+', op):
+                path = op.split('.')
+                res = global_namespace
+                for section in path:
+                    res = res[section]
+                op = res
             return op
         else:
             raise Exception('Unknown variable "{}" at position {}'
                             .format(op, self._tx_position))
+
+    @property
+    def update(self):
+        import re
+        op = self.op
+        if op in global_namespace:
+            print("Namespace update")
+            return op
+        elif re.match(r'(\w+\.)+\w+', op):
+            path = op.split('.')
+            res = global_namespace
+            for section in path:
+                res = res[section]
+                return op
+        else:
+            raise Exception(f'Namespace does not contain variable {op}')
 
 def cname(o):
     return o.__class__.__name__
@@ -415,29 +729,32 @@ def super_clafer(model, clafer):
             print(f'For clafer {clafer.name} super clafer namespace was merged')
             print(f'Namespace: {clafer.namespace}')
 
+def group_cardinality(model, clafer):
+    pass
+
 def to_json(model):
     result = {}
     for element in model.elements:
         if cname(element) == "Clafer" and element.abstract is None:
-            result[element.name] = element.namespace
+            if element.reference is not None:
+                result[element.name] = global_namespace[element.name]
+            else:
+                result[element.name] = element.namespace
     return result
 
 def main(debug=False):
-    filecopy = open('clafer.tx', "r")
-    grammar = filecopy.read()
     this_folder = dirname(__file__)
-    filecopy = open('test.cf', "r")
-    model_str = filecopy.read()
-    mm = metamodel_from_str(grammar, classes=[Expression, prec0, prec1, prec2, prec3,
-                                              prec4, prec5, prec6, prec7, prec8,
-                                              prec9, prec10, prec11, prec12, prec13,
-                                              prec14, prec15, prec16, prec17,
-                                              prec18, prec19, prec20, term])
+    mm = metamodel_from_file('clafer.tx', classes=[prec0, prec1, prec2, prec3,
+                                                   prec4, prec5, prec6, prec7, prec8,
+                                                   prec9, prec10, prec11, prec12, prec13,
+                                                   prec14, prec15, prec16, prec17,
+                                                   prec18, prec19, prec20, prec21, prec22, prec23, term],
+                             autokwd=True)
     metamodel_export(mm, join(this_folder, 'meta.dot'))
 
     # Meta-model knows how to parse and instantiate models.
-    global model, global_namespace
-    model = mm.model_from_str(model_str)
+    global model, global_namespace, keywords, exception_flag
+    model = mm.model_from_file('test.cf')
     model_export(model, join(this_folder, 'example.dot'))
     for element in model.elements:
         if cname(element) == "Clafer":
@@ -449,10 +766,15 @@ def main(debug=False):
             super_clafer(model, element)
     for element in model.elements:
         if cname(element) == "Constraint":
+            exception_flag = False
             constraint(element)
+    global_namespace_copy = global_namespace
+
     for element in model.elements:
         if cname(element) == "Clafer":
+            exception_flag = False
             root_clafer_constraints(element)
+    global_namespace = global_namespace_copy
 
     print(json.dumps(to_json(model), sort_keys=True, indent=4))
     with open('test.json', 'w', encoding='utf-8') as f:
