@@ -1,0 +1,85 @@
+{
+    "General": {
+        "NumberOfWorkers": 3,
+        "result_storage": "3"
+    },
+    "SelectionAlgorithm": {
+        "type": "Sobol"
+    },
+    "OD": {
+        "Chauvenet": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 3
+        }
+    },
+    "Repeater": {
+        "AcceptableErrorBasedRepeater": {
+            "MaxFailedTasksPerConfiguration": 3,
+            "BaseAcceptableErrors": 3,
+            "ConfidenceLevels": 3,
+            "DevicesScaleAccuracies": 3,
+            "DevicesAccuracyClasses": 3,
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": 3,
+                "RatiosMax": 3
+            },
+            "MinTasksPerConfiguration": 3,
+            "MaxTasksPerConfiguration": 3
+        }
+    },
+    "Predictor": {
+        "WindowSize": 3.0,
+        "Models": {
+            "TPE": {
+                "Parameters": {
+                    "TopNPercent": 3,
+                    "RandomFraction": 3,
+                    "BandwidthFactor": 3,
+                    "MinBandwirth": 3.0,
+                    "SamplingSize": 3
+                }
+            }
+        }
+    },
+    "StopConditionTriggerLogic": {
+        "Expression": "3",
+        "InspectionParameters": {
+            "RepetitionPerion": 3,
+            "TimeUnit": "3"
+        }
+    },
+    "QuantityBasedSC": {
+        "Parameters": {
+            "MaxConfigs": 3
+        },
+        "Name": "3",
+        "Type": "QuantityBased"
+    },
+    "GuaranteedSC": {
+        "Name": "3",
+        "Type": "Guaranted"
+    },
+    "BadConfigurationBasedSC": {
+        "Parameters": {
+            "MaxBadConfigurations": 3
+        },
+        "Name": "3",
+        "Type": "BadConfigurationBased"
+    },
+    "ImprovementBasedSC": {
+        "Parameters": {
+            "MaxConfigsWithoutImprovement": 3
+        },
+        "Name": "3",
+        "Type": "ImprovementBased"
+    },
+    "TimeBasedSC": {
+        "Parameters": {
+            "MaxRunTime": 3,
+            "TimeUnit": "3"
+        },
+        "Name": "3",
+        "Type": "TimeBased"
+    }
+}

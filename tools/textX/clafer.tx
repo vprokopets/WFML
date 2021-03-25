@@ -25,7 +25,7 @@ Clafer:
 
 Name: ID;
 Abstract: "abstract";
-Gcard: INT+[/\..|,/] | "xor " | "or " | "mux " | "opt " | Cardinterval;
+Gcard: INT+[/\..|,/] | "xor" | "or" | "mux" | "opt" | Cardinterval;
 Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
 Super: ":" prec0;
 Reference: "->" prec3 | "->>" prec3;

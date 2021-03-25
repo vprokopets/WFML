@@ -6,6 +6,7 @@ from textx.export import metamodel_export, model_export
 
 # Global variable namespace
 global_namespace = {}
+current_namespace = {}
 keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
             'if', 'in', 'lone', 'max', 'maximize', 'min',
             'minimize', 'mux', 'no', 'not', 'one', 'opt',
@@ -365,24 +366,74 @@ class prec10(ExpressionElement):
                 import re
                 if re.match(r'(\w+\.)+\w+', check):
                     path = check.split('.')
-                    res = global_namespace
-                    for index in range(0, len(path)):
-                        if index < len(path) - 1:
-                            res = res.get(path[index])
-                        else:
-                            check = path[index]
                     try:
-                        res[check] = right_value if type(right_value) != str else ast.literal_eval(right_value)
+                        assign = right_value if type(right_value) != str else ast.literal_eval(right_value)
                     except ValueError:
-                        res[check] = right_value
+                        assign = right_value
+                    try:
+                        global current_namespace
+                        current_namespace = self.update_nested_dict(current_namespace, path[-2], path[-1], assign)
+                    except Exception:
+                        global global_namespace
+                        global_namespace = self.update_nested_dict(global_namespace, path[-2], path[-1], assign)
                 else:
                     try:
-                        global_namespace[check] = right_value if type(right_value) != str else ast.literal_eval(right_value)
+                        current_namespace[check] = right_value if type(right_value) != str else ast.literal_eval(right_value)
                     except ValueError:
-                        global_namespace[check] = right_value
+                        current_namespace[check] = right_value
             else:
                 raise Exception(f'Parameter {ret} is not defined.')
         return ret
+
+    def find_in_obj(self, obj, condition, path=None):
+        ''' generator finds full path to nested dict key when key is at an unknown level
+            borrowed from http://stackoverflow.com/a/31625583/5456148'''
+        if path is None:
+            path = []
+
+        # In case this is a list
+        if isinstance(obj, list):
+            for index, value in enumerate(obj):
+                new_path = list(path)
+                new_path.append(index)
+                for result in self.find_in_obj(value, condition, path=new_path):
+                    yield result
+
+        # In case this is a dictionary
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                new_path = list(path)
+                new_path.append(key)
+                for result in self.find_in_obj(value, condition, path=new_path):
+                    yield result
+
+                if condition == key:
+                    new_path = list(path)
+                    new_path.append(key)
+                    yield new_path
+
+    def set_nested_value(self, nested_dict, path_list, key, value):
+        ''' add or update a value in a nested dict using passed list as path
+            borrowed from http://stackoverflow.com/a/11918901/5456148'''
+        cur = nested_dict
+        path_list.append(key)
+        for path_item in path_list[:-1]:
+            try:
+                cur = cur[path_item]
+            except KeyError:
+                cur = cur[path_item] = {}
+
+        cur[path_list[-1]] = value
+        return nested_dict
+
+    def update_nested_dict(self, nested_dict, findkey, updatekey, updateval):
+        ''' finds and updates values in nested dicts with find_in_dict(), set_nested_value()'''
+        return self.set_nested_value(
+            nested_dict,
+            list(self.find_in_obj(nested_dict, findkey))[0],
+            updatekey,
+            updateval
+        )
 class prec9(ExpressionElement):
     @property
     def value(self):
@@ -601,15 +652,21 @@ class term(ExpressionElement):
                         try:
                             op[index] = float(element)
                         except ValueError:
-                            if element in global_namespace and global_namespace[element] is not None:
-                                op[index] = global_namespace[element]
+                            if element in current_namespace and current_namespace[element] is not None:
+                                op[index] = current_namespace[element]
                 print(op)
             elif re.match(r'(\w+\.)+\w+', op):
                 path = op.split('.')
-                res = global_namespace
-                for section in path:
-                    res = res[section]
+                try:
+                    res = current_namespace
+                    for section in path:
+                        res = res[section]
+                except Exception:
+                    res = global_namespace
+                    for section in path:
+                        res = res[section]
                 op = res
+                print(res)
             return op
         else:
             raise Exception('Unknown variable "{}" at position {}'
@@ -619,17 +676,23 @@ class term(ExpressionElement):
     def update(self):
         import re
         op = self.op
-        if op in global_namespace:
+        if op in current_namespace:
             print("Namespace update")
             return op
         elif re.match(r'(\w+\.)+\w+', op):
             path = op.split('.')
-            res = global_namespace
-            for section in path:
-                res = res[section]
-                return op
+            try:
+                res = current_namespace
+                for section in path:
+                    res = res[section]
+            except Exception:
+                print(f'Local Namespace does not contain variable {op}')
+                res = global_namespace
+                for section in path:
+                    res = res[section]
+            return op
         else:
-            raise Exception(f'Namespace does not contain variable {op}')
+            raise Exception(f'Global namespace does not contain variable {op}')
 
 def cname(o):
     return o.__class__.__name__
@@ -673,6 +736,66 @@ def root_clafer(clafer, namespace=None):
         namespace[clafer.name] = group
         return namespace
 
+def feature_cardinality():
+    fcard = {}
+    for element in model.elements:
+        if cname(element) == "Clafer":
+            fcard.update(clafer_fcard(element))
+    return fcard
+
+def clafer_fcard(clafer):
+    fcard = {}
+    for child in clafer.nested:
+        for child1 in child.child:
+            if cname(child1) == "Clafer":
+                fcard.update(clafer_fcard(child1))
+    if clafer.fcard:
+        fcard.update(clafer.name)
+        
+        
+
+def cardinality_solver(card_expr, card_value):
+    import re
+    import pandas as pd
+    card = card_expr
+    x = card_value
+    res = []
+    if card == '*':
+        res.append('x>=0')
+    elif card == '+' or card == 'or':
+        res.append('x>=1')
+    elif card == '?' or card == 'mux':
+        res.append(['x>=0', 'x<=1'])
+    elif card == 'xor':
+        res.append('x==1')
+    elif type(card) == int or re.match(r'^\d+$', card):
+        res.append(f'x=={card}')
+    else:
+        strspl = card.split(',')
+        for lexem in strspl:
+            if re.match(r'(\d+\.\.)+\d+', lexem):
+                lexspl = lexem.split('..')
+                subres = []
+                subres.append(f'x>={lexspl[0]}')
+                subres.append(f'x<={lexspl[1]}')
+                res.append(subres)
+            else:
+                res.append(f'x=={lexem}')
+    match_group_res = []
+    for match_group in res:
+        if type(match_group) == list:
+            subres = []
+            for match in match_group:
+                subres.append(pd.eval(match))
+            match_group_res.append(all(subres))
+        else:
+            match_group_res.append(pd.eval(match_group))
+    result = any(match_group_res)
+    if result:
+        print(f'Result: {x} lies in interval {card}')
+        return True
+    else:
+        raise Exception(f'Result: {x} not lies in interval {card}')
 
 def group_clafer(clafer, namespace):
     print("______________________________")
@@ -698,33 +821,30 @@ def property_clafer(clafer, namespace):
 
 def root_clafer_constraints(clafer):
     print("______________________________")
+    print(f'ROOT CLAFER {clafer.name} constraints')
+    print(clafer.namespace)
+    global global_namespace, current_namespace
+    current_namespace = clafer.namespace
     counter = 0
     for child in clafer.nested:
         for child1 in child.child:
             if cname(child1) == "Constraint":
                 counter += 1
-                clafer.namespace = clafer_constraints(child1, clafer.namespace)
+                child1.name.value
+                clafer.namespace = current_namespace
+                global_namespace[clafer.name] = current_namespace
             elif cname(child1) == "Clafer" and child1.reference is None:
                 root_clafer_constraints(child1)
+    current_namespace = {}
     print(f'For clafer {clafer.name} there is/are {counter} constraint expression(s) evaluated.')
     print(f'Clafer namespace: {clafer.namespace}')
-
-def clafer_constraints(constraint, namespace):
-    print("_____________________")
-    global global_namespace
-    global_namespace = namespace
-    print(global_namespace)
-    exp = constraint.name
-    print(exp.value)
-    namespace = global_namespace
-    print(namespace)
-    return namespace
-    print("_____________________")
 
 def super_clafer(model, clafer):
     for element in model.elements:
         if element.name == clafer.super.value:
-            clafer.namespace = {**clafer.namespace, **element.namespace}
+            import copy
+            super_copy = copy.deepcopy(element.namespace)
+            clafer.namespace.update(super_copy)
             print('___________________________________________')
             print(f'For clafer {clafer.name} super clafer namespace was merged')
             print(f'Namespace: {clafer.namespace}')
@@ -753,13 +873,11 @@ def main(debug=False):
     metamodel_export(mm, join(this_folder, 'meta.dot'))
 
     # Meta-model knows how to parse and instantiate models.
-    global model, global_namespace, keywords, exception_flag
+    global model, global_namespace, keywords, exception_flag, current_namespace
     model = mm.model_from_file('test.cf')
     model_export(model, join(this_folder, 'example.dot'))
     for element in model.elements:
         if cname(element) == "Clafer":
-            if element.reference is not None:
-                global_namespace[element.name] = None
             root_clafer(element)
     for element in model.elements:
         if cname(element) == "Clafer" and element.super is not None:
@@ -768,13 +886,10 @@ def main(debug=False):
         if cname(element) == "Constraint":
             exception_flag = False
             constraint(element)
-    global_namespace_copy = global_namespace
-
     for element in model.elements:
         if cname(element) == "Clafer":
             exception_flag = False
             root_clafer_constraints(element)
-    global_namespace = global_namespace_copy
 
     print(json.dumps(to_json(model), sort_keys=True, indent=4))
     with open('test.json', 'w', encoding='utf-8') as f:

@@ -1,0 +1,279 @@
+
+    digraph textX {
+    fontname = "Bitstream Vera Sans"
+    fontsize = 8
+    node[
+        shape=record,
+        style=filled,
+        fillcolor=aliceblue
+    ]
+    nodesep = 0.3
+    edge[dir=black,arrowtail=empty]
+
+
+140464974668640[ label="{Model|}"]
+
+140464974093680[ label="{*Element|}"]
+
+140464974822784[ label="{Constraint|}"]
+
+140464974828320[ label="{Assertion|}"]
+
+140464974762272[ label="{Goal|gtype: Goaltype\l}"]
+
+140464974775712[ label="{Clafer|abstract: Abstract\lgcard: Gcard\lname: Name\lfcard: Fcard\l}"]
+
+140464975036384[ label="{*Super|}"]
+
+140464975041920[ label="{*Reference|}"]
+
+140464975047456[ label="{*Init|}"]
+
+140464975052992[ label="{Nested|}"]
+
+140464972385488[ label="{prec23|op: optional\<list[OBJECT]\>\l}"]
+
+140464972386432[ label="{prec22|op: optional\<list[OBJECT]\>\l}"]
+
+140464972387376[ label="{prec21|op: optional\<list[OBJECT]\>\l}"]
+
+140464972388320[ label="{prec20|op: optional\<list[OBJECT]\>\l}"]
+
+140464972389264[ label="{prec19|op: optional\<list[OBJECT]\>\l}"]
+
+140464972390208[ label="{prec18|op: optional\<list[OBJECT]\>\l}"]
+
+140464972391152[ label="{prec17|op: optional\<list[OBJECT]\>\l}"]
+
+140464972392096[ label="{prec16|op: optional\<list[OBJECT]\>\l}"]
+
+140464972393040[ label="{prec15|op: optional\<list[OBJECT]\>\l}"]
+
+140464972393984[ label="{prec14|op: optional\<list[OBJECT]\>\l}"]
+
+140464972394928[ label="{prec13|op: optional\<list[OBJECT]\>\l}"]
+
+140464972395872[ label="{prec12|op: optional\<list[OBJECT]\>\l}"]
+
+140464972396816[ label="{prec11|op: optional\<list[OBJECT]\>\l}"]
+
+140464972397760[ label="{prec10|op: optional\<list[OBJECT]\>\l}"]
+
+140464972398704[ label="{prec9|op: optional\<list[OBJECT]\>\l}"]
+
+140464972399648[ label="{prec8|op: optional\<list[OBJECT]\>\l}"]
+
+140464972400592[ label="{prec7|op: optional\<list[OBJECT]\>\l}"]
+
+140464972401536[ label="{prec6|op: optional\<list[OBJECT]\>\l}"]
+
+140464972402480[ label="{prec5|op: optional\<list[OBJECT]\>\l}"]
+
+140464972403424[ label="{prec4|op: optional\<list[OBJECT]\>\l}"]
+
+140464972404368[ label="{prec3|op: optional\<list[OBJECT]\>\l}"]
+
+140464972405312[ label="{prec2|op: optional\<list[OBJECT]\>\l}"]
+
+140464972407376[ label="{prec1|op: optional\<list[OBJECT]\>\l}"]
+
+140464972408320[ label="{prec0|op: optional\<list[OBJECT]\>\l}"]
+
+140464972409264[ label="{term|op: OBJECT\l}"]
+
+
+
+140464974668640 -> 140464974093680[arrowtail=diamond, dir=both, headlabel="elements 0..*"]
+140464974093680 -> 140464974775712 [dir=back]
+140464974093680 -> 140464974762272 [dir=back]
+140464974093680 -> 140464974822784 [dir=back]
+140464974093680 -> 140464974828320 [dir=back]
+140464974822784 -> 140464972385488[arrowtail=diamond, dir=both, headlabel="name "]
+140464974828320 -> 140464972385488[arrowtail=diamond, dir=both, headlabel="name "]
+140464974762272 -> 140464972385488[arrowtail=diamond, dir=both, headlabel="name "]
+140464974775712 -> 140464975036384[arrowtail=diamond, dir=both, headlabel="super "]
+140464974775712 -> 140464975041920[arrowtail=diamond, dir=both, headlabel="reference "]
+140464974775712 -> 140464975047456[arrowtail=diamond, dir=both, headlabel="init "]
+140464974775712 -> 140464975052992[arrowtail=diamond, dir=both, headlabel="nested 0..*"]
+140464975036384 -> 140464972408320 [dir=back]
+140464975041920 -> 140464972404368 [dir=back]
+140464975047456 -> 140464972385488 [dir=back]
+140464975052992 -> 140464974093680[arrowtail=diamond, dir=both, headlabel="child 1..*"]
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+140464974748624[ label="{*OBJECT|}"]
+
+match_rules [ shape=plaintext, label=< <table>
+	<tr>
+		<td><b>Abstract</b></td><td>abstract</td>
+	</tr>
+	<tr>
+		<td><b>BlockComment</b></td><td>\/\*(\*(?!\/)|[^*])*\*\/</td>
+	</tr>
+	<tr>
+		<td><b>Cardinterval</b></td><td>INT .. INT|*</td>
+	</tr>
+	<tr>
+		<td><b>Comment</b></td><td></td>
+	</tr>
+	<tr>
+		<td><b>ComplexName</b></td><td>(\w+\.)+\w+</td>
+	</tr>
+	<tr>
+		<td><b>Fcard</b></td><td>(INT)+|?|*|+</td>
+	</tr>
+	<tr>
+		<td><b>Gcard</b></td><td>(INT)+|xor|or|mux|opt</td>
+	</tr>
+	<tr>
+		<td><b>Goaltype</b></td><td>min|max|minimize|maximize</td>
+	</tr>
+	<tr>
+		<td><b>List</b></td><td>\{.+\}</td>
+	</tr>
+	<tr>
+		<td><b>Name</b></td><td>ID</td>
+	</tr>
+	<tr>
+		<td><b>Quant</b></td><td></td>
+	</tr>
+	<tr>
+		<td><b>QuantLone</b></td><td>lone</td>
+	</tr>
+	<tr>
+		<td><b>QuantNo</b></td><td>no</td>
+	</tr>
+	<tr>
+		<td><b>QuantNot</b></td><td>not</td>
+	</tr>
+	<tr>
+		<td><b>QuantOne</b></td><td>one</td>
+	</tr>
+	<tr>
+		<td><b>QuantSome</b></td><td>some</td>
+	</tr>
+	<tr>
+		<td><b>Quote</b></td><td>&#x27;.+&#x27;|&quot;.+&quot;</td>
+	</tr>
+	<tr>
+		<td><b>StringComment</b></td><td>\/\/.*$</td>
+	</tr>
+	<tr>
+		<td><b>op0</b></td><td>..|&amp;</td>
+	</tr>
+	<tr>
+		<td><b>op1</b></td><td>**</td>
+	</tr>
+	<tr>
+		<td><b>op10</b></td><td>=</td>
+	</tr>
+	<tr>
+		<td><b>op11</b></td><td>requires|excludes</td>
+	</tr>
+	<tr>
+		<td><b>op12</b></td><td>&lt;=|&gt;=|==|&lt;|&gt;|!=|in|not in</td>
+	</tr>
+	<tr>
+		<td><b>op13</b></td><td></td>
+	</tr>
+	<tr>
+		<td><b>op14</b></td><td>!</td>
+	</tr>
+	<tr>
+		<td><b>op15</b></td><td>F|eventually|G|globally|X|next</td>
+	</tr>
+	<tr>
+		<td><b>op16</b></td><td>W|weakuntil</td>
+	</tr>
+	<tr>
+		<td><b>op17</b></td><td>U|until</td>
+	</tr>
+	<tr>
+		<td><b>op18</b></td><td>&amp;&amp;</td>
+	</tr>
+	<tr>
+		<td><b>op19</b></td><td>xor</td>
+	</tr>
+	<tr>
+		<td><b>op2</b></td><td>--</td>
+	</tr>
+	<tr>
+		<td><b>op20</b></td><td>||</td>
+	</tr>
+	<tr>
+		<td><b>op21</b></td><td>=&gt;</td>
+	</tr>
+	<tr>
+		<td><b>op22</b></td><td>&lt;=&gt;</td>
+	</tr>
+	<tr>
+		<td><b>op3</b></td><td>,|++</td>
+	</tr>
+	<tr>
+		<td><b>op4</b></td><td>:&gt;</td>
+	</tr>
+	<tr>
+		<td><b>op5</b></td><td>&lt;:</td>
+	</tr>
+	<tr>
+		<td><b>op6</b></td><td>sum|product|#</td>
+	</tr>
+	<tr>
+		<td><b>op7</b></td><td>min|max</td>
+	</tr>
+	<tr>
+		<td><b>op8</b></td><td>*|/|%</td>
+	</tr>
+	<tr>
+		<td><b>op9</b></td><td>+|-</td>
+	</tr>
+</table> >]
+
+
+}

@@ -1,153 +1,23 @@
-General {
-    NumberOfWorkers -> integer
-    result_storage -> string
-    [NumberOfWorkers = 3]
-    [result_storage = './Results/']
-}
-
-SelectionAlgorithm -> string
-[SelectionAlgorithm = 'MersenneTwister']
-
-abstract OutliersDetection {
-    isEnabled -> boolean
-    MinActiveNumberOfTasks -> integer
-    MaxActiveNumberOfTasks -> integer
-}
-
-DixonOD : OutliersDetection {
-    [isEnabled = true]
-    [MinActiveNumberOfTasks = 3]
-    [MaxActiveNumberOfTasks = 10000]
-}
-
-GrubbsOD : OutliersDetection {
-    [isEnabled = true]
-    [MinActiveNumberOfTasks = 3]
-    [MaxActiveNumberOfTasks = 10000]
-}
-
-ChauvenetOD : OutliersDetection {
-    [isEnabled = true]
-    [MinActiveNumberOfTasks = 3]
-    [MaxActiveNumberOfTasks = 10000]
-}
-
-QuartilesOD : OutliersDetection {
-    [isEnabled = true]
-    [MinActiveNumberOfTasks = 3]
-    [MaxActiveNumberOfTasks = 10000]
-}
-
-MadOD : OutliersDetection {
-    [isEnabled = true]
-    [MinActiveNumberOfTasks = 3]
-    [MaxActiveNumberOfTasks = 10000]
-}
-
-
-abstract Repeater {
-    MinTasksPerConfiguration -> integer
-    MaxTasksPerConfiguration -> integer
-}
-
-DefaultRepeater : Repeater {
-    [MinTasksPerConfiguration = 10]
-    [MaxTasksPerConfiguration = 10]
-}
-
-AcceptableErrorBasedRepeater: Repeater {
-    [MinTasksPerConfiguration = 2]
-    [MaxTasksPerConfiguration = 10]
-    MaxFailedTasksPerConfiguration -> integer
-    [MaxFailedTasksPerConfiguration = 5]
-    BaseAcceptableErrors -> integer
-    [BaseAcceptableErrors = 5]
-    ConfidenceLevels -> integer
-    [ConfidenceLevels = 0.95]
-    DevicesScaleAccuracies -> integer
-    [DevicesScaleAccuracies = 10]
-    DevicesAccuracyClasses -> integer
-    [DevicesAccuracyClasses = 10]
-    ExperimentAwareness {
-        isEnabled -> boolean
-        [isEnabled = true]
-        MaxAcceptableErrors -> integer
-        [MaxAcceptableErrors = 50]
-        RatiosMax -> integer
-        [RatiosMax = 10]
+abstract process{
+    xor mode {
+        manual{
+            parameter1 -> integer
+        }
+        automatic{
+            parameter2 -> integer
+        }
     }
 }
-
-StopConditionTriggerLogic {
-    Expression -> string
-    [Expression = '(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased']
-    InspectionParameters {
-        RepetitionPerion -> integer
-        TimeUnit -> string
-        [RepetitionPerion = 1]
-        [TimeUnit = seconds]
-    }
+process1 : process{
+    [mode.manual.parameter1 = 2]
+    a -> integer
+    [if mode.manual.parameter1 > 5 then a = 100 else a = 100500]
 }
 
-abstract StopCondition {
-    Name -> string
-    Type -> string
+process2 : process{
+    [mode.manual.parameter1 = 10]
+    a -> integer
+    b -> integer
+    [if process1.mode.manual.parameter1 > 5 then a = 100 else a = 100500]
+    [if mode.manual.parameter1 > 5 then b = 100 else b = 100500]
 }
-
-QuantityBasedSC : StopCondition {
-    [Name = QuantityBased]
-    [Type = QuantityBased]
-    Parameters {
-        MaxConfigs -> integer
-        [MaxConfigs = 15]
-    }
-}
-
-GuaranteedSC : StopCondition {
-    [Name = Guaranteed]
-    [Type = Guaranteed]
-}
-
-BadConfigurationBasedSC : StopCondition {
-    [Name = 'BadConfigurationBased']
-    [Type = 'BadConfigurationBased']
-    Parameters {
-        MaxBadConfigurations -> integer
-        [MaxBadConfigurations = 10]
-    }
-}
-
-ImprovementBasedSC : StopCondition {
-    [Name = 'ImprovementBased']
-    [Type = 'ImprovementBased']
-    Parameters {
-        MaxConfigsWithoutImprovement -> integer
-        [MaxConfigsWithoutImprovement = 5]
-    }
-}
-
-TimeBasedSC : StopCondition {
-    [Name = 'TimeBased']
-    [Type = 'TimeBased']
-    Parameters {
-        MaxRunTime -> integer
-        TimeUnit -> string
-        [MaxRunTime = 10]
-        [TimeUnit = minutes]
-    }
-}
-
-
-abstract StopCondition{
-    threshold -> integer
-}
-
-DefaultStopCondition : StopCondition
-
-NewStopCondition{
-    threshold -> integer
-    [threshold = 10]
-}
-
-RequiredClafer
-[NewStopCondition requires RequiredClafer]
