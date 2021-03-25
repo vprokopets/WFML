@@ -73,8 +73,8 @@ class prec23(ExpressionElement):
                 statement.value
                 true_exp.value
                 if len(self.op) > 3:
-                    for else_exp in self.op[3::4]:
-                        else_exp.value
+                    else_exp = self.op[3::4]
+                    else_exp.value
                 ret = None
             elif operator == 'if':
                 print("Level 23 IF THEN ELSE statement.")
@@ -90,7 +90,7 @@ class prec23(ExpressionElement):
                     ret = true_exp.value
                 elif not ret:
                     if len(self.op) > 3:
-                        else_exp = self.op[3]
+                        else_exp = self.op[3::4]
                         ret = else_exp.value
                     else:
                         return None
@@ -502,8 +502,8 @@ class prec10(ExpressionElement):
                 elif re.match(r'(\w+\.)+\w+', check) and cardinality_flag == 'fcard':
                     print('CHECK4')
                     from wizard.views import card_update
-                    print(f'FCARDUPD: {check} {right_value}')
-                    card_update('fcard', {check: right_value})
+                    print(f'FCARDUPD: {ret} {right_value}')
+                    card_update('fcard', {ret: right_value})
                 else:
                     print('CHECK5')
                     try:
@@ -780,9 +780,6 @@ class term(ExpressionElement):
         if cross_tree_check:
             if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
                 path = op.split('.')
-                if path[0] == 'fcard' or path[0] == 'gcard':
-                    path.pop(0)
-                    print(f'Path {path}')
                 try:
                     res = current_namespace
                     for section in path:
@@ -872,20 +869,17 @@ class term(ExpressionElement):
                                 f_p = section
                             else:
                                 f_p = f_p + '.' + section
+                        full_path = current_path + '.' + f_p
+                        if full_path in mappings.keys():
+                            mapping_iter_sum = len(mappings[full_path])
+                            full_path = mappings[full_path][mapping_iter]
+                        print(f'FullPath {full_path}')
+                        print(f'MappingKeys {mappings.keys()}')
+                        print(f'Mapping Table {card}')
                         try:
-                            res = card[cardinality_flag][f_p]
+                            res = card[cardinality_flag][full_path]
                         except KeyError:
-                            full_path = current_path + '.' + f_p
-                            if full_path in mappings.keys():
-                                mapping_iter_sum = len(mappings[full_path])
-                                full_path = mappings[full_path][mapping_iter]
-                            print(f'FullPath {full_path}')
-                            print(f'MappingKeys {mappings.keys()}')
-                            print(f'Mapping Table {card}')
-                            try:
-                                res = card[cardinality_flag][full_path]
-                            except KeyError:
-                                raise Exception(f'No such key {full_path} in {card[cardinality_flag]}')
+                            raise Exception(f'No such key {full_path} in {card[cardinality_flag]}')
                     else:
                         try:
                             unvalidated_params.append(op)
@@ -932,12 +926,10 @@ class term(ExpressionElement):
                 mapping_iter_sum = len(mappings[op])
                 op = mappings[op][mapping_iter]
             path = op.split('.')
-            if path[0] == 'fcard':
+            if path[0] == 'fcard' or path[0] == 'gcard':
                 global cardinality_flag
                 cardinality_flag = path[0]
                 path = path[1:]
-            elif path[0] == 'gcard':
-                raise Exception(f'Group cardinality change is not allowed {op}')
             print(f'PATH!!!!!!{path}')
             try:
                 res = current_namespace
@@ -950,7 +942,7 @@ class term(ExpressionElement):
                 for section in path:
                     res = res[section]
                 res = res['value']
-            if cardinality_flag == 'fcard':
+            if cardinality_flag is True:
                 op = ''
                 for elem in path:
                     if op == '':
@@ -1232,7 +1224,7 @@ def staging(cross_tree_dependencies):
             result.append(f'cycle{index}')
         else:
             print("NO")
-    # result.reverse()
+    result.reverse()
     ret_val = fcardinalities + gcardinalities + result
     print(f'There are {len(res[0])} stages for cross-tree dependencies: {res[0]}')
     print(f'Cycled clafers: {cycled}')

@@ -1,85 +1,98 @@
 {
     "General": {
         "NumberOfWorkers": 3,
-        "result_storage": "3"
+        "result_storage": "save"
     },
     "SelectionAlgorithm": {
         "type": "Sobol"
     },
     "OD": {
+        "Dixon": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 30
+        },
         "Chauvenet": {
             "MinActiveNumberOfTasks": 3,
-            "MaxActiveNumberOfTasks": 3
+            "MaxActiveNumberOfTasks": 30
+        },
+        "Mad": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 30
         }
     },
     "Repeater": {
-        "AcceptableErrorBasedRepeater": {
-            "MaxFailedTasksPerConfiguration": 3,
-            "BaseAcceptableErrors": 3,
-            "ConfidenceLevels": 3,
-            "DevicesScaleAccuracies": 3,
-            "DevicesAccuracyClasses": 3,
-            "ExperimentAwareness": {
-                "isEnabled": true,
-                "MaxAcceptableErrors": 3,
-                "RatiosMax": 3
-            },
-            "MinTasksPerConfiguration": 3,
-            "MaxTasksPerConfiguration": 3
+        "DefaultRepeater": {
+            "MinTasksPerConfiguration": 2,
+            "MaxTasksPerConfiguration": 10
         }
     },
     "Predictor": {
-        "WindowSize": 3.0,
-        "Models": {
+        "WindowSize": 0.5,
+        "Models_0": {
             "TPE": {
                 "Parameters": {
-                    "TopNPercent": 3,
-                    "RandomFraction": 3,
+                    "TopNPercent": 30,
+                    "RandomFraction": 0,
                     "BandwidthFactor": 3,
-                    "MinBandwirth": 3.0,
-                    "SamplingSize": 3
+                    "MinBandwirth": 0.0,
+                    "SamplingSize": 96
+                }
+            }
+        },
+        "Models_1": {
+            "MAB": {
+                "Parameters": {
+                    "c": 0.5
                 }
             }
         }
     },
     "StopConditionTriggerLogic": {
-        "Expression": "3",
+        "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased",
         "InspectionParameters": {
-            "RepetitionPerion": 3,
-            "TimeUnit": "3"
+            "RepetitionPerion": 1,
+            "TimeUnit": "s"
         }
     },
     "QuantityBasedSC": {
         "Parameters": {
-            "MaxConfigs": 3
+            "MaxConfigs": 5
         },
-        "Name": "3",
+        "Name": "QBSC",
         "Type": "QuantityBased"
     },
     "GuaranteedSC": {
-        "Name": "3",
+        "Name": "GSC",
         "Type": "Guaranted"
     },
     "BadConfigurationBasedSC": {
         "Parameters": {
-            "MaxBadConfigurations": 3
+            "MaxBadConfigurations": 20
         },
-        "Name": "3",
+        "Name": "BCBSC",
         "Type": "BadConfigurationBased"
     },
     "ImprovementBasedSC": {
         "Parameters": {
-            "MaxConfigsWithoutImprovement": 3
+            "MaxConfigsWithoutImprovement": 5
         },
-        "Name": "3",
+        "Name": "IBSC",
         "Type": "ImprovementBased"
     },
-    "TimeBasedSC": {
+    "TimeBasedSC_0": {
         "Parameters": {
-            "MaxRunTime": 3,
-            "TimeUnit": "3"
+            "MaxRunTime": 10,
+            "TimeUnit": "m"
         },
-        "Name": "3",
+        "Name": "TBSC0",
+        "Type": "TimeBased"
+    },
+    "TimeBasedSC_1": {
+        "Parameters": {
+            "MaxRunTime": 1,
+            "TimeUnit": "h"
+        },
+        "Name": "TBSC1",
         "Type": "TimeBased"
     }
 }
