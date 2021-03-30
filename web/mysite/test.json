@@ -1,7 +1,7 @@
 {
     "General": {
         "NumberOfWorkers": 3,
-        "result_storage": "save"
+        "result_storage": "./Results/"
     },
     "SelectionAlgorithm": {
         "type": "Sobol"
@@ -11,38 +11,61 @@
             "MinActiveNumberOfTasks": 3,
             "MaxActiveNumberOfTasks": 30
         },
+        "Grubbs": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
         "Chauvenet": {
             "MinActiveNumberOfTasks": 3,
-            "MaxActiveNumberOfTasks": 30
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Quartiles": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
         },
         "Mad": {
             "MinActiveNumberOfTasks": 3,
-            "MaxActiveNumberOfTasks": 30
+            "MaxActiveNumberOfTasks": 10000
         }
     },
     "Repeater": {
-        "DefaultRepeater": {
+        "AcceptableErrorBasedRepeater": {
+            "MaxFailedTasksPerConfiguration": 5,
+            "BaseAcceptableErrors": [
+                5
+            ],
+            "ConfidenceLevels": [
+                0.95
+            ],
+            "DevicesScaleAccuracies": [
+                0
+            ],
+            "DevicesAccuracyClasses": [
+                0
+            ],
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": [
+                    50
+                ],
+                "RatiosMax": [
+                    10
+                ]
+            },
             "MinTasksPerConfiguration": 2,
             "MaxTasksPerConfiguration": 10
         }
     },
     "Predictor": {
-        "WindowSize": 0.5,
-        "Models_0": {
+        "WindowSize": 1.0,
+        "Models": {
             "TPE": {
                 "Parameters": {
                     "TopNPercent": 30,
                     "RandomFraction": 0,
                     "BandwidthFactor": 3,
-                    "MinBandwirth": 0.0,
+                    "MinBandwirth": 0.001,
                     "SamplingSize": 96
-                }
-            }
-        },
-        "Models_1": {
-            "MAB": {
-                "Parameters": {
-                    "c": 0.5
                 }
             }
         }
@@ -51,48 +74,42 @@
         "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased",
         "InspectionParameters": {
             "RepetitionPerion": 1,
-            "TimeUnit": "s"
+            "TimeUnit": "seconds"
         }
     },
-    "QuantityBasedSC": {
-        "Parameters": {
-            "MaxConfigs": 5
+    "StopCondition": {
+        "QuantityBasedSC": {
+            "Parameters": {
+                "MaxConfigs": 15
+            },
+            "Name": "QBSC",
+            "Type": "QuantityBased"
         },
-        "Name": "QBSC",
-        "Type": "QuantityBased"
-    },
-    "GuaranteedSC": {
-        "Name": "GSC",
-        "Type": "Guaranted"
-    },
-    "BadConfigurationBasedSC": {
-        "Parameters": {
-            "MaxBadConfigurations": 20
+        "GuaranteedSC": {
+            "Name": "GSC",
+            "Type": "Guaranted"
         },
-        "Name": "BCBSC",
-        "Type": "BadConfigurationBased"
-    },
-    "ImprovementBasedSC": {
-        "Parameters": {
-            "MaxConfigsWithoutImprovement": 5
+        "BadConfigurationBasedSC": {
+            "Parameters": {
+                "MaxBadConfigurations": 10
+            },
+            "Name": "BCBSC",
+            "Type": "BadConfigurationBased"
         },
-        "Name": "IBSC",
-        "Type": "ImprovementBased"
-    },
-    "TimeBasedSC_0": {
-        "Parameters": {
-            "MaxRunTime": 10,
-            "TimeUnit": "m"
+        "ImprovementBasedSC": {
+            "Parameters": {
+                "MaxConfigsWithoutImprovement": 5
+            },
+            "Name": "IBSC",
+            "Type": "ImprovementBased"
         },
-        "Name": "TBSC0",
-        "Type": "TimeBased"
-    },
-    "TimeBasedSC_1": {
-        "Parameters": {
-            "MaxRunTime": 1,
-            "TimeUnit": "h"
-        },
-        "Name": "TBSC1",
-        "Type": "TimeBased"
+        "TimeBasedSC": {
+            "Parameters": {
+                "MaxRunTime": 10,
+                "TimeUnit": "minutes"
+            },
+            "Name": "TBSC",
+            "Type": "TimeBased"
+        }
     }
 }

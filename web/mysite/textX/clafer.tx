@@ -75,7 +75,7 @@ op16: 'W' | 'weakuntil'                                         ;
 op15: 'F' | 'eventually' | 'G' | 'globally' | 'X' | 'next'      ;
 op14: '!'                                                       ;
 op13:  Quant                                                    ;
-op12:  '<' | '>' | '==' | '<=' | '>=' | '!=' | 'in' | 'not in'  ;
+op12: '<=' | '>=' | '==' | '<' | '>' | '!=' | 'in' | 'not in'   ;
 op11: 'requires' | 'excludes'                                   ;
 op10: '='                                                       ;
 op9:  '+' | '-'                                                 ;
@@ -87,7 +87,7 @@ op4:  ':>'                                                      ;
 op3:  ',' | '++'                                                ;
 op2:  '--'                                                      ;
 op1:  '**'                                                      ;
-op0:  '..' | '&'                                                 ;
+op0:  '..' | '&'                                                ;
 
 Quote: /'.+'/ | /".+"/;
 List: /\{.+\}/;

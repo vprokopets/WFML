@@ -1,5 +1,7 @@
 
 
+
+
 General {
     NumberOfWorkers -> integer
     result_storage -> string
@@ -41,14 +43,14 @@ xor Repeater{
         [MinTasksPerConfiguration >= 1]
         [MaxTasksPerConfiguration >= 1]
         MaxFailedTasksPerConfiguration -> integer
-        BaseAcceptableErrors -> integer
-        ConfidenceLevels -> integer
-        DevicesScaleAccuracies -> integer
-        DevicesAccuracyClasses -> integer
+        BaseAcceptableErrors -> integerArray
+        ConfidenceLevels -> floatArray
+        DevicesScaleAccuracies -> integerArray
+        DevicesAccuracyClasses -> integerArray
         ExperimentAwareness {
             isEnabled -> boolean
-            MaxAcceptableErrors -> integer
-            RatiosMax -> integer
+            MaxAcceptableErrors -> integerArray
+            RatiosMax -> integerArray
         }
     }
 }
@@ -116,47 +118,51 @@ StopConditionTriggerLogic {
         RepetitionPerion -> integer
         TimeUnit -> string
         [RepetitionPerion > 0]
+        [TimeUnit in {seconds, minutes, hours, days}]
     }
 }
 
-abstract StopCondition {
+abstract SC {
     Name -> string
     Type -> predefined
 }
 
-QuantityBasedSC : StopCondition 1..5{
-    Parameters {
-        MaxConfigs -> integer
-        [MaxConfigs > 0]
+StopCondition {
+    QuantityBasedSC : SC 1..5{
+        Parameters {
+            MaxConfigs -> integer
+            [MaxConfigs > 0]
+        }
+        [Type = QuantityBased]
     }
-    [Type = QuantityBased]
-}
 
-GuaranteedSC : StopCondition 1 {
-    [Type = Guaranted]
-}
-
-BadConfigurationBasedSC : StopCondition 1..5{
-    Parameters {
-        MaxBadConfigurations -> integer
-        [MaxBadConfigurations > 0]
+    GuaranteedSC : SC 1 {
+        [Type = Guaranted]
     }
-    [Type = BadConfigurationBased]
-}
 
-ImprovementBasedSC : StopCondition 1..5{
-    Parameters {
-        MaxConfigsWithoutImprovement -> integer
-        [MaxConfigsWithoutImprovement > 0]
+    BadConfigurationBasedSC : SC 1..5{
+        Parameters {
+            MaxBadConfigurations -> integer
+            [MaxBadConfigurations > 0]
+        }
+        [Type = BadConfigurationBased]
     }
-    [Type = ImprovementBased]
-}
 
-TimeBasedSC : StopCondition 1..5{
-    Parameters {
-        MaxRunTime -> integer
-        TimeUnit -> string
-        [MaxRunTime > 0]
+    ImprovementBasedSC : SC 1..5{
+        Parameters {
+            MaxConfigsWithoutImprovement -> integer
+            [MaxConfigsWithoutImprovement > 0]
+        }
+        [Type = ImprovementBased]
     }
-    [Type = TimeBased]
+
+    TimeBasedSC : SC 1..5{
+        Parameters {
+            MaxRunTime -> integer
+            TimeUnit -> string
+            [MaxRunTime > 0]
+            [TimeUnit in {seconds, minutes, hours, days}]
+        }
+        [Type = TimeBased]
+    }
 }

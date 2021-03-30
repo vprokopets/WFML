@@ -2,6 +2,7 @@ import ast
 import copy
 import json
 import itertools
+import logging
 import pandas as pd
 import re
 
@@ -9,10 +10,10 @@ from collections import defaultdict
 from functools import reduce
 import networkx as nx
 from os.path import join, dirname
-from textx import metamodel_from_file, metamodel_from_str, get_location
+from textx import metamodel_from_file, get_location
 from textx.export import metamodel_export, model_export
 
-# Global variable namespace
+# Global variables.
 global_namespace = {}
 abstract_namespace = {}
 current_namespace = {}
@@ -37,6 +38,9 @@ mapping_iter = 0
 mapping_current = []
 cardinality_flag = None
 cardinalities_list = {}
+
+# Logging configuration.
+logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
 
 class Expression(object):
     def __init__(self, **kwargs):
@@ -66,6 +70,17 @@ class ExpressionElement(object):
 class prec23(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec23 class operations returns bool value.
+        ! If prec23 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec23 class performs operation IF..THEN..ELSE.
+
+        RETURN
+        ret (variable type): previous level object if no prec23 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag, cardinality_flag
         self.exception_flag = False
         for operator, statement, true_exp in zip(self.op[0::4], self.op[1::4], self.op[2::4]):
@@ -76,24 +91,35 @@ class prec23(ExpressionElement):
                     else_exp = self.op[3::4]
                     else_exp.value
                 ret = None
+
             elif operator == 'if':
-                print("Level 23 IF THEN ELSE statement.")
+                logging.debug("Level 23 IF THEN ELSE statement.")
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 23 Exception flag.")
+                    logging.debug("Level 23 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
+
+                # Perform IF expression check.
                 ret = statement.value
+
+                # Release global exception flag to perform THEN or ELSE expression.
                 if self.exception_flag is True:
                     exception_flag = False
                 cardinality_flag = None
+
+                # If 'IF' expression was true, ther perform THEN expression.
                 if ret:
                     ret = true_exp.value
+                # If not, then perform ELSE expression if it exist. In the opposite case, do nothing.
                 elif not ret:
                     if len(self.op) > 3:
                         else_exp = self.op[3::4]
                         ret = else_exp.value
                     else:
                         return None
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 else:
                     if self.exception_flag is True:
                         ol = self._tx_position_end - self._tx_position
@@ -103,8 +129,12 @@ class prec23(ExpressionElement):
                                        f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                        f' Filename {get_location(self)["filename"]}\n'))
                         raise Exception(msg)
+
+        # Double check to release global exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -112,6 +142,17 @@ class prec23(ExpressionElement):
 class prec22(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec22 class operations returns bool value.
+        ! If prec22 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec22 class performs operation IFF.
+
+        RETURN
+        ret (variable type): previous level object if no prec22 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
 
@@ -119,14 +160,19 @@ class prec22(ExpressionElement):
             if operation == '<=>' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == '<=>':
-                print("Level 22 boolean IFF operation")
+                logging.debug("Level 22 boolean IFF operation")
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 22 Exception flag.")
+                    logging.debug("Level 22 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
+
                 ret = self.op[0].value
                 ret = (ret % 2 == 0) == (ret % operand.value == 0)
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
                     msg = ''.join((f'Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
@@ -135,8 +181,12 @@ class prec22(ExpressionElement):
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                    f' Filename {get_location(self)["filename"]}\n'))
                     raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -144,6 +194,17 @@ class prec22(ExpressionElement):
 class prec21(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec21 class operations returns bool value.
+        ! If prec21 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec21 class performs operation IMPLIES.
+
+        RETURN
+        ret (variable type): previous level object if no prec21 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
 
@@ -152,13 +213,17 @@ class prec21(ExpressionElement):
                 self.op[0].value
                 operand.value
             elif operation == '=>':
-                print("Level 21 boolean IMPLIES operation")
+                logging.debug("Level 21 boolean IMPLIES operation")
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 21 Exception flag.")
+                    logging.debug("Level 21 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
+
                 ret = self.op[0].value
                 ret = not(ret) or operand.value
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
                     msg = ''.join((f'Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
@@ -167,8 +232,12 @@ class prec21(ExpressionElement):
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                    f' Filename {get_location(self)["filename"]}\n'))
                     raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -176,6 +245,17 @@ class prec21(ExpressionElement):
 class prec20(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec20 class operations returns bool value.
+        ! If prec20 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec20 class performs operation OR.
+
+        RETURN
+        ret (variable type): previous level object if no prec20 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
 
@@ -183,14 +263,19 @@ class prec20(ExpressionElement):
             if operation == '||' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == '||':
-                print("Level 20 boolean OR operation")
+                logging.debug("Level 20 boolean OR operation")
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 20 Exception flag.")
+                    logging.debug("Level 20 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
+
                 ret = self.op[0].value
                 ret = ret or operand.value
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
                     msg = ''.join((f'Expression operation OR ({self.op[0].value} {operation} {operand.value})',
@@ -199,8 +284,12 @@ class prec20(ExpressionElement):
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                    f' Filename {get_location(self)["filename"]}\n'))
                     raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -208,6 +297,17 @@ class prec20(ExpressionElement):
 class prec19(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec19 class operations returns bool value.
+        ! If prec19 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec19 class performs operation XOR.
+
+        RETURN
+        ret (variable type): previous level object if no prec19 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
 
@@ -215,15 +315,19 @@ class prec19(ExpressionElement):
             if operation == 'xor' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == 'xor':
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 19 Exception flag.")
+                    logging.debug("Level 19 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
-                print("Level 19 boolean XOR operation")
+
+                logging.debug("Level 19 boolean XOR operation")
                 ret = self.op[0].value
                 ret = bool(ret) ^ bool(operand.value)
 
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
                     msg = ''.join((f'Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
@@ -232,8 +336,12 @@ class prec19(ExpressionElement):
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                    f' Filename {get_location(self)["filename"]}\n'))
                     raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -241,6 +349,17 @@ class prec19(ExpressionElement):
 class prec18(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec18 class operations returns bool value.
+        ! If prec18 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec18 class performs operation AND.
+
+        RETURN
+        ret (variable type): previous level object if no prec18 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
 
@@ -248,14 +367,20 @@ class prec18(ExpressionElement):
             if operation == '&&' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == '&&':
-                print("Level 18 boolean AND operation")
+                logging.debug("Level 18 boolean AND operation")
+
+                # Take exception flag if it was still not taken.
                 if exception_flag is False:
-                    print("Level 18 Exception flag.")
+                    logging.debug("Level 18 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
+
                 ret = self.op[0].value
                 ret = ret and operand.value
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
                     msg = ''.join((f'Expression operation AND ({self.op[0].value} {operation} {operand.value})',
@@ -264,8 +389,12 @@ class prec18(ExpressionElement):
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                                    f' Filename {get_location(self)["filename"]}\n'))
                     raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -273,6 +402,7 @@ class prec18(ExpressionElement):
 class prec17(ExpressionElement):
     @property
     def value(self):
+        # TODO Fullfull functionality or remove this class.
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             if operation == 'U' or operation == 'untill':
@@ -282,6 +412,7 @@ class prec17(ExpressionElement):
 class prec16(ExpressionElement):
     @property
     def value(self):
+        # TODO Fullfull functionality or remove this class.
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             if operation == 'W' or operation == 'weakuntill':
@@ -291,6 +422,7 @@ class prec16(ExpressionElement):
 class prec15(ExpressionElement):
     @property
     def value(self):
+        # TODO Fullfull functionality or remove this class.
         ret = self.op[0].value
         if ret == 'F' or ret == 'eventually':
             pass
@@ -303,22 +435,42 @@ class prec15(ExpressionElement):
 class prec14(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec14 class operations returns bool value.
+        ! If prec14 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec14 class performs operation NOT.
+
+        RETURN
+        ret (variable type): previous level object if no prec14 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global exception_flag
         self.exception_flag = False
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
             if operation == '!' and cross_tree_check:
                 operand.value
+
+            # Take exception flag if it was still not taken.
             if operation == '!':
                 if exception_flag is False:
-                    print("Level 14 Exception flag.")
+                    logging.debug("Level 14 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
-                print("Level 14 boolean NO operation")
+
+                logging.debug("Level 14 boolean NO operation")
                 ret = not(operand.value)
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     raise Exception(f'Expression operation {operation} {operand.value} was not satisfied.')
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
 
@@ -327,6 +479,23 @@ class prec14(ExpressionElement):
 class prec13(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec13 class operations returns bool value.
+        ! If prec13 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec13 class performs quantification operations.
+        These operations are used to perform prec12 operations with variables with fcard > 1.
+        For example,
+        a -> integer
+        [fcard.a = 3]
+        [one a > 2]
+        means that exactly one from comparison operations [a0 > 2], [a1 > 2], [a2 > 2] should return True.
+
+        RETURN
+        ret (variable type): previous level object if no prec13 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         global mapping_current
         global exception_flag
         self.exception_flag = False
@@ -334,37 +503,52 @@ class prec13(ExpressionElement):
         if mapping_iter == 0:
             mapping_current = []
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            # Take exception flag if it was still not taken.
             if exception_flag is False:
-                print("Level 13 Exception flag.")
+                logging.debug("Level 13 Exception flag.")
                 exception_flag = True
                 self.exception_flag = True
             operand.value
+
+            # Perform comparison operation to all mappings.
             if mapping_iter < mapping_iter_sum and len(self.op) > 1:
                 mapping_current.append(self.op[1].value)
-                print(f'Mapping Current append {self.op[1].value} mapping iter {mapping_iter}')
+                logging.debug(f'Mapping Current append {self.op[1].value} mapping iter {mapping_iter}')
+
+            # Count number of True results and perform quantification operation.
             if mapping_iter == mapping_iter_sum - 1 and len(self.op) > 1:
                 number = mapping_current.count(True)
+                logging.debug(f'Check Operation {operation}. Values {mapping_current}')
 
-                print(f'Check Operation {operation}. Values {mapping_current}')
                 if operation in ['no', 'none', 'lone', 'one', 'some'] and cross_tree_check:
                     self.exception_flag = False
                     operand.value
+
                 if operation == 'no' or operation == 'none':
                     if number == 0:
                         ret = True
+
                 elif operation == 'lone':
                     if number >= 1:
                         ret = True
+
                 elif operation == 'one':
                     if number == 1:
                         ret = True
+
                 elif operation == 'some':
                     if number > 1:
                         ret = True
+
+                # Raise exception if result is False and exception flag was taken by this operation.
                 if ret is False and self.exception_flag is True:
                     raise Exception(f'Expression operation {operation} {mapping_current} was not satisfied.')
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -373,46 +557,69 @@ class prec13(ExpressionElement):
 class prec12(ExpressionElement):
     @property
     def value(self):
+        """
+        ! prec12 class operations returns bool value.
+        ! If prec12 class operations are not part of higher-level operations,
+        then exception will be raised if operation result is False.
+
+        prec12 class performs comparison operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec12 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         ret = self.op[0].value
         global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
 
+            # Take exception flag if it was still not taken.
             if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in']:
                 if exception_flag is False:
-                    print("Level 12 Exception flag.")
+                    logging.debug("Level 12 Exception flag.")
                     exception_flag = True
                     self.exception_flag = True
                 ret = self.op[0].value
-                print(f'{ret} {operation} {operand.value}')
+                logging.debug(f'{ret} {operation} {operand.value}')
+
             if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in'] and cross_tree_check:
                 self.exception_flag = False
                 self.op[0].value
                 operand.value
+
             elif operation == '<':
                 ret = ret < operand.value
-                print("Level 12 comparison < operation")
+                logging.debug("Level 12 comparison < operation")
+
             elif operation == '>':
                 ret = ret > operand.value
-                print("Level 12 comparison > operation")
+                logging.debug("Level 12 comparison > operation")
+
             elif operation == '==':
                 ret = ret == operand.value
-                print("Level 12 comparison == operation")
+                logging.debug("Level 12 comparison == operation")
+
             elif operation == '>=':
                 ret = ret >= operand.value
-                print("Level 12 comparison >= operation")
+                logging.debug("Level 12 comparison >= operation")
+
             elif operation == '<=':
                 ret = ret <= operand.value
-                print("Level 12 comparison <= operation")
+                logging.debug("Level 12 comparison <= operation")
+
             elif operation == '!=':
                 ret = ret != operand.value
-                print("Level 12 comparison != operation")
+                logging.debug("Level 12 comparison != operation")
+
             elif operation == 'in':
                 ret = ret in operand.value
-                print("Level 12 comparison in operation")
+                logging.debug("Level 12 comparison in operation")
+
             elif operation == 'not in':
                 ret = ret not in operand.value
+
+        # Raise exception if result is False and exception flag was taken by this operation.
         if ret is False and self.exception_flag is True:
             ol = self._tx_position_end - self._tx_position
             msg = ''.join((f'Expression operation ({self.op[0].value} {operation} {operand.value})',
@@ -421,8 +628,12 @@ class prec12(ExpressionElement):
                            f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
                            f' Filename {get_location(self)["filename"]}\n'))
             raise Exception(msg)
+
+        # Release exception flag.
         if self.exception_flag is True:
             exception_flag = False
+
+        # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
@@ -430,11 +641,19 @@ class prec12(ExpressionElement):
 class prec11(ExpressionElement):
     @property
     def value(self):
+        """
+        prec11 class performs requires and excludes operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec11 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             if operation in ['requires', 'excludes'] and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == 'requires':
                 flag_left = False
                 flag_right = False
@@ -447,6 +666,7 @@ class prec11(ExpressionElement):
                     raise Exception(f'Left clafer {ret} does not exist')
                 elif flag_right is False:
                     raise Exception(f'Required clafer {operand.value} does not exist')
+
             elif operation == 'excludes':
                 flag_left = False
                 flag_right = False
@@ -462,50 +682,61 @@ class prec11(ExpressionElement):
 class prec10(ExpressionElement):
     @property
     def value(self):
+        """
+        prec10 class performs assignment operation.
+
+        RETURN
+        ret (variable type): previous level object if no prec10 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation == '=' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == '=':
                 check = self.op[0].update
-                print(f"Level 10 assignment operation: {check} {operation} {right_value} {cardinality_flag}")
+                logging.debug(f"Level 10 assignment operation: {check} {operation} {right_value} {cardinality_flag}")
+
+                # Assign to complex path variable.
                 if re.match(r'(\w+\.)+\w+', check) and cardinality_flag is None:
                     path = check.split('.')
                     path.append('value')
-                    print('CHECK1')
+
+                    # Double check Python literal structures values if they are presented in str object.
                     try:
                         assign = right_value if type(right_value) != str else ast.literal_eval(right_value)
                     except ValueError:
                         assign = right_value
+
+                    # Try find and assign value to variable in local namespace.
                     try:
-                        print('CHECK2')
                         global current_namespace
                         ret = current_namespace
                         for section in path:
                             ret = ret[section]
-                        print('Assigned to Current')
                         current_namespace = self.update_nested_dict(current_namespace, path, assign)
+
+                    # If previous was not succeed, then try to do the same in global namespace.
                     except Exception:
                         global global_namespace
-                        print('CHECK3')
                         ret = global_namespace
                         for section in path:
                             ret = ret[section]
-                        print(f'Assigned to Global {path} {assign}')
                         global_namespace = self.update_nested_dict(global_namespace, path, assign)
                         ret = global_namespace
                         for section in path:
                             ret = ret[section]
-                            print(f'RET: {ret}')
+
+                # If cardinality flag was set, then update cardinality value instead of variable in namespace.
                 elif re.match(r'(\w+\.)+\w+', check) and cardinality_flag == 'fcard':
-                    print('CHECK4')
                     from wizard.views import card_update
-                    print(f'FCARDUPD: {ret} {right_value}')
                     card_update('fcard', {ret: right_value})
+
+                # If path to variable is simple, just assign value to variable in local namespace.
                 else:
-                    print('CHECK5')
                     try:
                         current_namespace[check]['value'] = right_value if type(right_value) != str else ast.literal_eval(right_value)
                     except ValueError:
@@ -545,7 +776,7 @@ class prec10(ExpressionElement):
         ''' add or update a value in a nested dict using passed list as path
             borrowed from http://stackoverflow.com/a/11918901/5456148'''
         cur = nested_dict
-        print(f'Full path: {path_list}')
+        logging.debug(f'Full path: {path_list}')
         for path_item in path_list[:-1]:
             try:
                 cur = cur[path_item]
@@ -553,7 +784,7 @@ class prec10(ExpressionElement):
                 cur = cur[path_item] = {}
 
         cur[path_list[-1]] = value
-        print(f'Value was set {path_list[-1]} {value}')
+        logging.debug(f'Value was set {path_list[-1]} {value}')
         return nested_dict
 
     def update_nested_dict(self, nested_dict, path, updateval):
@@ -563,9 +794,18 @@ class prec10(ExpressionElement):
             path,
             updateval
         )
+
+
 class prec9(ExpressionElement):
     @property
     def value(self):
+        """
+        prec9 class performs addition and subtraction operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec9 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
@@ -573,10 +813,10 @@ class prec9(ExpressionElement):
                 self.op[0].value
                 operand.value
             elif operation == '+':
-                print(f"Level 9 addition operation: {ret} {operation} {right_value}")
+                logging.debug(f"Level 9 addition operation: {ret} {operation} {right_value}")
                 ret += right_value
             elif operation == '-':
-                print(f"Level 9 subtraction operation: {ret} {operation} {right_value}")
+                logging.debug(f"Level 9 subtraction operation: {ret} {operation} {right_value}")
                 ret -= right_value
         return ret
 
@@ -587,20 +827,30 @@ class prec9(ExpressionElement):
 class prec8(ExpressionElement):
     @property
     def value(self):
+        """
+        prec8 class performs miltiplication, division and remainer operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec8 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation in ['*', '/', '%'] and cross_tree_check:
                 self.op[0].value
                 operand.value
+
             elif operation == '*':
-                print(f"Level 8 multiplication operation: {ret} {operation} {right_value}")
+                logging.debug(f"Level 8 multiplication operation: {ret} {operation} {right_value}")
                 ret *= right_value
+
             elif operation == '/':
-                print(f"Level 8 division operation: {ret} {operation} {right_value}")
+                logging.debug(f"Level 8 division operation: {ret} {operation} {right_value}")
                 ret /= right_value
+
             elif operation == '%':
-                print(f"Level 9 remainder operation: {ret} {operation} {right_value}")
+                logging.debug(f"Level 9 remainder operation: {ret} {operation} {right_value}")
                 ret %= right_value
         return ret
 
@@ -611,14 +861,24 @@ class prec8(ExpressionElement):
 class prec7(ExpressionElement):
     @property
     def value(self):
+        """
+        prec7 class performs min and max operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec7 operations are not presented in constraint
+                            operation result in opposite case.
+        """
+        # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
             if operation in ['min', 'max'] and cross_tree_check:
                 operand.value
+
             elif operation == 'min':
-                print(f"Level 8 min operation: {operation}")
+                logging.debug(f"Level 8 min operation: {operation}")
                 ret = min(operand.value)
+
             elif operation == 'max':
-                print(f"Level 8 max operation: {operation}")
+                logging.debug(f"Level 8 max operation: {operation}")
                 ret = max(operand.value)
         if len(self.op) == 1:
             ret = self.op[0].value
@@ -632,17 +892,28 @@ class prec7(ExpressionElement):
 class prec6(ExpressionElement):
     @property
     def value(self):
+        """
+        prec6 class performs sum, product and count operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec6 operations are not presented in constraint
+                            operation result in opposite case.
+        """
+        # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
             if operation in ['sum', 'product', '#'] and cross_tree_check:
                 operand.value
+
             elif operation == 'sum':
-                print(f"Level 7 sum operation: {operation}")
+                logging.debug(f"Level 7 sum operation: {operation}")
                 ret = sum(operand.value)
+
             elif operation == 'product':
-                print(f"Level 7 product operation: {operation}")
+                logging.debug(f"Level 7 product operation: {operation}")
                 ret = reduce((lambda x, y: x * y), operand.value)
+
             elif operation == '#':
-                print(f"Level 7 count operation: {operation}")
+                logging.debug(f"Level 7 count operation: {operation}")
                 ret = len(operand.value)
         if len(self.op) == 1:
             ret = self.op[0].value
@@ -655,6 +926,7 @@ class prec6(ExpressionElement):
 class prec5(ExpressionElement):
     @property
     def value(self):
+        # TODO prec5 - domain operation
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             if operation == '<:':
@@ -668,6 +940,7 @@ class prec5(ExpressionElement):
 class prec4(ExpressionElement):
     @property
     def value(self):
+        # TODO prec4 - range operation
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             if operation == ':>':
@@ -681,12 +954,21 @@ class prec4(ExpressionElement):
 class prec3(ExpressionElement):
     @property
     def value(self):
+        """
+        prec3 class performs lists union operation.
+
+        RETURN
+        ret (variable type): previous level object if no prec3 operation is not presented in constraint
+                            merged lists in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation in [',', '++'] and cross_tree_check:
                 self.op[0].value
                 operand.value
+
+            # Perform list union if such operation exist.
             elif operation == ',' or operation == '++':
                 if type(ret) == list and type(right_value) == list:
                     ret = list(set(ret) | set(right_value))
@@ -704,12 +986,21 @@ class prec3(ExpressionElement):
 class prec2(ExpressionElement):
     @property
     def value(self):
+        """
+        prec2 class performs lists difference operation.
+
+        RETURN
+        ret (variable type): previous level object if no prec2 operation is not presented in constraint
+                            merged lists in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation == '--' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
+            # Perform list difference if such operation exist.
             elif operation == '--' and type(ret) == list and type(right_value) == list:
                 ret = list(set(ret) - set(right_value))
             elif operation == '--' and type(ret) != list:
@@ -725,12 +1016,22 @@ class prec2(ExpressionElement):
 class prec1(ExpressionElement):
     @property
     def value(self):
+        """
+        prec1 class performs lists merging operations.
+
+        RETURN
+        ret (variable type): previous level object if no prec1 operations are not presented in constraint
+                            merged lists in opposite case.
+        """
+        # TODO Rethink prec1 and prec0 classes as their functionality is duplicated.
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation == '**' and cross_tree_check:
                 self.op[0].value
                 operand.value
+
+            # Perform list merge (without duplicates) if such operation exist.
             elif operation == '**' and type(ret) == list and type(right_value) == list:
                 ret = list(set(ret) & set(right_value))
             elif operation == '**' and type(ret) != list:
@@ -747,18 +1048,29 @@ class prec1(ExpressionElement):
 class prec0(ExpressionElement):
     @property
     def value(self):
+        """
+        prec0 class performs lists concatenation ('..') and merging ('&') operations.
+
+        RETURN
+        op (variable type): term object if no prec0 operations are not presented in constraint
+                            concatenated/merged lists in opposite case.
+        """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
             if operation in ['..', '&'] and cross_tree_check:
                 self.op[0].value
                 operand.value
+
+            # Perform list concatenation (with duplicates) if such operation exist.
             if operation == '..' and type(ret) == list and type(right_value) == list:
                 ret = ret + right_value
             elif operation == '..' and type(ret) != list:
                 raise Exception(f'Parameter {ret} is not list.')
             elif operation == '..' and type(right_value) != list:
                 raise Exception(f'Parameter {right_value} is not list.')
+
+            # Perform list merge (without duplicates) if such operation exist.
             if operation == '&' and type(ret) == list and type(right_value) == list:
                 ret = list(set(ret) & set(right_value))
             elif operation == '&' and type(ret) != list:
@@ -775,8 +1087,16 @@ class prec0(ExpressionElement):
 class term(ExpressionElement):
     @property
     def value(self):
+        """
+        Function to check type of op value (variable, number, string, etc.) and return it.
+
+        RETURN
+        op (variable type): variable, number, string, etc.
+        """
         op = self.op
         global unvalidated_params, mapping_iter_sum
+
+        # Cross-tree section finds whether variable is assigned to parent clafer or not.
         if cross_tree_check:
             if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
                 path = op.split('.')
@@ -793,21 +1113,32 @@ class term(ExpressionElement):
                         cross_tree_clafers.append([current_cross_tree, path[0]])
                         cross_tree_clafers_full.append(op)
                     except Exception:
-                        print('ok')
+                        logging.debug('ok')
         else:
+            # In case of int or float value, just return it
             if type(op) in {int, float}:
-                print(f"Operation object: {op} with type {type(op)}")
+                logging.debug(f"Operation object: {op} with type {type(op)}")
                 return op
+
+            # In case of ExpressionElement object (another constraint), return its validated value.
             elif isinstance(op, ExpressionElement):
-                print(f"Operation object: {op} with value {type(op)}")
+                logging.debug(f"Operation object: {op} with value {type(op)}")
                 return op.value
+
+            # In case of top-level variable in global namespace return its value.
+            # TODO same logic as in local namespace section
             elif op in global_namespace and global_namespace[op] is not None:
-                print("Namespace")
+                logging.debug("Variable in global namespace.")
                 return global_namespace[op]['value']
+
+            # In case of simple name variable (without delimiters) in local namespace return its value.
             elif op in current_namespace and current_namespace[op] is not None:
-                print("Namespace")
+                # Check for existing mappings
+                logging.debug("Variable in local namespace")
                 check = current_path + '.' + op
-                print(f'Check: {check}, current path {current_path}')
+                logging.debug(f'Check: {check}, current path {current_path}')
+
+                # If check was success then change basic path on current mapping value.
                 if check in mappings.keys():
                     global mapping_iter_sum
                     mapping_iter_sum = len(mappings[check])
@@ -819,6 +1150,8 @@ class term(ExpressionElement):
                             res = res[section]
                         unvalidated_params.append(mappings[check][mapping_iter])
                         return res['value']
+
+                # Double check if local namespace variable has no value (check in global namespace).
                 if len(current_path.split('.')) > 1:
                     unvalidated_params.append(check)
                     if current_namespace[op]['value'] is None:
@@ -833,13 +1166,19 @@ class term(ExpressionElement):
                 else:
                     unvalidated_params.append(op)
                 return current_namespace[op]['value']
+
+            # In case of bool value, just return it.
             elif type(op) is bool:
                 return op
+
+            # In case of strina value, launch additional checks.
             elif type(op) is str and op not in keywords:
-                print(f"String object: {op}")
+                logging.debug(f"String object: {op}")
+
+                # If string pattern match list object ('{a, b}'), transform it to python list object.
                 if re.match(r'\{.+\}', op):
                     op = op.replace('{', '').replace('}', '').replace(' ', '')
-                    print("List object")
+                    logging.debug("List object")
                     op = op.split(',')
                     for index, element in enumerate(op):
                         try:
@@ -850,12 +1189,17 @@ class term(ExpressionElement):
                             except ValueError:
                                 if element in current_namespace and current_namespace[element] is not None:
                                     op[index] = current_namespace[element]
-                    print(op)
+                    logging.debug(op)
+
+                # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
                 elif re.match(r'(\w+\.)+\w+', op):
+                    # Check for mappings
                     if op in mappings.keys():
                         mapping_iter_sum = len(mappings[op])
                         op = mappings[op][mapping_iter]
                     path = op.split('.')
+
+                    # Perform feature of group cardinality search if first part of string is a appropriate keyword.
                     if path[0] == 'fcard' or path[0] == 'gcard':
                         global cardinality_flag
                         cardinality_flag = path[0]
@@ -863,39 +1207,43 @@ class term(ExpressionElement):
                         card = get_card()
                         path = path[1:]
 
+                        # Rebuild path string without keyword.
                         f_p = ''
                         for section in path:
                             if f_p == '':
                                 f_p = section
                             else:
                                 f_p = f_p + '.' + section
+
+                        # Build full path (Cardinalities are presented as full path records).
                         full_path = current_path + '.' + f_p
                         if full_path in mappings.keys():
                             mapping_iter_sum = len(mappings[full_path])
                             full_path = mappings[full_path][mapping_iter]
-                        print(f'FullPath {full_path}')
-                        print(f'MappingKeys {mappings.keys()}')
-                        print(f'Mapping Table {card}')
                         try:
                             res = card[cardinality_flag][full_path]
                         except KeyError:
                             raise Exception(f'No such key {full_path} in {card[cardinality_flag]}')
+
+                    # If no cardinalities keyword presented in path, then try to find variable using this path.
                     else:
+
+                        # Firstly in local namespace.
                         try:
                             unvalidated_params.append(op)
                             res = current_namespace
-                            print(f'namespace: {res}')
-                            print(f'path: {path}')
                             for section in path:
                                 res = res[section]
                             res = res['value']
+
+                        # Then in global.
                         except Exception:
                             res = global_namespace
                             for section in path:
                                 res = res[section]
                             res = res['value']
                     op = res
-                    print(res)
+                    logging.debug(res)
                 return op
             else:
                 raise Exception('Unknown variable "{}" at position {}'
@@ -903,13 +1251,20 @@ class term(ExpressionElement):
 
     @property
     def update(self):
+        """
+        Function to check, whether variable is present in local/global namespace.
+
+        RETURN
+        op (type = str): path to required variable in the namespace.
+        """
         op = self.op
         global mapping_iter_sum
+
+        # Check local namespace.
         if op in current_namespace:
-            print("Namespace update")
+            logging.debug("Namespace update")
             check = current_path + '.' + op
-            print(f'Check: {check}, current path {current_path}')
-            print(global_namespace)
+            logging.debug(f'Check: {check}, current path {current_path}')
             if check in mappings.keys():
                 mapping_iter_sum = len(mappings[check])
                 new_op = mappings[check][mapping_iter].split('.')[-1]
@@ -919,8 +1274,9 @@ class term(ExpressionElement):
                     for section in path:
                         res = res[section]
                 op = mappings[check][mapping_iter]
-                print(f'OP {op}')
             return op
+
+        # Check global namespace. Also this section finds cardinalities.
         elif re.match(r'(\w+\.)+\w+', op):
             if op in mappings.keys():
                 mapping_iter_sum = len(mappings[op])
@@ -930,14 +1286,13 @@ class term(ExpressionElement):
                 global cardinality_flag
                 cardinality_flag = path[0]
                 path = path[1:]
-            print(f'PATH!!!!!!{path}')
             try:
                 res = current_namespace
                 for section in path:
                     res = res[section]
                 res = res['value']
             except Exception:
-                print(f'Local Namespace does not contain variable {op}')
+                logging.info(f'Local Namespace does not contain variable {op}')
                 res = global_namespace
                 for section in path:
                     res = res[section]
@@ -949,890 +1304,1070 @@ class term(ExpressionElement):
                         op = elem
                     else:
                         op = op + '.' + elem
-            print(f'Return {op} value')
+            logging.debug(f'Return {op} value')
             return op
         else:
             raise Exception(f'Global namespace does not contain variable {op}')
 
-def cname(o):
-    return o.__class__.__name__
 
+class textX_API():
 
-def constraint(constraint):
-    print("_____________________")
-    exp = constraint.name
-    print(exp.value)
-    print(global_namespace)
+    def cname(self, o):
+        """
+        Function to return class name of object.
 
+        INPUTS
+        o: object to check.
 
-def root_clafer(clafer, namespace=None):
-    if namespace is None:
-        return_trigger = False
-    else:
-        return_trigger = True
-    print("______________________________")
-    print(f"This is Clafer: {clafer.name}")
-    print(f"Is it abstract: {clafer.abstract}")
-    print(f"Its group cardinality: {clafer.gcard}")
-    print(f"Its feature cardinality: {clafer.fcard}")
-    if clafer.super is not None:
-        print(f"It has super instance: {clafer.super.value}")
-    else:
-        print(f"It has super instance: {clafer.super}")
-    print(f"It has reference: {clafer.reference}")
-    print(f"It has init expression: {clafer.init}")
-    group = {}
+        RETURN
+        (type = string): object`s class name.
+        """
+        return o.__class__.__name__
 
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer" and child1.reference is None:
-                group = root_clafer(child1, group)
-            elif cname(child1) == "Clafer" and child1.reference is not None:
-                group = property_clafer(child1, group)
-    clafer.namespace = group
-    clafer.super_direct = []
-    clafer.super_indirect = []
-    print(f"Clafer namespace: {clafer.namespace}")
-    print("______________________________")
-    if return_trigger:
-        namespace[clafer.name] = group
-        return namespace
+    def constraint(self, constraint):
+        """
+        Perform constraint execution.
+        """
+        exp = constraint.name
+        exp.value
 
+    def root_clafer(self, clafer, namespace=None):
+        """
+        ! This method is recursive.
 
-def get_model_cardinalities():
-    fcard = {}
-    gcard = {}
-    for element in model.elements:
-        if cname(element) == "Clafer":
-            fcard.update(clafer_fcard(element))
-            gcard.update(clafer_gcard(element))
-    return fcard, gcard
+        Function to define clafers.
 
-def clafer_fcard(clafer, prefix=None):
-    fcard = {}
-    if prefix:
-        name = prefix + '.' + clafer.name
-    else:
-        name = clafer.name
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer":
-                fcard.update(clafer_fcard(child1, name))
-    if clafer.fcard:
-        fcard.update({name: clafer.fcard})
-    return fcard
+        INPUTS
+        clafer (type = clafer): clafer to define.
+        namespace (type = dict): top-level clafer namespace to fullfill.
 
-def clafer_gcard(clafer, prefix=None):
-    gcard = {}
-    if prefix:
-        name = prefix + '.' + clafer.name
-    else:
-        name = clafer.name
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer":
-                gcard.update(clafer_gcard(child1, name))
-    if clafer.gcard:
-        gcard.update({name: clafer.gcard})
-    return gcard
-
-def cardinality_solver(clafer, card_type, card_value):
-    fcard, gcard = get_model_cardinalities()
-    if card_type == 'fcard':
-        card = fcard[clafer]
-    else:
-        card = gcard[clafer]
-    x = card_value
-    res = []
-    if card == '*':
-        res.append('x>=0')
-    elif card == '+' or card == 'or':
-        res.append('x>=1')
-    elif card == '?' or card == 'mux':
-        res.append(['x>=0', 'x<=1'])
-    elif card == 'xor':
-        res.append('x==1')
-    elif type(card) == int or re.match(r'^\d+$', card):
-        res.append(f'x=={card}')
-    else:
-        strspl = card.split(',')
-        for lexem in strspl:
-            if re.match(r'(\d+\.\.)+\d+', lexem):
-                lexspl = lexem.split('..')
-                subres = []
-                subres.append(f'x>={lexspl[0]}')
-                subres.append(f'x<={lexspl[1]}')
-                res.append(subres)
-            else:
-                res.append(f'x=={lexem}')
-    match_group_res = []
-    for match_group in res:
-        if type(match_group) == list:
-            subres = []
-            for match in match_group:
-                subres.append(pd.eval(match))
-            match_group_res.append(all(subres))
+        RETURN
+        namespace (type = dict): clafer`s namespace. Only for not top-level clafers.
+        """
+        if namespace is None:
+            return_trigger = False
         else:
-            match_group_res.append(pd.eval(match_group))
-    result = any(match_group_res)
-    if result:
-        print(f'Result: {x} lies in interval {card}')
-        return True
-    else:
-        return Exception(f'Result: {x} not lies in interval {card}')
+            return_trigger = True
+        logging.debug(f"This is Clafer: {clafer.name}")
+        logging.debug(f"Is it abstract: {clafer.abstract}")
+        logging.debug(f"Its group cardinality: {clafer.gcard}")
+        logging.debug(f"Its feature cardinality: {clafer.fcard}")
+        if clafer.super is not None:
+            logging.debug(f"It has super instance: {clafer.super.value}")
+        else:
+            logging.debug(f"It has super instance: {clafer.super}")
+        logging.debug(f"It has reference: {clafer.reference}")
+        logging.debug(f"It has init expression: {clafer.init}")
+        group = {}
 
-def get_abstract_clafers():
-    global abstract_clafers
-    return abstract_clafers
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer" and child1.reference is None:
+                    group = self.root_clafer(child1, group)
+                elif self.cname(child1) == "Clafer" and child1.reference is not None:
+                    group = self.property_clafer(child1, group)
 
-def update_abstract_clafers():
-    global abstract_clafers
-    for element in model.elements:
-        if cname(element) == "Clafer":
-            for element in clafer_abstract(element):
-                abstract_clafers.append(element)
+        clafer.namespace = group
+        clafer.super_direct = []
+        clafer.super_indirect = []
+        logging.debug(f"Clafer namespace: {clafer.namespace}")
+        if return_trigger:
+            namespace[clafer.name] = group
+            return namespace
 
-def clafer_abstract(clafer, prefix=None):
-    abstr_clafers = []
-    if prefix:
-        name = prefix + '.' + clafer.name
-    else:
-        name = clafer.name
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer":
-                res = clafer_abstract(child1, name)
-                abstr_clafers = abstr_clafers + res
-    if clafer.abstract:
-        abstr_clafers.append(name)
-    return abstr_clafers
+    def get_model_cardinalities(self):
+        """
+        Function to find all cardinalities.
 
-def fullfill_abstract_dependencies():
-    global abstract_dependencies, model
-    for clafer in abstract_clafers:
-        res = []
+        RETURN
+        fcard (type = dict): dict of feature cardinalities values.
+        gcard (type = dict): dict of group cardinalities values.
+        """
+        fcard = {}
+        gcard = {}
         for element in model.elements:
-            if cname(element) == "Clafer":
-                for elem in find_abstract(element, clafer):
-                    res.append(elem)
-        abstract_dependencies.update({clafer: res})
-    print(f'Abstract dependencies fullfiled: {abstract_dependencies}')
+            if self.cname(element) == "Clafer":
+                fcard.update(self.clafer_fcard(element))
+                gcard.update(self.clafer_gcard(element))
+        return fcard, gcard
 
-def find_abstract(clafer, abstract, prefix=None):
-    abstr_clafers = []
-    if prefix:
-        name = prefix + '.' + clafer.name
-    else:
-        name = clafer.name
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer":
-                res = find_abstract(child1, abstract, name)
-                abstr_clafers = abstr_clafers + res
-    print(clafer.abstract)
-    print(f'SUPERDIRECT: {type(clafer)}')
-    from pprint import pprint
-    # pprint(vars(clafer))
-    if abstract in clafer.super_direct or abstract in clafer.super_indirect:
-        abstr_clafers.append(name)
-    return abstr_clafers
+    def clafer_fcard(self, clafer, prefix=None):
+        """
+        ! This method is recursive.
 
-def get_abstract_dependencies():
-    global abstract_dependencies
-    return abstract_dependencies
+        Function to find all feature cardinalities.
 
-def topological_sort(dependency_pairs):
-    num_heads = defaultdict(int)
-    tails = defaultdict(list)
-    for h, t in dependency_pairs:
-        num_heads[t] += 1
-        tails[h].append(t)
+        INPUTS
+        clafer (type = clafer): clafer to check its feature cardinality.
+        prefix (type = str): prefix to create full path.
 
-    ordered = [h for h in tails if h not in num_heads]
-    for h in ordered:
-        for t in tails[h]:
-            num_heads[t] -= 1
-            if not num_heads[t]:
-                ordered.append(t)
-    cyclic = [n for n, heads in num_heads.items() if heads]
-    return ordered, cyclic
-
-
-def staging(cross_tree_dependencies):
-    global cycles, cross_tree_list
-
-    ctl = []
-    all_clafers = list(global_namespace.keys())
-    cross_clafers = []
-    for dep in cross_tree_dependencies:
-        cross_clafers.append(dep[0])
-        cross_clafers.append(dep[1])
-        ctl.append(dep[1])
-    cross_tree_list = list(dict.fromkeys(ctl))
-    cross_clafers = list(dict.fromkeys(cross_clafers))
-    s = set(cross_clafers)
-    independent_clafers = [x for x in all_clafers if x not in s]
-    # Create networkx graph object
-    G = nx.DiGraph(cross_tree_dependencies)
-    index = 0
-    new_dep = []
-    cycled = []
-    # Find all cycles in graph
-    for cycle in nx.simple_cycles(G):
-        index += 1
-        print(f'Cycle cycle{index} contain elements: {cycle}')
-        cycles[f'cycle{index}'] = cycle
-        for element in cycle:
-            cycled.append(element)
-            for dep in cross_tree_dependencies:
-                if element == dep[0] and dep[1] not in cycle:
-                    new_dep.append([f'cycle{index}', dep[1]])
-                elif element == dep[1] and dep[0] not in cycle:
-                    new_dep.append([dep[0], f'cycle{index}'])
-
-    # Remove cycle dependencies duplicates
-    new_k = []
-    for elem in new_dep:
-        if elem not in new_k:
-            new_k.append(elem)
-    new_dep = new_k
-    new_dep1 = cross_tree_dependencies
-    new_dep2 = []
-    # Copy all dependencies not related to any cycle
-    for dep in new_dep1:
-        flag = False
-        for element in cycled:
-            if element in dep:
-                flag = True
-        if flag is False:
-            new_dep2.append(dep)
-    # Add cardinalities
-    fcard, gcard = get_model_cardinalities()
-    fcardinalities = [{'fcard': fcard}]
-    gcardinalities = [{'gcard': gcard}]
-    # Combine cycle and not-cycle dependencies to form final list
-    res = new_dep2 + new_dep
-    res = topological_sort(res)
-    result = res[0] + independent_clafers
-    # Add independent cycles
-    index = 0
-    for cycle in nx.simple_cycles(G):
-        index += 1
-        print("IS HERE?")
-        if f'cycle{index}' not in result:
-            print('YES')
-            result.append(f'cycle{index}')
+        RETURN
+        fcard (type = dict): dict of feature cardinalities values.
+        """
+        fcard = {}
+        if prefix:
+            name = prefix + '.' + clafer.name
         else:
-            print("NO")
-    result.reverse()
-    ret_val = fcardinalities + gcardinalities + result
-    print(f'There are {len(res[0])} stages for cross-tree dependencies: {res[0]}')
-    print(f'Cycled clafers: {cycled}')
-    print(f'Additional independent clafers: {independent_clafers}')
-    print(f'Final result: {result}')
-    return ret_val
+            name = clafer.name
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer":
+                    fcard.update(self.clafer_fcard(child1, name))
+        if clafer.fcard:
+            fcard.update({name: clafer.fcard})
+        return fcard
 
-def recursive_items(dictionary, prefix=None):
-    for key, value in dictionary.items():
-        if type(value) is dict:
-            if 'type' in value.keys() and 'value' in value.keys():
+    def clafer_gcard(self, clafer, prefix=None):
+        """
+        ! This method is recursive.
+
+        Function to find all group cardinalities.
+
+        INPUTS
+        clafer (type = clafer): clafer to check its group cardinality.
+        prefix (type = str): prefix to create full path.
+
+        RETURN
+        gcard (type = dict): dict of group cardinalities values.
+        """
+        gcard = {}
+        if prefix:
+            name = prefix + '.' + clafer.name
+        else:
+            name = clafer.name
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer":
+                    gcard.update(self.clafer_gcard(child1, name))
+        if clafer.gcard:
+            gcard.update({name: clafer.gcard})
+        return gcard
+
+    def cardinality_solver(self, clafer, card_type: str, card_value: int):
+        """
+        Function to check, is target value allowed by cardinality record ot not.
+
+        INPUTS
+        clafer (type = clafer): clafer to check cardinality value (get it`s cardinality record).
+        card_type (type = str): feature or group cardinality.
+        card_value (type = int): cardinality value to check.
+
+        RETURN
+        True (type = bool): if check was successfull;
+        Raise Exception if not.
+        """
+        fcard, gcard = self.get_model_cardinalities()
+        if card_type == 'fcard':
+            card = fcard[clafer]
+        else:
+            card = gcard[clafer]
+        x = card_value
+        res = []
+
+        # Transform special cardinality values to simple constraint. Fullfill match groups.
+        if card == '*':
+            res.append('x>=0')
+        elif card == '+' or card == 'or':
+            res.append('x>=1')
+        elif card == '?' or card == 'mux':
+            res.append(['x>=0', 'x<=1'])
+        elif card == 'xor':
+            res.append('x==1')
+        elif type(card) == int or re.match(r'^\d+$', card):
+            res.append(f'x=={card}')
+        else:
+            strspl = card.split(',')
+            for lexem in strspl:
+                if re.match(r'(\d+\.\.)+\d+', lexem):
+                    lexspl = lexem.split('..')
+                    subres = []
+                    subres.append(f'x>={lexspl[0]}')
+                    subres.append(f'x<={lexspl[1]}')
+                    res.append(subres)
+                else:
+                    res.append(f'x=={lexem}')
+        match_group_res = []
+
+        # Check all match groups
+        for match_group in res:
+            if type(match_group) == list:
+                subres = []
+                for match in match_group:
+                    subres.append(pd.eval(match))
+                match_group_res.append(all(subres))
+            else:
+                match_group_res.append(pd.eval(match_group))
+        result = any(match_group_res)
+        if result:
+            logging.debug(f'Result: {x} lies in interval {card}')
+            return True
+        else:
+            return Exception(f'Result: {x} not lies in interval {card}')
+
+    def get_abstract_clafers(self):
+        global abstract_clafers
+        return abstract_clafers
+
+    def update_abstract_clafers(self):
+        """
+        Function to find all abstract clafers.
+        """
+        global abstract_clafers
+        for element in model.elements:
+            if self.cname(element) == "Clafer":
+                for element in self.clafer_abstract(element):
+                    abstract_clafers.append(element)
+
+    def clafer_abstract(self, clafer, prefix=None):
+        """
+        ! This method is recursive.
+
+        Function to find all abstract clafers.
+
+        INPUTS
+        clafer (type = clafer): top-level clafer to check for abstract.
+        prefix (type = str): prefix to create full path.
+
+        RETURN
+        abstr_clafers (type = list): list of abstract clafers.
+        """
+        abstr_clafers = []
+        if prefix:
+            name = prefix + '.' + clafer.name
+        else:
+            name = clafer.name
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer":
+                    res = self.clafer_abstract(child1, name)
+                    abstr_clafers = abstr_clafers + res
+        if clafer.abstract:
+            abstr_clafers.append(name)
+        return abstr_clafers
+
+    def fullfill_abstract_dependencies(self):
+        """
+        Function to fullfill abstract clafer dependencies.
+        This depencendies are presented as dict(abstract clafer: [list of clafers inherited from it])
+        """
+        global abstract_dependencies, model
+        for clafer in abstract_clafers:
+            res = []
+            for element in model.elements:
+                if self.cname(element) == "Clafer":
+                    for elem in self.find_abstract(element, clafer):
+                        res.append(elem)
+            abstract_dependencies.update({clafer: res})
+        logging.info(f'Abstract dependencies fullfiled: {abstract_dependencies}')
+
+    def find_abstract(self, clafer, abstract, prefix=None):
+        """
+        ! This method is recursive.
+
+        Function to find all clafers with concrete abstract clafer.
+
+        INPUTS
+        clafer (type = clafer): clafer to check for abstract.
+        abstract (type = clafer): abstract clafer to check.
+
+        RETURN
+        abstr_clafers (type = list): list of clafers with concrete abstract clafer.
+        """
+        abstr_clafers = []
+        if prefix:
+            name = prefix + '.' + clafer.name
+        else:
+            name = clafer.name
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer":
+                    res = self.find_abstract(child1, abstract, name)
+                    abstr_clafers = abstr_clafers + res
+        if abstract in clafer.super_direct or abstract in clafer.super_indirect:
+            abstr_clafers.append(name)
+        return abstr_clafers
+
+    def get_abstract_dependencies(self):
+        global abstract_dependencies
+        return abstract_dependencies
+
+    def topological_sort(self, dependency_pairs):
+        """
+        Subfunction to define sequence of clafers to validate. The analogue of directed graph path.
+
+        INPUTS
+        dependency_pairs: list of cross-tree dependencies pairs.
+
+        RETURN
+        ordered (type = list): sequence of independent clafers to validate.
+        cyclic (type = list): list of cyclic clafers.
+        """
+        num_heads = defaultdict(int)
+        tails = defaultdict(list)
+        for h, t in dependency_pairs:
+            num_heads[t] += 1
+            tails[h].append(t)
+
+        ordered = [h for h in tails if h not in num_heads]
+        for h in ordered:
+            for t in tails[h]:
+                num_heads[t] -= 1
+                if not num_heads[t]:
+                    ordered.append(t)
+        cyclic = [n for n, heads in num_heads.items() if heads]
+        return ordered, cyclic
+
+
+    def staging(self, cross_tree_dependencies: list):
+        """
+        Function to define sequence of clafers to validate.
+
+        INPUTS
+        cross_tree_dependencies: list of cross-tree dependencies.
+
+        RETURN
+        ret_val (type = list): sequence of clafers to validate.
+        """
+        global cycles, cross_tree_list
+
+        # Define cross-tree and independent clafers
+        ctl = []
+        all_clafers = list(global_namespace.keys())
+        cross_clafers = []
+        for dep in cross_tree_dependencies:
+            cross_clafers.append(dep[0])
+            cross_clafers.append(dep[1])
+            ctl.append(dep[1])
+        cross_tree_list = list(dict.fromkeys(ctl))
+        cross_clafers = list(dict.fromkeys(cross_clafers))
+        s = set(cross_clafers)
+        independent_clafers = [x for x in all_clafers if x not in s]
+
+        # Create networkx graph object
+        G = nx.DiGraph(cross_tree_dependencies)
+        index = 0
+        new_dep = []
+        cycled = []
+
+        # Find all cycles in graph
+        for cycle in nx.simple_cycles(G):
+            index += 1
+            logging.debug(f'Cycle cycle{index} contain elements: {cycle}')
+            cycles[f'cycle{index}'] = cycle
+            for element in cycle:
+                cycled.append(element)
+                for dep in cross_tree_dependencies:
+                    if element == dep[0] and dep[1] not in cycle:
+                        new_dep.append([f'cycle{index}', dep[1]])
+                    elif element == dep[1] and dep[0] not in cycle:
+                        new_dep.append([dep[0], f'cycle{index}'])
+
+        # Remove cycle dependencies duplicates
+        new_k = []
+        for elem in new_dep:
+            if elem not in new_k:
+                new_k.append(elem)
+        new_dep = new_k
+        new_dep1 = cross_tree_dependencies
+        new_dep2 = []
+
+        # Copy all dependencies not related to any cycle
+        for dep in new_dep1:
+            flag = False
+            for element in cycled:
+                if element in dep:
+                    flag = True
+            if flag is False:
+                new_dep2.append(dep)
+
+        # Add cardinalities
+        fcard, gcard = self.get_model_cardinalities()
+        fcardinalities = [{'fcard': fcard}]
+        gcardinalities = [{'gcard': gcard}]
+
+        # Combine cycle and not-cycle dependencies to form final list
+        res = new_dep2 + new_dep
+        res = self.topological_sort(res)
+        result = res[0] + independent_clafers
+
+        # Add independent cycles
+        index = 0
+        for cycle in nx.simple_cycles(G):
+            index += 1
+            if f'cycle{index}' not in result:
+                result.append(f'cycle{index}')
+        result.reverse()
+        ret_val = fcardinalities + gcardinalities + result
+        logging.info(f'There are {len(res[0])} stages for cross-tree dependencies: {res[0]}')
+        logging.info(f'Cycled clafers: {cycled}')
+        logging.info(f'Additional independent clafers: {independent_clafers}')
+        logging.info(f'Final result: {result}')
+        return ret_val
+
+    def recursive_items(self, dictionary: dict, prefix=None):
+        """
+        ! This method is recursive.
+
+        Function to read values from dictionary.
+
+        INPUTS
+        dictionary: dictionary to read value from.
+        prefix (type = str): prefix to create full path for nested clafers.
+
+        RETURN
+        (type = list): tuple of key-value records.
+        """
+        for key, value in dictionary.items():
+            if type(value) is dict:
+                if 'type' in value.keys() and 'value' in value.keys():
+                    if not prefix:
+                        yield (key, value)
+                    else:
+                        yield (prefix + "." + key, value)
+                else:
+                    if prefix:
+                        prefix_upd = prefix + "." + key
+                    else:
+                        prefix_upd = key
+                    yield from self.recursive_items(value, prefix=prefix_upd)
+            else:
                 if not prefix:
                     yield (key, value)
                 else:
                     yield (prefix + "." + key, value)
-            else:
-                if prefix:
-                    prefix_upd = prefix + "." + key
-                else:
-                    prefix_upd = key
-                yield from recursive_items(value, prefix=prefix_upd)
-        else:
-            if not prefix:
-                yield (key, value)
-            else:
-                yield (prefix + "." + key, value)
 
-def update_namespace(new, inner=None, topkey=None):
-    global global_namespace
-    if not inner:
-        if topkey:
-            inner = global_namespace
-        else:
-            raise(Exception("NO TOPKEY PROVIDED"))
+    def update_namespace(self, new: dict):
+        """
+        Function to update global namespace records.
 
-    for k, v in new.items():
-        if re.match(r'(\w+\.)+\w+', k):
-            k = k.split('.')
-        if k[0].split('_')[0] in inner.keys() and topkey and k[0] not in inner.keys():
-            inner[k[0]] = copy.deepcopy(inner[k[0].split('_')[0]])
-        for key, value in inner.items():
+        INPUTS
+        new: dict with values to update.
+        """
+        global global_namespace
 
-            if k == key:
-                if inner[k]['type'] == 'boolean':
-                    v = json.loads(v.lower())
-                inner[k].update({'value': v})
-                break
-            elif k[0] == key:
-                inner_copy = inner
-                for section in k[:-1]:
-                    inner_copy = inner_copy[section]
-                if k[-1] in inner_copy.keys():
-                    if inner_copy[k[-1]]['type'] == 'boolean':
-                        print(f'INS V {v}')
+        inner = global_namespace
+
+        for k, v in new.items():
+            if re.match(r'(\w+\.)+\w+', k):
+                k = k.split('.')
+
+            # Coppy top-level records if mapping exist.
+            if k[0].split('_')[0] in inner.keys() and k[0] not in inner.keys():
+                inner[k[0]] = copy.deepcopy(inner[k[0].split('_')[0]])
+
+            for key, value in inner.items():
+                # Update top-level key value
+                if k == key:
+                    if inner[k]['type'] == 'boolean':
                         v = json.loads(v.lower())
-                        print(f'TRA V {v}')
-                    inner_copy[k[-1]].update({'value': v})
-                    print(f'INSERTED {k} with value {v} into {key} and value {value}')
-                else:
-                    print(f'INNERCOPY: {inner_copy}')
-                    original = k[-1].split('_')[0]
-                    if 'type' in inner_copy[original].keys():
-                        if inner_copy[original]['type'] == 'boolean':
+                    inner[k].update({'value': v})
+                    break
+                elif k[0] == key:
+                    inner_copy = inner
+                    for section in k[:-1]:
+                        inner_copy = inner_copy[section]
+
+                    # If fcard == 1.
+                    if k[-1] in inner_copy.keys():
+                        if inner_copy[k[-1]]['type'] == 'boolean':
                             v = json.loads(v.lower())
-                        inner_copy[k[-1]] = {'value': v, 'type': inner_copy[original]['type']}
+                        inner_copy[k[-1]].update({'value': v})
+
+                    # If fcard != 1.
                     else:
-                        inner_copy[k[-1]] = copy.deepcopy(v)
+                        original = k[-1].split('_')[0]
+                        if 'type' in inner_copy[original].keys():
+                            if inner_copy[original]['type'] == 'boolean':
+                                v = json.loads(v.lower())
+                            inner_copy[k[-1]] = {'value': v, 'type': inner_copy[original]['type']}
+                        else:
+                            inner_copy[k[-1]] = copy.deepcopy(v)
 
+    def read_keys(self):
+        """
+        Function to read all keys in global namespace.
 
-def read_keys():
-    top_keys = global_namespace.keys()
-    keys = {}
-    for topkey in top_keys:
-        print(topkey)
-        subkey = []
-        for key, value in recursive_items(global_namespace[topkey]):
-            subkey.append({key: value})
-        keys[topkey] = subkey
-    return keys
+        RETURN
+        keys (type = dict): dict(top-level key: all nested keys).
+        """
+        top_keys = global_namespace.keys()
+        keys = {}
+        for topkey in top_keys:
+            logging.debug(topkey)
+            subkey = []
+            for key, value in self.recursive_items(global_namespace[topkey]):
+                subkey.append({key: value})
+            keys[topkey] = subkey
+        return keys
 
-def read_certain_key(path, only_childs):
-    abs_flag = False
-    path_flag = True
-    path_check = global_namespace
-    check = ''
-    print(f'Read path {path}')
-    for part in path.split('.'):
-        try:
-            path_check = path_check[part]
-        except KeyError:
-            path_flag = False
-        if check == '':
-            check = part
+    def read_certain_key(self, path: str, only_childs: bool):
+        """
+        ! This method is only used to read group cardinalities (including inherited from abstract clafers).
+
+        Function to read values from global namespace.
+
+        INPUTS
+        path: path to read value from.
+        only_childs: flag to return only direct childs.
+
+        RETURN
+        key (type = dict): read value.
+        """
+        abs_flag = False
+        path_flag = True
+        path_check = global_namespace
+        check = ''
+        logging.debug(f'Read path {path}')
+        for part in path.split('.'):
+            try:
+                path_check = path_check[part]
+            except KeyError:
+                path_flag = False
+            if check == '':
+                check = part
+            else:
+                check = check + '.' + part
+            for dep in abstract_dependencies.keys():
+                if check.split('_')[0] in abstract_dependencies[dep]:
+                    check = dep
+            if check in abstract_clafers:
+                abs_flag = True
+        key = {}
+        if path_flag is True:
+            ns = global_namespace
+            logging.debug(f'Take Global namespace {ns}')
+            p = path
+        elif path_flag is False and abs_flag is True:
+            ns = abstract_namespace
+            p = check
+            logging.debug(f'Take Abstract namespace {ns}')
         else:
-            check = check + '.' + part
-        for dep in abstract_dependencies.keys():
-            if check.split('_')[0] in abstract_dependencies[dep]:
-                check = dep
-        if check in abstract_clafers:
-            abs_flag = True
-    key = {}
-    if path_flag is True:
-        ns = global_namespace
-        print(f'Take Global namespace {ns}')
-        p = path
-    elif path_flag is False and abs_flag is True:
-        ns = abstract_namespace
-        p = check
-        print(f'Take Abstract namespace {ns}')
-    else:
-        raise Exception(f'No such clafer exist {path}')
-    subkey = []
-    path_s = p.split('.')
-    for elem in path_s:
-        ns = ns[elem]
-    if only_childs:
-        for k in ns.keys():
-            subkey.append(k)
-    else:
-        for k, v in recursive_items(ns):
-            subkey.append({k: v})
-    key[path] = subkey
-    return key
+            raise Exception(f'No such clafer exist {path}')
+        subkey = []
+        path_s = p.split('.')
+        for elem in path_s:
+            ns = ns[elem]
+        if only_childs:
+            for k in ns.keys():
+                subkey.append(k)
+        else:
+            for k, v in self.recursive_items(ns):
+                subkey.append({k: v})
+        key[path] = subkey
+        return key
 
-def get_cycle_keys():
-    return cycles
+    def get_cycle_keys(self):
+        return cycles
 
-def get_namespace():
-    return global_namespace
+    def get_namespace(self):
+        return global_namespace
 
-def get_mappings():
-    return mappings
+    def get_mappings(self):
+        return mappings
 
-def write_to_keys(input_data=None):
-    for k, v in input_data.items():
-        update_namespace(new={k: v}, topkey=True)
+    def write_to_keys(self, input_data=None):
+        """
+        Update global namespace with data from web interface.
+        """
+        for k, v in input_data.items():
+            self.update_namespace(new={k: v})
 
-def group_clafer(clafer, namespace):
-    print("______________________________")
-    print(f"This is group Clafer: {clafer.name}")
-    group = {}
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer" and child1.reference is None:
-                group_clafer(child1, group)
-            elif cname(child1) == "Clafer" and child1.reference is not None:
-                property_clafer(child1, group)
-    namespace[clafer.name] = group
-    clafer.namespace = group
-    return namespace
+    def group_clafer(self, clafer, namespace: dict):
+        """
+        ! This method is recursive.
+        ! Group clafer is a clafer that does not refers to any type. This clafer could have childs.
 
-def property_clafer(clafer, namespace):
-    print("______________________________")
-    print(f"This is property Clafer: {clafer.name}")
-    print(f"It has reference: {clafer.reference}")
-    sub = {'value': None, 'type': clafer.reference.value}
-    clafer.super_direct = []
-    clafer.super_indirect = []
-    namespace[clafer.name] = sub
-    return namespace
-    print("______________________________")
+        Function to update parent namespace with the group clafer.
 
-def root_clafer_constraints(clafer, isroot, flag=True):
-    print("______________________________")
-    print(f'ROOT CLAFER {clafer.name} constraints')
-    print(clafer.namespace)
-    global global_namespace, current_namespace, unvalidated_params, current_path
-    if isroot is True:
-        current_path = clafer.name
-    else:
-        local_path = current_path
-        current_path = current_path + '.' + clafer.name
-    from wizard.views import check_gcard
-    if flag is False:
-        check = check_gcard(current_path)
-        print(f'GC_CHECK: {check}')
-    else:
-        check = True
-    if check is True:
-        current_namespace = clafer.namespace
-        counter = 0
+        INPUTS
+        clafer (type = textX.clafer): clafer to define.
+        namespace: parent namespace.
+
+        RETURN
+        namespace (type = dict): parent namespace with this clafer record.
+        """
+
+        logging.debug(f"This is group Clafer: {clafer.name}")
+        group = {}
         for child in clafer.nested:
             for child1 in child.child:
-                unvalidated_params = []
-                print(f'CNAME {cname(child1)} {child1.name}')
-                if cname(child1) == "Constraint":
-                    counter += 1
-                    global mapping_iter, mapping_iter_sum, cardinality_flag
-                    cardinality_flag = None
-                    mapping_iter = 0
-                    mapping_iter_sum = 1
-                    print(f'CONSTRAINTNAME: {child1.name}')
-                    while mapping_iter < mapping_iter_sum:
-                        unvalidated_params = []
-                        child1.name.value
-                        mapping_iter += 1
-                    clafer.namespace = current_namespace
-                    if isroot is True:
-                        global_namespace[clafer.name] = current_namespace
-                elif cname(child1) == 'Clafer' and isinstance(child1.reference, type(None)):
-                    clafer.namespace[child1.name].update(root_clafer_constraints(child1, False, flag))
-                    current_namespace = clafer.namespace
+                if self.cname(child1) == "Clafer" and child1.reference is None:
+                    self.group_clafer(child1, group)
+                elif self.cname(child1) == "Clafer" and child1.reference is not None:
+                    self.property_clafer(child1, group)
+        namespace[clafer.name] = group
+        clafer.namespace = group
+        return namespace
+
+    def property_clafer(self, clafer, namespace: dict):
+        """
+        ! Property clafer is a clafer that refers to some type. This clafer has no childs.
+
+        Function to update parent namespace with the property clafer.
+
+        INPUTS
+        clafer (type = textX.clafer): clafer to define.
+        namespace: parent namespace.
+
+        RETURN
+        namespace (type = dict): parent namespace with this clafer record.
+        """
+        logging.debug(f"This is property Clafer: {clafer.name}")
+        logging.debug(f"It has reference: {clafer.reference}")
+        sub = {'value': None, 'type': clafer.reference.value}
+        clafer.super_direct = []
+        clafer.super_indirect = []
+        namespace[clafer.name] = sub
+        return namespace
+
+    def root_clafer_constraints(self, clafer, isroot, gcard_check=True):
+        """
+        ! This method is recursive.
+
+        Find and validate all clafer and his childs constraints.
+
+        INPUTS
+        clafer (type = textX.clafer): clafer to validation.
+        isroot (type = bool): flag to reset current_path variable.
+        Path is built according to clafer nested structure.
+        gcard_check (type = bool): flag to perform gcard check.
+
+        RETURN
+        clafer.namespace (type = dict): clafer namespace after constraints validation.
+        """
+        logging.info(f'Clafer {clafer.name} constraint validation.')
+        global global_namespace, current_namespace, unvalidated_params, current_path
+
+        # According to isroot flag update current_path variable.
+        if isroot is True:
+            current_path = clafer.name
+        else:
+            local_path = current_path
+            current_path = current_path + '.' + clafer.name
+
+        # According to gcard_check flag perform gcard check (is this clafer is valid gcard choice).
+        from wizard.views import check_gcard
+        if gcard_check is False:
+            check = check_gcard(current_path)
+            logging.debug(f'GC_CHECK: {check}')
+        else:
+            check = True
+
+        if check is True:
+            current_namespace = clafer.namespace
+            counter = 0
+            for child in clafer.nested:
+                for child1 in child.child:
+                    unvalidated_params = []
+
+                    # Perform constraint validation using clafer mappings if such are exist.
+                    if self.cname(child1) == "Constraint":
+                        counter += 1
+                        global mapping_iter, mapping_iter_sum, cardinality_flag
+                        cardinality_flag = None
+                        mapping_iter = 0
+                        mapping_iter_sum = 1
+                        logging.debug(f'Constraint name: {child1.name}')
+                        while mapping_iter < mapping_iter_sum:
+                            unvalidated_params = []
+                            child1.name.value
+                            mapping_iter += 1
+                        clafer.namespace = current_namespace
+                        if isroot is True:
+                            global_namespace[clafer.name] = current_namespace
+
+                    # Perform constraint validation for nested clafers.
+                    elif self.cname(child1) == 'Clafer' and isinstance(child1.reference, type(None)):
+                        logging.info(f'CLAFR {clafer.namespace}')
+                        clafer.namespace[child1.name].update(self.root_clafer_constraints(child1, False, gcard_check))
+                        current_namespace = clafer.namespace
+
+            current_namespace = {}
+            logging.info(f'For clafer {clafer.name} there is/are {counter} constraint expression(s) evaluated.')
+            logging.debug(f'Clafer namespace: {clafer.namespace}')
+
+        # Reset current_path variable.
+        if isroot is True:
+            current_path = ''
+        else:
+            current_path = local_path
+        return clafer.namespace
+
+    def cardinalities_upd(self, card):
+        global cardinalities_list
+        cardinalities_list = card
+
+    def get_card(self):
+        global cardinalities_list
+        return cardinalities_list
+
+    def get_cross_tree_list(self):
+        global cross_tree_list, cross_tree_clafers_full
+        return cross_tree_list, cross_tree_clafers_full
+
+    def super_clafer(self, clafer):
+        """
+        ! This method is recursive.
+
+        Find and fullfill all super relations in the model.
+
+        INPUTS
+        clafer (type = textX.clafer): clafer to check for super relation.
+        """
+        if clafer.super is not None:
+            for element in model.elements:
+                if element.name == clafer.super.value:
+                    super_copy = copy.deepcopy(element.namespace)
+                    clafer.namespace.update(super_copy)
+                    if len(element.nested) > 0:
+                        # If clafer has no childs, just copy super clafer nested elements.
+                        if clafer.nested == []:
+                            clafer.nested = element.nested
+                            repl = []
+                            for child in element.nested:
+                                for child1 in child.child:
+                                    repl.append(child1)
+                                child.child = repl
+                        # If clafer has childs, merge both clafers nested elements.
+                        else:
+                            for child in clafer.nested:
+                                for child1 in element.nested:
+                                    for child2 in child1.child:
+                                        if child2 not in child.child:
+                                            logging.debug(f'Parent constraint {child2} was merged to {child}')
+                                            child.child.append(child2)
+                    # Append all direct and indirect super relations.
+                    # Note, that direct relation is super relation of this clafer.
+                    # While indirect relation is direct super relation of super clafer and so on.
+                    clafer.super_direct.append(element.name)
+                    if element.super_direct != []:
+                        for rel in element.super_direct:
+                            clafer.super_indirect.append(rel)
+                        for rel in element.super_indirect:
+                            clafer.super_indirect.append(rel)
+                    logging.info(f'For clafer {clafer.name} super clafer namespace was merged')
+        for child in clafer.nested:
+            for child1 in child.child:
+                if self.cname(child1) == "Clafer":
+                    self.super_clafer(child1)
+
+    def reset_exception_flag(self):
+        global exception_flag
+        exception_flag = False
+        logging.debug(f'Global exception flag was reset: {exception_flag}')
+
+    def get_unvalidated_params(self):
+        global unvalidated_params
+        return unvalidated_params
+
+    def to_json(self):
+        """
+        ! This method will be removed.
+
+        Create dict object with fullfilled values
+
+        RETURN
+        result (type = dict): copies of global namespace records or element namespace.
+        """
+        result = {}
+        for element in model.elements:
+            if self.cname(element) == "Clafer" and element.abstract is None:
+                if element.reference is not None:
+                    result[element.name] = global_namespace[element.name]
+                else:
+                    result[element.name] = element.namespace
+        return result
+
+    def mapping(self, original, copy):
+        """
+        ! This method is only used for clafers with cardinalities != 1
+
+        Create new mapping instance. This mapping will be used for constraints validation.
+        For example, fcard (a) = 2, then 2 clafers will be created -> a0, a1.
+        Mapping presented as a dict: {a: [a0, a1]}
+        For constraint [a > 5] two constraints will be validated instead this one:
+        [a0 > 5]
+        [a1 > 5]
+
+        INPUTS
+        original: original clafer name.
+        copy: copy of original clafer name with added suffix _x, where x is sequentional mapping number.
+        """
+        global mappings
+        if original not in mappings.keys():
+            mappings.update({original: []})
+        mappings[original].append(copy)
+        mappings[original] = list(dict.fromkeys(mappings[original]))
+        logging.debug(f'New mapping was added: {original}: {copy}')
+
+    def update_global_namespace(self, key: str, value: int):
+        """
+        ! Method is used only to update filled on web interface cardinalities form.
+
+        Update global namespace record.
+
+        INPUTS
+        key: cardinality identification name.
+        value: cardinality value.
+        """
+        global global_namespace
+        k_s = key.split('_')
+        if k_s[0] == 'fcard' and len(k_s[1].split('.')) > 1 and value > 1:
+            ret = global_namespace
+            for part in k_s[1].split('.'):
+                ret = ret[part]
+            for index in range(0, value):
+                self.write_to_keys({k_s[1] + '_' + str(index): ret})
+
+    def validate_clafer(self, clafer: str):
+        """
+        Perform clafer constraints validation.
+
+        INPUTS
+        clafer: name of clafer to validate constraints.
+
+        RETURN:
+        True (type = bool): if clafer was successfully validated;
+        e (type = Exception): if not.
+        """
+        global exception_flag, mappings, current_path, unvalidated_params
+        current_path = ''
+        try:
+            for element in model.elements:
+                if self.cname(element) == "Constraint":
+                    exception_flag = False
+                    self.constraint(element)
+            for element in model.elements:
+                if self.cname(element) == "Clafer" and element.name == clafer:
+                    exception_flag = False
+                    self.root_clafer_constraints(element, True, False)
+            current_path = ''
+            unvalidated_params = []
+            return True
+        except Exception as e:
+            logging.info(f'! Exception: {e}.')
+            current_path = ''
+            return e
+
+    def reset_global_variables(self):
+        """
+        Clear all shared variables.
+        """
+        global global_namespace, current_namespace, current_path, cross_tree_clafers, cross_tree_list
+        global cycles, exception_flag, cross_tree_check, current_cross_tree, unvalidated_params
+        global abstract_clafers, abstract_dependencies, mappings, mapping_iter_sum
+        global mapping_iter, cardinalities_list, abstract_namespace, cross_tree_clafers_full
+        global_namespace = {}
+        abstract_namespace = {}
         current_namespace = {}
-        print(f'For clafer {clafer.name} there is/are {counter} constraint expression(s) evaluated.')
-        print(f'Clafer namespace: {clafer.namespace}')
-    if isroot is True:
         current_path = ''
-    else:
-        current_path = local_path
-    return clafer.namespace
-
-def cardinalities_upd(card):
-    global cardinalities_list
-    cardinalities_list = card
-
-def get_card():
-    global cardinalities_list
-    return cardinalities_list
-
-def get_cross_tree_list():
-    global cross_tree_list, cross_tree_clafers_full
-    return cross_tree_list, cross_tree_clafers_full
-
-def super_clafer(model, clafer):
-    if clafer.super is not None:
-        for element in model.elements:
-            if element.name == clafer.super.value:
-                super_copy = copy.deepcopy(element.namespace)
-                clafer.namespace.update(super_copy)
-                if len(element.nested) > 0:
-                    if clafer.nested == []:
-                        clafer.nested = element.nested
-                        repl = []
-                        for child in element.nested:
-                            for child1 in child.child:
-                                repl.append(child1)
-                            child.child = repl
-                    else:
-                        for child in clafer.nested:
-                            for child1 in element.nested:
-                                for child2 in child1.child:
-                                    print(f'Child {child} Child1 {child1} Child2 {child2}')
-                                    if child2 not in child.child:
-                                        print(f'Parent constraint {child2} was merged to {child}')
-                                        child.child.append(child2)
-                clafer.super_direct.append(element.name)
-                if element.super_direct:
-                    for rel in element.super_direct:
-                        clafer.super_indirect.append(rel)
-                    for rel in element.super_indirect:
-                        clafer.super_indirect.append(rel)
-                print('___________________________________________')
-                print(f'For clafer {clafer.name} super clafer namespace was merged')
-                print(f'Namespace: {clafer.namespace}')
-                print(f'SUPERDIRECT: {clafer.super_direct}')
-                print(f'SUPERINDIRECT: {clafer.super_indirect}')
-    for child in clafer.nested:
-        for child1 in child.child:
-            if cname(child1) == "Clafer":
-                super_clafer(model, child1)
-
-def group_cardinality(model, clafer):
-    pass
-
-def reset_exception_flag():
-    global exception_flag
-    exception_flag = False
-    print(f'Global exception flag was reset: {exception_flag}')
-
-def get_unvalidated_params():
-    global unvalidated_params
-    return unvalidated_params
-
-def to_json(model):
-    result = {}
-    for element in model.elements:
-        if cname(element) == "Clafer" and element.abstract is None:
-            if element.reference is not None:
-                result[element.name] = global_namespace[element.name]
-            else:
-                result[element.name] = element.namespace
-    return result
-
-def mapping(original, copy):
-    global mappings
-    print(f'NEW MAPPING {original} {copy}')
-    if original not in mappings.keys():
-        mappings.update({original: []})
-    mappings[original].append(copy)
-    mappings[original] = list(dict.fromkeys(mappings[original]))
-
-def update_global_namespace(key, value):
-    global global_namespace
-    k_s = key.split('_')
-    print(f'UPD NS KS {k_s}')
-    if k_s[0] == 'fcard' and len(k_s[1].split('.')) > 1:
-        ret = global_namespace
-        for part in k_s[1].split('.'):
-            ret = ret[part]
-        for index in range(0, value):
-            write_to_keys({k_s[1] + '_' + str(index): ret})
-
-
-
-
-def validate_clafer(clafer):
-    global exception_flag, mappings, current_path, unvalidated_params
-    current_path = ''
-    try:
-        for element in model.elements:
-            if cname(element) == "Constraint":
-                exception_flag = False
-                constraint(element)
-        for element in model.elements:
-            if cname(element) == "Clafer" and element.name == clafer:
-                exception_flag = False
-                root_clafer_constraints(element, True, False)
-        current_path = ''
+        cross_tree_clafers = []
+        cross_tree_clafers_full = []
+        cross_tree_list = []
+        cycles = {}
+        exception_flag = False
+        cross_tree_check = False
+        current_cross_tree = None
         unvalidated_params = []
-        return True
-    except Exception as e:
-        print('EXCEPTION OCCURED')
-        print(f'{e}')
-        current_path = ''
-        return e
+        abstract_clafers = []
+        abstract_dependencies = {}
+        mappings = {}
+        mapping_iter_sum = 1
+        mapping_iter = 0
+        cardinalities_list = {}
 
-def reset_global_variables():
-    global global_namespace, current_namespace, current_path, cross_tree_clafers, cross_tree_list
-    global cycles, exception_flag, cross_tree_check, current_cross_tree, unvalidated_params
-    global abstract_clafers, abstract_dependencies, mappings, mapping_iter_sum
-    global mapping_iter, cardinalities_list, abstract_namespace
-    global_namespace = {}
-    abstract_namespace = {}
-    current_namespace = {}
-    current_path = ''
-    cross_tree_clafers = []
-    cross_tree_clafers_full = []
-    cross_tree_list = []
-    cycles = {}
-    exception_flag = False
-    cross_tree_check = False
-    current_cross_tree = None
-    unvalidated_params = []
-    abstract_clafers = []
-    abstract_dependencies = {}
-    mappings = {}
-    mapping_iter_sum = 1
-    mapping_iter = 0
-    cardinalities_list = {}
+    def clear_json_trash(self, dictionary: dict):
+        """
+        ! This method is recursive.
 
-def clear_json_trash(dictionary):
-    flag = False
-    cflag = False
-    rm_keys = []
-    for key, value in dictionary.items():
-        if isinstance(value, dict) and 'value' not in value.keys():
-            dictionary[key], c_flag = clear_json_trash(value)
-            if dictionary[key] == {} or dictionary[key] is None:
-                rm_keys.append(key)
-        elif isinstance(value, dict) and 'value' in value.keys():
-            if value['value'] is None:
-                rm_keys.append(key)
-            else:
-                flag = True
-                dictionary[key] = value['value']
-    for key in rm_keys:
-        dictionary.pop(key, None)
-    if cflag is True:
-        flag = True
-    return dictionary, flag
+        Clear global namespace from unfilled fields.
 
-def save_json():
-    # preprint = to_json(model)
-    global global_namespace
-    preprint = copy.deepcopy(global_namespace)
-    res, _ = clear_json_trash(preprint)
-    print(f'PREPRINT {preprint}')
-    print(f'FINALMODEL {res}')
+        INPUTS
+        dictionary: dict object to find unfilled fields.
 
-    with open('test.json', 'w', encoding='utf-8') as f:
-        json.dump(res, f, ensure_ascii=False, indent=4)
-    return res
+        RETURN
+        dictionary: (type = dict): cleaned input dictionary.
+        """
+        rm_keys = []
+        for key, value in dictionary.items():
+            if isinstance(value, dict) and 'value' not in value.keys():
+                dictionary[key] = self.clear_json_trash(value)
+                if dictionary[key] == {} or dictionary[key] is None:
+                    rm_keys.append(key)
+            elif isinstance(value, dict) and 'value' in value.keys():
+                if value['value'] is None:
+                    rm_keys.append(key)
+                else:
+                    dictionary[key] = value['value']
+        for key in rm_keys:
+            dictionary.pop(key, None)
+        return dictionary
 
+    def preprocess_json(self, dictionary: dict):
+        """
+        ! This method is recursive.
 
-def main_stub(descr):
-    a = """
-Model: elements*=Element;
+        Preprocess global namespace.
 
-Element: Clafer | Goal | Constraint | Assertion;
+        INPUTS
+        dictionary: dict object to find unfilled fields.
 
-Constraint: "[" name=prec23 "]";
-Assertion: "assert" "[" name=prec23 "]";
-Goal: 
-    "<<"
-    gtype=Goaltype
-    name=prec23 
-    ">>"
-;
+        RETURN
+        dictionary: (type = dict): processed input dictionary.
+        """
+        for key, value in dictionary.items():
+            if isinstance(value, dict) and 'value' not in value.keys():
+                dictionary[key] = self.preprocess_json(value)
+            elif isinstance(value, dict) and 'value' in value.keys():
+                if value['type'] == 'array' or value['type'] == 'integerArray' or value['type'] == 'floatArray':
+                    value['value'] = value['value'].split(',')
+                if value['type'] == 'integerArray':
+                    ret = []
+                    for subvalue in value['value']:
+                        ret.append(int(subvalue))
+                    value['value'] = ret
+                elif value['type'] == 'floatArray':
+                    ret = []
+                    for subvalue in value['value']:
+                        ret.append(float(subvalue))
+                    value['value'] = ret
+        return dictionary
 
-Goaltype: "min" | "max" | "minimize" | "maximize";
-Clafer: 
-    abstract=Abstract?
-    gcard=Gcard?
-    name=Name
-    super=Super?
-    reference=Reference?
-    fcard=Fcard?
-    init=Init?
-    nested*=Nested?
-;
+    def save_json(self):
+        """
+        Prepare and save final result.
 
-Name: ID;
-Abstract: "abstract";
-Gcard: INT+[/\..|,/] | "xor" | "or" | "mux" | "opt" | Cardinterval;
-Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
-Super: ":" prec0;
-Reference: "->" prec3 | "->>" prec3;
-Init: "=" prec23 | ":=" prec23;
-Nested: 
-    "{"
-    /\s*/
-    child+=Element
-    "}"
-;
-Cardinterval: INT ".." (INT | "*");
+        RETURN
+        res (type = dict): final result
+        """
 
-prec23:   (op='if')* op=prec22 ('then' op=prec22 ('else' op=prec22)?)*; 
-prec22:   op=prec21  (op=op22   op=prec21)*;
-prec21:   op=prec20  (op=op21   op=prec20)*;
-prec20:   op=prec19  (op=op20   op=prec19)*;
-prec19:   op=prec18  (op=op19   op=prec18)*;
-prec18:   op=prec17  (op=op18   op=prec17)*;
-prec17:   op=prec16  (op=op17   op=prec16)*;
-prec16:   op=prec15  (op=op16   op=prec15)*;
-prec15:   (op=op15)*  op=prec14;
-prec14:   (op=op14)*  op=prec13;
-prec13:   (op=op13)*  op=prec12;
-prec12:   op=prec11  (op=op12   op=prec11)*;
-prec11:   op=prec10  (op=op11   op=prec10)*;
-prec10:   op=prec9  (op=op10   op=prec9)*;
-prec9:   op=prec8  (op=op9   op=prec8)*;
-prec8:   op=prec7  (op=op8   op=prec7)*;
-prec7:   (op=op7)*  op=prec6;
-prec6:   (op=op6)*  op=prec5;
-prec5:   op=prec4  (op=op5   op=prec4)*;
-prec4:   op=prec3  (op=op4   op=prec3)*;
-prec3:   op=prec2  (op=op3   op=prec2)*;
-prec2:   op=prec1  (op=op2   op=prec1)*;
-prec1:   op=prec0  (op=op1   op=prec0)*;
-prec0:   op=term   (op=op0   op=term)*;
-term:    op=NUMBER | op = BOOL | op=ComplexName | op = ID | op = Quote | op = List | ('(' op=prec23 ')');
+        global global_namespace
+        preprint = copy.deepcopy(global_namespace)
+        preprocessed_preprint = self.preprocess_json(preprint)
+        res = self.clear_json_trash(preprocessed_preprint)
+        logging.info('Final result was successfully created.')
+        logging.debug(f'Final Model {res}')
 
+        with open('test.json', 'w', encoding='utf-8') as f:
+            json.dump(res, f, ensure_ascii=False, indent=4)
+        return res
 
-op22: '<=>'                                                     ;
-op21: '=>'                                                      ;
-op20: '||'                                                      ;
-op19: 'xor'                                                     ;
-op18: '&&'                                                      ;
-op17: 'U' | 'until'                                             ;
-op16: 'W' | 'weakuntil'                                         ;
-op15: 'F' | 'eventually' | 'G' | 'globally' | 'X' | 'next'      ;
-op14: '!'                                                       ;
-op13:  Quant                                                    ;
-op12: '<=' | '>=' | '==' | '<' | '>' | '!=' | 'in' | 'not in'   ;
-op11: 'requires' | 'excludes'                                   ;
-op10: '='                                                       ;
-op9:  '+' | '-'                                                 ;
-op8:  '*' | '/' | '%'                                           ;
-op7:  'min' | 'max'                                             ;
-op6:  'sum' | 'product' | '#'                                   ;
-op5:  '<:'                                                      ;
-op4:  ':>'                                                      ;
-op3:  ',' | '++'                                                ;
-op2:  '--'                                                      ;
-op1:  '**'                                                      ;
-op0:  '..' | '&'                                                ;
+    def define_clafers(self):
+        """
+        Calls clafer definition function for all clafers in the model.
+        """
+        global model
+        for element in model.elements:
+            if self.cname(element) == "Clafer":
+                self.root_clafer(element)
+        logging.info('All clafers are successfully defined.')
 
-Quote: /'.+'/ | /".+"/;
-List: /\{.+\}/;
-ComplexName: /(\w+\.)+\w+/;
+    def define_super_relations(self):
+        """
+        Calls super relations definition function for all clafers in the modell.
+        """
+        global model
+        for element in model.elements:
+            if self.cname(element) == "Clafer":
+                self.super_clafer(element)
+        logging.info('For all clafers super relations are defined.')
 
-Quant: QuantNo | QuantNot | QuantLone | QuantOne | QuantSome;
-QuantNo: "no";
-QuantNot: "not";
-QuantLone: "lone";
-QuantOne: "one";
-QuantSome: "some";
+    def initialize_global_namespace(self):
+        """
+        Create dict with the nested structure of model.
+        """
+        global model
+        for element in model.elements:
+            if self.cname(element) == "Clafer" and element.abstract is None:
+                global_namespace[element.name] = element.namespace
+        logging.info('Global namespace successfully fullfilled.')
 
-Comment:
-  StringComment | BlockComment
-;
-
-StringComment: /\/\/.*$/;
-BlockComment: /\/\*(\*(?!\/)|[^*])*\*\//;
-"""
-    this_folder = dirname(__file__)
-    mm = metamodel_from_str(a, classes=[prec0, prec1, prec2, prec3,
-                                                   prec4, prec5, prec6, prec7, prec8,
-                                                   prec9, prec10, prec11, prec12, prec13,
-                                                   prec14, prec15, prec16, prec17,
-                                                   prec18, prec19, prec20, prec21, prec22, prec23, term],
-                             autokwd=True)
-
-    # Meta-model knows how to parse and instantiate models.
-    global model, global_namespace, keywords, exception_flag, current_namespace, cross_tree_check
-    global current_cross_tree, cross_tree_clafers, abstract_namespace
-    reset_global_variables()
-    model = mm.model_from_str(descr)
-    metamodel_export(mm, join(this_folder, 'meta.dot'))
-    model_export(model, join(this_folder, 'example.dot'))
-    update_abstract_clafers()
-    print(f'TYPE: {type(model.elements)}')
-    for element in model.elements:
-        if cname(element) == "Clafer":
-            root_clafer(element)
-    print("CLAFER DEFINITION DONE")
-    for element in model.elements:
-        if cname(element) == "Clafer":
-            super_clafer(model, element)
-    print("CLAFER SUPER RELATIONS DONE")
-    fullfill_abstract_dependencies()
-    for element in model.elements:
-        if cname(element) == "Clafer" and element.abstract is None:
-            global_namespace[element.name] = element.namespace
-        elif cname(element) == "Clafer" and element.abstract is not None:
-            abstract_namespace[element.name] = element.namespace
-    print(f"GLOBAL NAMESPACE FULLFILLED: {global_namespace}")
-    cross_tree_check = True
-    for element in model.elements:
-        exception_flag = False
-        if cname(element) == "Constraint":
-            constraint(element)
-    for element in model.elements:
-        exception_flag = False
-        if cname(element) == "Clafer" and element.abstract is None:
-            current_cross_tree = element.name
-            root_clafer_constraints(element, True)
-    print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    print('Cross-tree clafers')
-    cross_tree_clafers.sort()
-    res_cross_tree = list(k for k, _ in itertools.groupby(cross_tree_clafers))
-    # res_cross_tree = list(dict.fromkeys(cross_tree_clafers))
-    print(res_cross_tree)
-    print('__________________________')
-    stages = staging(res_cross_tree)
-    cross_tree_check = False
-    return stages
-
-def main(debug=False):
-    this_folder = dirname(__file__)
-    mm = metamodel_from_file('clafer.tx', classes=[prec0, prec1, prec2, prec3,
-                                                   prec4, prec5, prec6, prec7, prec8,
-                                                   prec9, prec10, prec11, prec12, prec13,
-                                                   prec14, prec15, prec16, prec17,
-                                                   prec18, prec19, prec20, prec21, prec22, prec23, term],
-                             autokwd=True)
-    metamodel_export(mm, join(this_folder, 'meta.dot'))
-
-    # Meta-model knows how to parse and instantiate models.
-    global model, global_namespace, keywords, exception_flag, current_namespace, cross_tree_check
-    global current_cross_tree
-    model = mm.model_from_file('test.cf')
-    model_export(model, join(this_folder, 'example.dot'))
-    for element in model.elements:
-        if cname(element) == "Clafer":
-            root_clafer(element)
-    print("CLAFER DEFINITION DONE")
-    for element in model.elements:
-        if cname(element) == "Clafer" and element.super is not None:
-            super_clafer(model, element)
-    print("CLAFER SUPER RELATIONS DONE")
-    for element in model.elements:
-        if cname(element) == "Clafer" and element.abstract is None:
-            global_namespace[element.name] = element.namespace
-    print(f"GLOBAL NAMESPACE FULLFILLED: {global_namespace}")
-
-    cross_tree_check = True
-    for element in model.elements:
-        exception_flag = False
-        if cname(element) == "Constraint":
-            constraint(element)
-    for element in model.elements and element.abstract is None:
-        exception_flag = False
-        if cname(element) == "Clafer":
-            current_cross_tree = element.name
-            root_clafer_constraints(element, True)
-    print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    print('Cross-tree clafers')
-    cross_tree_clafers.sort()
-    res_cross_tree = list(k for k, _ in itertools.groupby(cross_tree_clafers))
-    # res_cross_tree = list(dict.fromkeys(cross_tree_clafers))
-    print(res_cross_tree)
-    print('__________________________')
-    stages = staging(res_cross_tree)
-    cross_tree_check = False
-    for element in model.elements:
-        if cname(element) == "Constraint":
+    def cross_tree_check(self):
+        """
+        Find all cross-tree dependencies in model constraints.
+        """
+        global cross_tree_check, exception_flag, current_cross_tree
+        cross_tree_check = True
+        for element in model.elements:
             exception_flag = False
-            constraint(element)
-    for element in model.elements:
-        if cname(element) == "Clafer" and element.abstract is None:
+            if self.cname(element) == "Constraint":
+                self.constraint(element)
+        for element in model.elements:
             exception_flag = False
-            root_clafer_constraints(element, True)
+            if self.cname(element) == "Clafer" and element.abstract is None:
+                current_cross_tree = element.name
+                self.root_clafer_constraints(element, True)
+        logging.info('Model was successfully checked for cross-tree dependencies.')
 
-    print(json.dumps(to_json(model), sort_keys=True, indent=4))
-    with open('test.json', 'w', encoding='utf-8') as f:
-        json.dump(to_json(model), f, ensure_ascii=False, indent=4)
+    def initialize_product(self, description: dict):
+        """
+        Performs initial model preprocessing.
+
+        INPUTS
+        description: model description from web interface or file.
+
+        RETURN
+        stages (type = list): sequence of clafer to perform constraint solving.
+        """
+        global model, cross_tree_check, cross_tree_clafers
+
+        # Read language grammar and create textX metamodel object from it.
+        this_folder = dirname(__file__)
+        mm = metamodel_from_file(f'{this_folder}/clafer.tx',
+                                 classes=[prec0, prec1, prec2, prec3,
+                                          prec4, prec5, prec6, prec7, prec8,
+                                          prec9, prec10, prec11, prec12, prec13,
+                                          prec14, prec15, prec16, prec17,
+                                          prec18, prec19, prec20, prec21, prec22, prec23, term],
+                                 autokwd=True)
+
+        # Reset shared info variables and create textX model object from description.
+        self.reset_global_variables()
+        model = mm.model_from_str(description)
+
+        # Export both metamodel and model in .dot format for class diagram construction.
+        metamodel_export(mm, join(this_folder, 'metamodel.dot'))
+        model_export(model, join(this_folder, 'model.dot'))
+
+        # Perform basic initialization
+        self.define_clafers()
+        self.define_super_relations()
+
+        # Define all abstract clafers and dependencies to them.
+        self.update_abstract_clafers()
+        self.fullfill_abstract_dependencies()
+
+        # Initialize global namespace and perform cross-tree check.
+        self.initialize_global_namespace()
+        self.cross_tree_check()
+
+        # Define constraint solving sequence
+        cross_tree_clafers.sort()
+        res_cross_tree = list(k for k, _ in itertools.groupby(cross_tree_clafers))
+        stages = self.staging(res_cross_tree)
+        cross_tree_check = False
+        return stages
+
+    def solve_constraints(self):
+        """
+        ! This method is only used with automatic product filling (no web interface).
+
+        Performs solving for all types of constraints.
+        """
+        global exception_flag
+        for element in model.elements:
+            if self.cname(element) == "Constraint":
+                exception_flag = False
+                self.constraint(element)
+        for element in model.elements:
+            if self.cname(element) == "Clafer" and element.abstract is None:
+                exception_flag = False
+                self.root_clafer_constraints(element, True)
+
+        logging.info(json.dumps(self.to_json(model), sort_keys=True, indent=4))
+        with open('test.json', 'w', encoding='utf-8') as f:
+            json.dump(self.to_json(model), f, ensure_ascii=False, indent=4)
 
 
 if __name__ == '__main__':
-    main()
+    pass
