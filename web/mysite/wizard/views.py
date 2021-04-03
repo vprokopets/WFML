@@ -238,168 +238,20 @@ class ModelInputForm(forms.Form):
 
     a = """
 
-General {
-    NumberOfWorkers -> integer
-    result_storage -> string
-    [NumberOfWorkers >= 1]
+abstract Nominal {
+   name -> string
+   upper -> string
+   lower -> string
+}
+abstract Categorical {
+   name -> string
+   categories -> array
 }
 
-SelectionAlgorithm {
-    type -> string
-    [type in {Sobol, MersenneTwister}]
-}
-
-abstract OutliersDetection 5{
-    MinActiveNumberOfTasks -> integer
-    MaxActiveNumberOfTasks -> integer
-    [MinActiveNumberOfTasks >= 3]
-    [MaxActiveNumberOfTasks >= 3]
-    [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]
-}
-
-or OD{
-    Dixon : OutliersDetection
-    Grubbs : OutliersDetection
-    Chauvenet : OutliersDetection
-    Quartiles : OutliersDetection
-    Mad : OutliersDetection
-}
-
-abstract AbstrRepeater {
-    MinTasksPerConfiguration -> integer
-    MaxTasksPerConfiguration -> integer
-}
-
-xor Repeater{
-    DefaultRepeater : AbstrRepeater {
-        [MinTasksPerConfiguration >= 2]
-        [MaxTasksPerConfiguration >= 2]
-    }
-    AcceptableErrorBasedRepeater: AbstrRepeater {
-        [MinTasksPerConfiguration >= 1]
-        [MaxTasksPerConfiguration >= 1]
-        MaxFailedTasksPerConfiguration -> integer
-        BaseAcceptableErrors -> integerArray
-        ConfidenceLevels -> floatArray
-        DevicesScaleAccuracies -> integerArray
-        DevicesAccuracyClasses -> integerArray
-        ExperimentAwareness {
-            isEnabled -> boolean
-            MaxAcceptableErrors -> integerArray
-            RatiosMax -> integerArray
-        }
-    }
-}
-
-abstract TreeParzenEstimator {
-    Parameters {
-        TopNPercent -> integer
-        RandomFraction -> integer
-        BandwidthFactor -> integer
-        MinBandwirth -> float
-        SamplingSize -> integer
-    }
-}
-
-abstract MultiArmedBandit {
-    Parameters {
-        xor cType{
-            int
-            float
-            std
-        }
-        c -> float
-        [if gcard.cType == float then 0 <= c]
-        [if gcard.cType == float then c <= 1]
-        [if gcard.cType == std then c = std]
-    }
-}
-
-abstract ModelMock
-
-abstract SciKitLearn {
-    Type -> string
-    Parameters {
-        SamplingSize -> integer
-        MinimalScore -> float
-        CrossValidationSplits -> integer
-        TestSize -> float
-        DataPreprocessing {
-            OrdinalHyperparameter -> string
-            NominalHyperparameter -> string
-            IntegerHyperparameter -> string
-            FloatHyperparameter -> string
-        }
-        UnderlyingModelParameters {
-            n_iter -> integer
-            tol -> float
-            normalize -> boolean
-        }
-    }
-}
-
-Predictor {
-    WindowSize -> float
-    xor Models 1..5 {
-        TPE : TreeParzenEstimator
-        MAB : MultiArmedBandit
-        MM : ModelMock
-        skLearn : SciKitLearn
-    }
-}
-
-StopConditionTriggerLogic {
-    Expression -> string
-    InspectionParameters {
-        RepetitionPerion -> integer
-        TimeUnit -> string
-        [RepetitionPerion > 0]
-        [TimeUnit in {seconds, minutes, hours, days}]
-    }
-}
-
-abstract SC {
-    Name -> string
-    Type -> predefined
-}
-
-StopCondition {
-    QuantityBasedSC : SC 1..5{
-        Parameters {
-            MaxConfigs -> integer
-            [MaxConfigs > 0]
-        }
-        [Type = QuantityBased]
-    }
-
-    GuaranteedSC : SC 1 {
-        [Type = Guaranted]
-    }
-
-    BadConfigurationBasedSC : SC 1..5{
-        Parameters {
-            MaxBadConfigurations -> integer
-            [MaxBadConfigurations > 0]
-        }
-        [Type = BadConfigurationBased]
-    }
-
-    ImprovementBasedSC : SC 1..5{
-        Parameters {
-            MaxConfigsWithoutImprovement -> integer
-            [MaxConfigsWithoutImprovement > 0]
-        }
-        [Type = ImprovementBased]
-    }
-
-    TimeBasedSC : SC 1..5{
-        Parameters {
-            MaxRunTime -> integer
-            TimeUnit -> string
-            [MaxRunTime > 0]
-            [TimeUnit in {seconds, minutes, hours, days}]
-        }
-        [Type = TimeBased]
+SearchSpace  {
+    xor param + {
+        NominalParameter: Nominal
+        CategoricalParameter: Categorical
     }
 }
 
@@ -713,13 +565,14 @@ def factory_wizard(request, *args, **kwargs):
         form_list = ret_form_list
     return ReturnClass.as_view()(request, *args, **kwargs)
 
-def card_update(card_type: str, card_value):
+def card_update(card_type: str, card_value, not_initial_flag=False):
     """
     Update card table according to card type.
 
     INPUTS
     card_type (variable type): type of cardinality (fcard, gcard)
     card_value: cardinality value
+    not_initial_flag (type = bool): flag shows that function is calles not in feature cardinalities definition step.
     """
     global card
     logging.debug(card)
@@ -728,6 +581,10 @@ def card_update(card_type: str, card_value):
     else:
         card['gcard'].update(card_value)
     logging.debug(f'Card is updated: {card}')
+
+    if card_type == 'fcard' and not_initial_flag is True:
+        for k, v in card_value.items():
+            api.update_global_namespace('fcard_' + k, v)
 
 def get_fcard(clafer: str):
     """

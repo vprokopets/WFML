@@ -1,7 +1,3 @@
-
-
-
-
 General {
     NumberOfWorkers -> integer
     result_storage -> string
@@ -13,7 +9,43 @@ SelectionAlgorithm {
     [type in {Sobol, MersenneTwister}]
 }
 
-abstract OutliersDetection 5{
+DomainDescription {
+    DataFile -> string
+}
+
+TaskCondiguration {
+    TaskName -> integer
+    xor Scenario {
+        FromFile {
+            WsFile -> string
+            AdditionalParameter * {
+                Name -> string
+                Value -> string
+            }
+        }
+        FromDescription {
+            Problem -> string
+            InitializationParameters -> string
+            Budget {
+                Type -> string
+                Amount -> integer
+            }
+            Hyperparameters -> string
+        }
+    }
+    Objectives + {
+        Name -> string
+        DataType -> string
+        Minimization -> boolean
+        Priority -> integer
+        ModelPriority -> integer
+        ExpectedValuesRange -> floatArray
+        MaxTimeToRunTask ? -> integer
+    }
+    [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Objectives]
+}
+
+abstract OutliersDetector 5{
     MinActiveNumberOfTasks -> integer
     MaxActiveNumberOfTasks -> integer
     [MinActiveNumberOfTasks >= 3]
@@ -21,17 +53,18 @@ abstract OutliersDetection 5{
     [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]
 }
 
-or OD{
-    Dixon : OutliersDetection
-    Grubbs : OutliersDetection
-    Chauvenet : OutliersDetection
-    Quartiles : OutliersDetection
-    Mad : OutliersDetection
+or OutliersDetection{
+    Dixon : OutliersDetector
+    Grubbs : OutliersDetector
+    Chauvenet : OutliersDetector
+    Quartiles : OutliersDetector
+    Mad : OutliersDetector
 }
 
 abstract AbstrRepeater {
     MinTasksPerConfiguration -> integer
     MaxTasksPerConfiguration -> integer
+    [MinTasksPerConfiguration <= MaxTasksPerConfiguration]
 }
 
 xor Repeater{
@@ -39,23 +72,27 @@ xor Repeater{
         [MinTasksPerConfiguration >= 2]
         [MaxTasksPerConfiguration >= 2]
     }
-    AcceptableErrorBasedRepeater: AbstrRepeater {
+    AcceptableErrorBasedRepeater: AbstrRepeater 1{
         [MinTasksPerConfiguration >= 1]
         [MaxTasksPerConfiguration >= 1]
         MaxFailedTasksPerConfiguration -> integer
-        BaseAcceptableErrors -> integerArray
-        ConfidenceLevels -> floatArray
-        DevicesScaleAccuracies -> integerArray
-        DevicesAccuracyClasses -> integerArray
+        BaseAcceptableErrors -> integer
+        ConfidenceLevels -> float
+        DevicesScaleAccuracies -> integer
+        DevicesAccuracyClasses -> integer
         ExperimentAwareness {
             isEnabled -> boolean
-            MaxAcceptableErrors -> integerArray
-            RatiosMax -> integerArray
+            MaxAcceptableErrors -> integer
+            RatiosMax -> integer
         }
     }
 }
 
-abstract TreeParzenEstimator {
+abstract Model {
+    Type -> predefined
+}
+
+abstract TreeParzenEstimator: Model {
     Parameters {
         TopNPercent -> integer
         RandomFraction -> integer
@@ -63,9 +100,10 @@ abstract TreeParzenEstimator {
         MinBandwirth -> float
         SamplingSize -> integer
     }
+    [Type = 'brise.TreeParzenEstimator']
 }
 
-abstract MultiArmedBandit {
+abstract MultiArmedBandit: Model {
     Parameters {
         xor cType{
             int
@@ -77,6 +115,7 @@ abstract MultiArmedBandit {
         [if gcard.cType == float then c <= 1]
         [if gcard.cType == std then c = std]
     }
+    [type = 'brise.MultiArmedBandit']
 }
 
 abstract ModelMock

@@ -733,7 +733,7 @@ class prec10(ExpressionElement):
                 # If cardinality flag was set, then update cardinality value instead of variable in namespace.
                 elif re.match(r'(\w+\.)+\w+', check) and cardinality_flag == 'fcard':
                     from wizard.views import card_update
-                    card_update('fcard', {ret: right_value})
+                    card_update('fcard', {check: right_value}, True)
 
                 # If path to variable is simple, just assign value to variable in local namespace.
                 else:
@@ -1099,7 +1099,16 @@ class term(ExpressionElement):
         # Cross-tree section finds whether variable is assigned to parent clafer or not.
         if cross_tree_check:
             if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
+                forbidden_flag = False
                 path = op.split('.')
+
+                # Check for cardinality keyword and remove it.
+                if path[0] == 'fcard' or path[0] == 'gcard':
+                    path = path[1:]
+
+                # Forbid to add to cross-tree clafers own clafers written in full-path form.
+                if path[0] == current_path.split('.')[0]:
+                    forbidden_flag = True
                 try:
                     res = current_namespace
                     for section in path:
@@ -1109,9 +1118,10 @@ class term(ExpressionElement):
                         res = global_namespace
                         for section in path:
                             res = res[section]
-                        global cross_tree_clafers, cross_tree_clafers_full
-                        cross_tree_clafers.append([current_cross_tree, path[0]])
-                        cross_tree_clafers_full.append(op)
+                        if forbidden_flag is False:
+                            global cross_tree_clafers, cross_tree_clafers_full
+                            cross_tree_clafers.append([current_cross_tree, path[0]])
+                            cross_tree_clafers_full.append(op)
                     except Exception:
                         logging.debug('ok')
         else:
@@ -1216,7 +1226,7 @@ class term(ExpressionElement):
                                 f_p = f_p + '.' + section
 
                         # Build full path (Cardinalities are presented as full path records).
-                        full_path = current_path + '.' + f_p
+                        full_path = f_p
                         if full_path in mappings.keys():
                             mapping_iter_sum = len(mappings[full_path])
                             full_path = mappings[full_path][mapping_iter]
@@ -1286,24 +1296,23 @@ class term(ExpressionElement):
                 global cardinality_flag
                 cardinality_flag = path[0]
                 path = path[1:]
-            try:
-                res = current_namespace
-                for section in path:
-                    res = res[section]
-                res = res['value']
-            except Exception:
-                logging.info(f'Local Namespace does not contain variable {op}')
-                res = global_namespace
-                for section in path:
-                    res = res[section]
-                res = res['value']
-            if cardinality_flag is True:
                 op = ''
                 for elem in path:
                     if op == '':
                         op = elem
                     else:
                         op = op + '.' + elem
+            else:
+                try:
+                    res = current_namespace
+                    for section in path:
+                        res = res[section]
+                    res = res['value']
+                except Exception:
+                    logging.info(f'Local Namespace does not contain variable {op}')
+                    res = global_namespace
+                    for section in path:
+                        res = res[section]
             logging.debug(f'Return {op} value')
             return op
         else:
@@ -1696,7 +1705,7 @@ class textX_API():
             index += 1
             if f'cycle{index}' not in result:
                 result.append(f'cycle{index}')
-        result.reverse()
+        # result.reverse()
         ret_val = fcardinalities + gcardinalities + result
         logging.info(f'There are {len(res[0])} stages for cross-tree dependencies: {res[0]}')
         logging.info(f'Cycled clafers: {cycled}')
@@ -1744,7 +1753,6 @@ class textX_API():
         new: dict with values to update.
         """
         global global_namespace
-
         inner = global_namespace
 
         for k, v in new.items():
@@ -2114,10 +2122,15 @@ class textX_API():
         k_s = key.split('_')
         if k_s[0] == 'fcard' and len(k_s[1].split('.')) > 1 and value > 1:
             ret = global_namespace
-            for part in k_s[1].split('.'):
-                ret = ret[part]
-            for index in range(0, value):
-                self.write_to_keys({k_s[1] + '_' + str(index): ret})
+            path = k_s[1].split('.')
+            for section in path[:-1]:
+                ret = ret[section]
+            logging.debug(f'Subkeys {ret.keys()}. Path {path[-1]}. Full {path}.')
+            if path[-1] in ret.keys():
+                for index in range(0, value):
+                    ret.update({path[-1] + '_' + str(index): copy.deepcopy(ret[path[-1]])})
+                    logging.info(f'Global namespace was mapped {index + 1} of {value} times for clafer {key}')
+            logging.debug(f'{global_namespace[path[0]]}')
 
     def validate_clafer(self, clafer: str):
         """
@@ -2243,8 +2256,8 @@ class textX_API():
 
         global global_namespace
         preprint = copy.deepcopy(global_namespace)
-        preprocessed_preprint = self.preprocess_json(preprint)
-        res = self.clear_json_trash(preprocessed_preprint)
+        preprocessed_preprint = self.clear_json_trash(preprint)
+        res = self.preprocess_json(preprocessed_preprint)
         logging.info('Final result was successfully created.')
         logging.debug(f'Final Model {res}')
 
