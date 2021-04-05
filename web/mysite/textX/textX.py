@@ -1600,6 +1600,32 @@ class textX_API():
         global abstract_dependencies
         return abstract_dependencies
 
+    def get_clafer_type(self, clafer: str):
+        """
+        Function to find and return specified clafer type.
+
+        INPUTS
+        clafer: clafer name.
+
+        RETURN
+        type (type = str): clafer type if clafer is parametric.
+        unspecified : if clafer is group.
+        """
+        global global_namespace
+        path = clafer.split('.')
+        gn_copy = global_namespace
+        try:
+            for section in path:
+                gn_copy = gn_copy[section]
+        except Exception as e:
+            logging.info(f'An exception was occured {e}')
+
+        if 'type' in gn_copy.keys():
+            return gn_copy['type']
+        else:
+            return 'Group clafer'
+
+
     def topological_sort(self, dependency_pairs):
         """
         Subfunction to define sequence of clafers to validate. The analogue of directed graph path.
@@ -2326,7 +2352,7 @@ class textX_API():
 
         # Read language grammar and create textX metamodel object from it.
         this_folder = dirname(__file__)
-        mm = metamodel_from_file(f'{this_folder}/clafer.tx',
+        mm = metamodel_from_file(f'{this_folder}/grammar.tx',
                                  classes=[prec0, prec1, prec2, prec3,
                                           prec4, prec5, prec6, prec7, prec8,
                                           prec9, prec10, prec11, prec12, prec13,

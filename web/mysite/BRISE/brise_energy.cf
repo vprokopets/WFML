@@ -204,4 +204,64 @@ StopCondition {
         }
         [Type = TimeBased]
     }
+
+abstract NominalHyperparameter {
+    Type -> predefined
+    [Type = NominalHyperparameter]
+}
+
+abstract OrdinalHyperparameter {
+    Type -> predefined
+    Categories -> predefined
+    Default -> string
+    [Type = OrdinalHyperparameter]
+    [Default in Categories]
+}
+
+abstract IntegerOrdinalHyperparameter {
+    Type -> predefined
+    Categories -> predefined
+    Default -> integer
+    [Type = IntegerOrdinalHyperparameter]
+    [Default in Categories]
+}
+
+abstract FloatOrdinalHyperparameter {
+    Type -> predefined
+    Categories -> predefined
+    Default -> float
+    [Type = FloatOrdinalHyperparameter]
+    [Default in Categories]
+}
+
+abstract FloatHyperparameter {
+    Type -> predefined
+    Lower -> predefined
+    Upper -> predefined
+    Default -> float
+    [Default >= Lower]
+    [Default <= Upper]
+    [Type = FloatHyperparameter]
+}
+
+abstract IntegerHyperparameter {
+    Name -> predefined
+    Type -> predefined
+    Lower -> predefined
+    Upper -> predefined
+    Default -> integer
+    [Default >= Lower]
+    [Default <= Upper]
+    [Type = IntegerHyperparameter]
+}
+
+Experiment : NominalHyperparameter {
+    Energy: NominalHyperparameter {
+        Frequency: FloatOrdinalHyperparameter{
+            [Categories = {1200.0, 1300.0, 1400.0}]
+        }
+        Threads: IntegerOrdinalHyperparameter{
+            [Categories = {1, 2, 4}]
+        }
+    }
 }

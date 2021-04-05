@@ -52,7 +52,9 @@ class WizardStepForm(forms.Form):
             for subparam in param['params']:
                 if element not in subparam.split('.')[0]:
                     subparam = element + '.' + subparam
-                self.add_error(subparam, param['error'])
+                param_type = api.get_clafer_type(subparam)
+                if param_type != 'predefined':
+                    self.add_error(subparam, param['error'])
         return cd
 
     def validation(self, element: str):
