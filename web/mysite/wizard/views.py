@@ -5,17 +5,23 @@ from formtools.wizard.views import SessionWizardView
 from django import forms
 from collections import OrderedDict
 from textX.textX import textX_API
+import copy
 import logging
 
 model = {}
 model_steps = []
 card = {}
+card_initial = {}
 abstr_clafers = []
 steps_validated = {}
 ignore_fields = []
 generated = []
 api = textX_API()
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
+extra_step_flag = False
+extra_fields = []
+form_list = OrderedDict()
+generated_steps = []
 
 class WizardStepForm(forms.Form):
     """
@@ -53,7 +59,7 @@ class WizardStepForm(forms.Form):
                 if element not in subparam.split('.')[0]:
                     subparam = element + '.' + subparam
                 param_type = api.get_clafer_type(subparam)
-                if param_type != 'predefined':
+                if param_type != 'predefined' and check_gcard(subparam) is True:
                     self.add_error(subparam, param['error'])
         return cd
 
@@ -126,9 +132,6 @@ class FCardinalityForm(forms.Form):
         for key, error in uk.items():
             self.add_error(key, error)
 
-        # Update global namespace (create mappings).
-        for key, value in cd.items():
-            api.update_global_namespace(key, value)
         return cd
 
     def check_abstract_cardinalities(self, key: str):
@@ -240,21 +243,28 @@ class ModelInputForm(forms.Form):
 
     a = """
 
-abstract Nominal {
-   name -> string
-   upper -> string
-   lower -> string
-}
-abstract Categorical {
-   name -> string
-   categories -> array
+Predictor {
+    xor Model 1 {
+        a -> string
+        b -> string
+    }
 }
 
-SearchSpace  {
-    xor param + {
-        NominalParameter: Nominal
-        CategoricalParameter: Categorical
-    }
+Context {
+    Model {
+        xor Structure {
+           Flat
+           Hierarchical
+        }
+        ModelStructure -> predefined
+        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Model = 1 else fcard.Predictor.Model = 3]
+        [ModelStructure = gcard.Context.Model.Structure]
+   }
+}
+
+SearchSpace {
+    Model -> string
+    [Model in childs.Predictor]
 }
 
 """
@@ -286,28 +296,39 @@ class WizardClass(SessionWizardView):
         """
 
         # Create form object.
-        global model_steps, card
+        global model_steps, card, extra_fields, card_initial, extra_step_flag, generated_steps
         if step is None:
             step = self.steps.current
-        logging.debug(f'CALLFORM {step}')
-        logging.debug(f'WIZARD: {type(self).form_list}')
-        form = super(WizardClass, self).get_form(step, data, files)
 
+        logging.info(f'CALLFORM {step}')
+        logging.info(f'WIZARD: {self.form_list}')
+        form = super(WizardClass, self).get_form(step, data, files)
+        import copy
         # Get all required data from API.
         keys = api.read_keys()
         ad = api.get_abstract_dependencies()
-        current_step = model_steps[int(step)]
+        generated_steps = list(dict.fromkeys(generated_steps))
+        if step not in generated_steps:
+            extra_step_counter = 0
+            for g_s in generated_steps:
+                if int(step) >= int(g_s):
+                    extra_step_counter += 1
+            current_step = model_steps[int(step) - extra_step_counter]
+        else:
+            current_step = copy.deepcopy(card_initial)
         cycles = api.get_cycle_keys()
 
         # Fill form label and head.
         form.label = current_step
-        form.head = 'Cardinalities' if int(step) == 0 else 'Clafer'
-        logging.debug(f'Current step: {int(step)} {current_step}')
+        form.head = 'Cardinalities' if isinstance(form, type(FCardinalityForm())) or isinstance(form, type(GCardinalityForm())) else 'Clafer'
+        logging.debug(f'Current step: {step} {current_step}')
         logging.debug(f'Keys: {keys}')
 
         # Construct FCardinalityForm for the first step.
-        if int(step) == 0:
-            card.update(current_step)
+        if isinstance(form, type(FCardinalityForm())):
+            if steps_validated[int(step)] is False:
+                card_update('fcard', current_step['fcard'])
+                card_initial.update(copy.deepcopy(card))
             for fcard, value in current_step['fcard'].items():
                 logging.debug(f'FCARD: {fcard} value {value}')
                 if type(value) is not int and fcard not in ignore_fields and fcard not in ad.keys():
@@ -323,11 +344,19 @@ class WizardClass(SessionWizardView):
                     form.fields[f'fcard_{fcard}'] = forms.IntegerField(label=f'Feature cardinality for clafer {fcard}. Allowed values: {allowed}')
 
         # Construct GCardinalityForm for the first step.
-        elif int(step) == 1:
+        elif isinstance(form, type(GCardinalityForm())):
             # Update cardinalities according to fcard data from the previous step.
-            card.update(current_step)
-            upd_gcard()
-
+            if step == '1':
+                if steps_validated[int(step)] is False:
+                    card_update('gcard', current_step['gcard'])
+                    card_initial.update(copy.deepcopy(card))
+                    upd_gcard()
+            else:
+                copyd = {'gcard': {}}
+                for item in extra_fields:
+                    for key in item.keys():
+                        copyd['gcard'].update({key: current_step['gcard'][key.split('_')[0]]})
+                current_step = copyd
             # Create fields for each gcard record.
             for gcard, value in current_step['gcard'].items():
                 logging.debug(f'GCARD: {gcard} value {value}')
@@ -375,7 +404,7 @@ class WizardClass(SessionWizardView):
 
                     # If there are no abstract clafers, that will match any part of gcard value, then just add this gcard.
                     # TODO check this section on fcard support.
-                    if gcards == []:
+                    if gcards == [] and flag is False:
                         gcards.append(gcard)
                     logging.debug(f'GCARDS FULLFILLED: {gcards}')
 
@@ -402,6 +431,7 @@ class WizardClass(SessionWizardView):
 
         # Construct WizardStepForm for the all other steps.
         else:
+            extra_fields = []
             # If step contains cycle, then get all cycle items and perform field initialization for all of them.
             if current_step in cycles.keys():
                 for element in cycles[current_step]:
@@ -506,14 +536,43 @@ class WizardClass(SessionWizardView):
         step = self.steps.current
         global steps_validated
         steps_validated.update({int(step): True})
-        if int(step) == 0 or int(step) == 1:
+        if isinstance(form, type(FCardinalityForm())) or isinstance(form, type(GCardinalityForm())):
             cd = form.cleaned_data
-            logging.debug(f'STEP {step} CARDINALITIES: {cd}')
+            logging.info(f'STEP {step} CARDINALITIES: {cd}')
             for key, value in cd.items():
                 key_split = key.split('_', 1)
                 card_update(key_split[0], {key_split[1]: value})
+        logging.info(f'STEP {step} FINISHED. CARDINALITIES: {card}')
         return self.get_form_step_data(form)
 
+    def render_next_step(self, form, **kwargs):
+        """
+        This method gets called when the next step/form should be rendered.
+        `form` contains the last/current form.
+        """
+        global extra_step_flag, generated_steps
+        if extra_step_flag is True:
+            for index in range(len(self.form_list) - 1, int(self.steps.current), -1):
+                self.form_list[str(index + 1)] = self.form_list[str(index)]
+            self.form_list[str(int(self.steps.current) + 1)] = GCardinalityForm
+            logging.info('Rendering additional step.')
+            global form_list
+            form_list = self.form_list
+            generated_steps.append(str(int(self.steps.current) + 1))
+        # get the form instance based on the data from the storage backend
+        # (if available).
+        logging.info('Rendering next step.')
+        next_step = self.steps.next
+        new_form = self.get_form(
+            next_step,
+            data=self.storage.get_step_data(next_step),
+            files=self.storage.get_step_files(next_step),
+        )
+        # change the stored current step
+        self.storage.current_step = next_step
+        if extra_step_flag is True:
+            extra_step_flag = False
+        return self.render(new_form, **kwargs)
 
 def initial_page(request, *args, **kwargs):
     """
@@ -528,17 +587,23 @@ def initial_page(request, *args, **kwargs):
         # Create a form instance and populate it with data from the request (binding):
         form = ModelInputForm(request.POST)
         if form.is_valid():
-            global model, model_steps, abstr_clafers
+            global model, model_steps, abstr_clafers, generated_steps, card_initial, card
             model = form.cleaned_data['model_field']
             logging.info(f'Model: {model}')
             model_steps = api.initialize_product(model)
             abstr_clafers = api.get_abstract_clafers()
-            global steps_validated, ignore_fields, generated
+            global steps_validated, ignore_fields, generated, extra_step_flag, extra_fields, form_list
             steps_validated = {}
             ignore_fields = []
             generated = []
-            for step in range(len(model_steps) - 2):
-                steps_validated.update({step + 1: False})
+            generated_steps = []
+            extra_fields = []
+            form_list = OrderedDict()
+            extra_step_flag = False
+            card_initial = {}
+            card = {}
+            for step in range(len(model_steps)):
+                steps_validated.update({step: False})
             return HttpResponseRedirect(reverse('factory_wizard'))
 
     elif request.method == 'GET':
@@ -558,16 +623,27 @@ def factory_wizard(request, *args, **kwargs):
     """
     step_number = len(model_steps)
     ret_form_list = []
-    ret_form_list.append(FCardinalityForm)
-    ret_form_list.append(GCardinalityForm)
-    for step in range(step_number - 2):
-        ret_form_list.append(WizardStepForm)
+    if form_list == OrderedDict():
+        ret_form_list.append(FCardinalityForm)
+        ret_form_list.append(GCardinalityForm)
+        for step in range(step_number - 2):
+            ret_form_list.append(WizardStepForm)
+    else:
+        for index in form_list:
+            form = form_list[index]
+            if form == type(FCardinalityForm()):
+                ret_form_list.append(FCardinalityForm)
+            elif form == type(GCardinalityForm()):
+                ret_form_list.append(GCardinalityForm)
+            else:
+                ret_form_list.append(WizardStepForm)
+
 
     class ReturnClass(WizardClass):
         form_list = ret_form_list
     return ReturnClass.as_view()(request, *args, **kwargs)
 
-def card_update(card_type: str, card_value, not_initial_flag=False):
+def card_update(card_type: str, card_value):
     """
     Update card table according to card type.
 
@@ -578,15 +654,21 @@ def card_update(card_type: str, card_value, not_initial_flag=False):
     """
     global card
     logging.debug(card)
+    for key in ['fcard', 'gcard']:
+        if key not in card.keys():
+            card.update({key: {}})
     if card_type == 'fcard':
         card['fcard'].update(card_value)
     else:
         card['gcard'].update(card_value)
     logging.debug(f'Card is updated: {card}')
 
-    if card_type == 'fcard' and not_initial_flag is True:
+    if card_type == 'fcard':
+        upd_gcard()
         for k, v in card_value.items():
-            api.update_global_namespace('fcard_' + k, v)
+            if type(v) is int:
+                api.update_global_namespace('fcard_' + k, v)
+                logging.debug(f'Global namespace mappings for clafer {k}, was created {v} times.')
 
 def get_fcard(clafer: str):
     """
@@ -662,7 +744,7 @@ def upd_gcard():
     """
     Update group cardinality if it was multiplied according to feature cardinality.
     """
-    global card
+    global card, extra_step_flag, extra_fields
     rm_keys = []
     add_keys = []
     fcard = 1
@@ -671,18 +753,24 @@ def upd_gcard():
         for repeat in range(0, repeats):
             if repeats > 1:
                 name = name_generation(key, struct, repeat)
-                api.mapping(key, name)
-                if key not in ignore_fields:
-                    ignore_fields.append(key)
-                if key not in rm_keys:
-                    rm_keys.append(key)
-                for index in range(0, fcard):
-                    add_keys.append({name: value})
+                if name not in card['gcard'].keys():
+                    if steps_validated[1] is True:
+                        logging.info('Extra Step Flag was set!')
+                        extra_step_flag = True
+                    api.mapping(key, name)
+                    if key not in ignore_fields:
+                        ignore_fields.append(key)
+                    if key not in rm_keys:
+                        rm_keys.append(key)
+                    for index in range(0, fcard):
+                        add_keys.append({name: value})
             else:
                 name = key
     # If gcard was multiplied, we need to add generated keys and remove the original key from card table.
     logging.debug(f'RM KEYS {rm_keys}')
     logging.debug(f'ADD KEYS {add_keys}')
+    if extra_fields == []:
+        extra_fields = add_keys
     for key in rm_keys:
         card['gcard'].pop(key, None)
     for key in add_keys:
@@ -730,7 +818,7 @@ def name_generation(original_name: str, struct: dict, repeat: int, flag=True):
             res = name
         else:
             res = res + '.' + name
-    logging.info(f'Original {original_name} -> generated: {res}')
+    logging.debug(f'Original {original_name} -> generated: {res}')
     if flag:
         generated.append(res)
     return res

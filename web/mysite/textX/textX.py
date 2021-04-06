@@ -40,7 +40,7 @@ cardinality_flag = None
 cardinalities_list = {}
 
 # Logging configuration.
-logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
 
 class Expression(object):
     def __init__(self, **kwargs):
@@ -88,7 +88,7 @@ class prec23(ExpressionElement):
                 statement.value
                 true_exp.value
                 if len(self.op) > 3:
-                    else_exp = self.op[3::4]
+                    else_exp = self.op[3]
                     else_exp.value
                 ret = None
 
@@ -114,7 +114,7 @@ class prec23(ExpressionElement):
                 # If not, then perform ELSE expression if it exist. In the opposite case, do nothing.
                 elif not ret:
                     if len(self.op) > 3:
-                        else_exp = self.op[3::4]
+                        else_exp = self.op[3]
                         ret = else_exp.value
                     else:
                         return None
@@ -733,7 +733,7 @@ class prec10(ExpressionElement):
                 # If cardinality flag was set, then update cardinality value instead of variable in namespace.
                 elif re.match(r'(\w+\.)+\w+', check) and cardinality_flag == 'fcard':
                     from wizard.views import card_update
-                    card_update('fcard', {check: right_value}, True)
+                    card_update('fcard', {check: right_value})
 
                 # If path to variable is simple, just assign value to variable in local namespace.
                 else:
@@ -1160,6 +1160,9 @@ class term(ExpressionElement):
                             res = res[section]
                         unvalidated_params.append(mappings[check][mapping_iter])
                         return res['value']
+                    elif new_op in current_namespace.keys():
+                        unvalidated_params.append(new_op)
+                        return current_namespace[op]['value']
 
                 # Double check if local namespace variable has no value (check in global namespace).
                 if len(current_path.split('.')) > 1:
@@ -1174,14 +1177,14 @@ class term(ExpressionElement):
                         except KeyError:
                             raise Exception(f'Such variable {op} does not exist')
                 else:
-                    unvalidated_params.append(op)
+                    unvalidated_params.append(check)
                 return current_namespace[op]['value']
 
             # In case of bool value, just return it.
             elif type(op) is bool:
                 return op
 
-            # In case of strina value, launch additional checks.
+            # In case of string value, launch additional checks.
             elif type(op) is str and op not in keywords:
                 logging.debug(f"String object: {op}")
 
@@ -1204,7 +1207,7 @@ class term(ExpressionElement):
                 # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
                 elif re.match(r'(\w+\.)+\w+', op):
                     # Check for mappings
-                    if op in mappings.keys():
+                    if op in mappings.keys() and op.split('.')[0] not in ['fcard', 'gcard']:
                         mapping_iter_sum = len(mappings[op])
                         op = mappings[op][mapping_iter]
                     path = op.split('.')
@@ -1227,13 +1230,17 @@ class term(ExpressionElement):
 
                         # Build full path (Cardinalities are presented as full path records).
                         full_path = f_p
-                        if full_path in mappings.keys():
-                            mapping_iter_sum = len(mappings[full_path])
-                            full_path = mappings[full_path][mapping_iter]
                         try:
                             res = card[cardinality_flag][full_path]
                         except KeyError:
                             raise Exception(f'No such key {full_path} in {card[cardinality_flag]}')
+
+                    elif path[0] == 'childs':
+                        path = path[1:]
+                        res = global_namespace
+                        for section in path:
+                            res = res[section]
+                        res = list(res.keys())
 
                     # If no cardinalities keyword presented in path, then try to find variable using this path.
                     else:
@@ -1856,6 +1863,8 @@ class textX_API():
             try:
                 path_check = path_check[part]
             except KeyError:
+                logging.debug(f'No such key in namespace {path}.')
+                logging.debug(f'Global namespace: {global_namespace}')
                 path_flag = False
             if check == '':
                 check = part
@@ -1869,7 +1878,7 @@ class textX_API():
         key = {}
         if path_flag is True:
             ns = global_namespace
-            logging.debug(f'Take Global namespace {ns}')
+            # logging.debug(f'Take Global namespace {ns}')
             p = path
         elif path_flag is False and abs_flag is True:
             ns = abstract_namespace
@@ -2146,7 +2155,7 @@ class textX_API():
         """
         global global_namespace
         k_s = key.split('_')
-        if k_s[0] == 'fcard' and len(k_s[1].split('.')) > 1 and value > 1:
+        if k_s[0] == 'fcard' and len(k_s[1].split('.')) >= 1 and value > 1:
             ret = global_namespace
             path = k_s[1].split('.')
             for section in path[:-1]:

@@ -1,0 +1,105 @@
+abstract Camera {
+    FocalLength -> float
+    Resolution -> float
+    [Resolution > 0]
+    [FocalLength > 0]
+}
+
+abstract WideCamera: Camera {
+    [FocalLength > 15]
+    [FocalLength <= 30]
+}
+
+abstract UltrawideCamera: Camera {
+    [FocalLength <= 15]
+}
+
+abstract TelephotoCamera: Camera {
+    [FocalLength > 30]
+}
+
+abstract MainCamera {
+    xor Type {
+        Wide: WideCamera
+        Ultrawide: UltrawideCamera
+        Telephoto: TelephotoCamera
+    }
+}
+
+abstract SelfieCamera {
+    xor Type {
+        Wide: WideCamera
+        Ultrawide: UltrawideCamera
+    }
+}
+
+
+abstract Band2G {
+    FrequencyBand -> integer
+    [FrequencyBand in {850, 900, 1800, 1900}]
+}
+
+abstract Band3G {
+    FrequencyBand -> integer
+    [FrequencyBand in {850, 900, 1900, 2100}]
+}
+
+abstract Band4G {
+    FrequencyBandNumber -> integer
+    [FrequencyBandNumber in {1, 2, 3, 4, 5, 7, 8}]
+}
+
+abstract Band5G {
+    FrequencyBandNumber -> integer
+    [FrequencyBandNumber in {1, 3, 5, 7, 8}]
+}
+
+Network {
+    xor Bands + {
+        B2G: Band2G
+        B3G: Band3G
+        B4G: Band4G
+        B5G: Band5G
+    }
+}
+
+Body {
+    Height -> float
+    Length -> float
+    Width -> float
+    Weight -> integer
+}
+Buttons {
+    PowerButton -> predefined
+    SoundButton -> predefined 2
+    CypherButton -> predefined 1
+    ControlButton -> predefined 0, 2..4, 7..9
+    [PowerButton = 1]
+    [SoundButton = 2]
+    [CypherButton = 3]
+    [ControlButton = 3]
+}
+
+RearCamera: MainCamera +
+FrontCamera: SelfieCamera
+Display {
+    Type -> string
+    Size -> float
+    Resolution{
+        Height -> integer
+        Width -> integer
+        [Height > 0]
+        [Width > 0]
+    }
+    [Type in {AMOLED, IPS, TFT}]
+    [Size > 0]
+    [Size < 7]
+    [if Size < 3 then fcard.Buttons.CypherButton = 10 else fcard.Buttons.CypherButton = 0]
+}
+Processor {
+    Cores -> integer
+    Frequency -> float
+    [Cores in {1, 2, 4, 6, 8}]
+    [Frequency > 0]
+    [Frequency < 3]
+}

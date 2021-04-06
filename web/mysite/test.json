@@ -1,26 +1,21 @@
 {
-    "Experiment": {
-        "Energy": {
-            "Frequency": {
-                "Type": "FloatOrdinalHyperparameter",
-                "Categories": [
-                    1200.0,
-                    1300.0,
-                    1400.0
-                ],
-                "Default": 1200.0
-            },
-            "Threads": {
-                "Type": "IntegerOrdinalHyperparameter",
-                "Categories": [
-                    1,
-                    2,
-                    4
-                ],
-                "Default": 2
-            },
-            "Type": "NominalHyperparameter"
+    "Predictor": {
+        "Model_0": {
+            "a": "3"
         },
-        "Type": "NominalHyperparameter"
+        "Model_1": {
+            "b": "3"
+        },
+        "Model_2": {
+            "b": "3"
+        }
+    },
+    "Context": {
+        "Model": {
+            "ModelStructure": "Hierarchical"
+        }
+    },
+    "SearchSpace": {
+        "Model": "Model_1"
     }
 }
