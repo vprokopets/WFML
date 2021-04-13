@@ -1,21 +1,52 @@
 {
-    "Predictor": {
-        "Model_0": {
-            "a": "3"
-        },
-        "Model_1": {
-            "b": "3"
-        },
-        "Model_2": {
-            "b": "3"
+    "Body": {
+        "Height": 3.0,
+        "Length": 3.0,
+        "Width": 3.0,
+        "Weight": 3
+    },
+    "Buttons": {
+        "PowerButton": 1,
+        "CypherButton": 3,
+        "SoundButton_0": 2,
+        "SoundButton_1": 2,
+        "ControlButton_0": 3,
+        "ControlButton_1": 3
+    },
+    "FrontCamera": {
+        "Type": {
+            "Wide": {
+                "FocalLength": 22.0,
+                "Resolution": 2.0
+            }
         }
     },
-    "Context": {
-        "Model": {
-            "ModelStructure": "Hierarchical"
+    "Display": {
+        "Type": "IPS",
+        "Size": 3.0,
+        "Resolution": {
+            "Height": 3,
+            "Width": 3
         }
     },
-    "SearchSpace": {
-        "Model": "Model_1"
+    "Processor": {
+        "Cores": 2,
+        "Frequency": 2.0
+    },
+    "RearCamera_0": {
+        "Type": {
+            "Wide": {
+                "FocalLength": 16.0,
+                "Resolution": 3.0
+            }
+        }
+    },
+    "RearCamera_1": {
+        "Type": {
+            "Wide": {
+                "FocalLength": 16.0,
+                "Resolution": 3.0
+            }
+        }
     }
 }
