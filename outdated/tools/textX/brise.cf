@@ -159,6 +159,14 @@ abstract NominalHyperparameter {
     [Type = NominalHyperparameter]
 }
 
+abstract OrdinalHyperparameter {
+    Type -> predefined
+    Categories -> predefined
+    Default -> string
+    [Type = OrdinalHyperparameter]
+    [Default in Categories]
+}
+
 abstract IntegerOrdinalHyperparameter {
     Type -> predefined
     Categories -> predefined
@@ -198,12 +206,59 @@ abstract IntegerHyperparameter {
 
 
 Experiment : NominalHyperparameter {
-    Energy: NominalHyperparameter {
-        Frequency: FloatOrdinalHyperparameter{
-            [Categories = {1200.0, 1300.0, 1400,0}]
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPy {
+            SimulatedAnnealing: NominalHyperparameter {
+                MutationType: OrdinalHyperparameter{
+                    MutationProbability: FloatHyperparameter{
+                        [Lower = 0]
+                        [Upper = 1]
+                    }
+                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
+                }
+            }
+            EvolutionStrategy: NominalHyperparameter {
+                mu: IntegerHyperparameter {
+                    [Lower = 1]
+                    [Upper = 1000]
+                }
+                lambda_ : IntegerHyperparameter{
+                    [Lower = 1]
+                    [Upper = 1000]
+                }
+                elitist: OrdinalHyperparameter{
+                    [Categories = {True, False}]
+                }
+                MutationType: OrdinalHyperparameter{
+                    MutationProbability: FloatHyperparameter{
+                        [Lower = 0]
+                        [Upper = 1]
+                    }
+                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
+                }
+            }
         }
-        Threads: IntegerOrdinalHyperparameter{
-            [Categories = {1, 2, 4}]
+        jMetal {
+            EvolutionStrategy: NominalHyperparameter {
+                mu: IntegerHyperparameter {
+                    [Lower = 1]
+                    [Upper = 1000]
+                }
+                lambda_ : IntegerHyperparameter{
+                    [Lower = 1]
+                    [Upper = 1000]
+                }
+                elitist: OrdinalHyperparameter{
+                    [Categories = {True, False}]
+                }
+                MutationType: OrdinalHyperparameter{
+                    MutationProbability: FloatHyperparameter{
+                        [Lower = 0]
+                        [Upper = 1]
+                    }
+                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
+                }
+            }
         }
     }
 }

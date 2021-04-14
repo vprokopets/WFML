@@ -13,7 +13,7 @@ DomainDescription {
     DataFile -> string
 }
 
-TaskCondiguration {
+TaskConfiguration {
     TaskName -> integer
     xor Scenario {
         FromFile {
@@ -40,12 +40,12 @@ TaskCondiguration {
         Priority -> integer
         ModelPriority -> integer
         ExpectedValuesRange -> floatArray
-        MaxTimeToRunTask ? -> integer
+        MaxTimeToRunTask -> integer ?
     }
-    [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Objectives]
+    [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.TaskConfiguration.Objectives]
 }
 
-abstract OutliersDetector 5{
+abstract OutliersDetector 5 {
     MinActiveNumberOfTasks -> integer
     MaxActiveNumberOfTasks -> integer
     [MinActiveNumberOfTasks >= 3]
@@ -143,11 +143,13 @@ abstract SciKitLearn {
 
 Predictor {
     WindowSize -> float
-    xor Models 1..5 {
-        TPE : TreeParzenEstimator
-        MAB : MultiArmedBandit
-        MM : ModelMock
-        skLearn : SciKitLearn
+    Models {
+        xor Model 1 {
+            TPE : TreeParzenEstimator
+            MAB : MultiArmedBandit
+            MM : ModelMock
+            skLearn : SciKitLearn
+        }
     }
 }
 
@@ -204,34 +206,48 @@ StopCondition {
         }
         [Type = TimeBased]
     }
+}
 
 abstract NominalHyperparameter {
     Type -> predefined
     [Type = NominalHyperparameter]
 }
 
+abstract MDNominalHyperparameter {
+    Type -> predefined
+    Model -> string
+    [Type = NominalHyperparameter]
+    [Model in childs.Predictor.Models]
+}
+
 abstract OrdinalHyperparameter {
     Type -> predefined
     Categories -> predefined
     Default -> string
+    Model -> predefined
     [Type = OrdinalHyperparameter]
     [Default in Categories]
+    [Model in childs.Predictor.Models]
 }
 
 abstract IntegerOrdinalHyperparameter {
     Type -> predefined
     Categories -> predefined
     Default -> integer
+    Model -> predefined
     [Type = IntegerOrdinalHyperparameter]
     [Default in Categories]
+    [Model in childs.Predictor.Models]
 }
 
 abstract FloatOrdinalHyperparameter {
     Type -> predefined
     Categories -> predefined
     Default -> float
+    Model -> predefined
     [Type = FloatOrdinalHyperparameter]
     [Default in Categories]
+    [Model in childs.Predictor.Models]
 }
 
 abstract FloatHyperparameter {
@@ -239,9 +255,11 @@ abstract FloatHyperparameter {
     Lower -> predefined
     Upper -> predefined
     Default -> float
+    Model -> predefined
     [Default >= Lower]
     [Default <= Upper]
     [Type = FloatHyperparameter]
+    [Model in childs.Predictor.Models]
 }
 
 abstract IntegerHyperparameter {
@@ -250,65 +268,97 @@ abstract IntegerHyperparameter {
     Lower -> predefined
     Upper -> predefined
     Default -> integer
+    Model -> predefined
     [Default >= Lower]
     [Default <= Upper]
     [Type = IntegerHyperparameter]
+    [Model in childs.Predictor.Models]
 }
 
 Experiment : NominalHyperparameter {
-    LowLevelHeuristic: NominalHyperparameter {
-        jMetalPy {
-            SimulatedAnnealing: NominalHyperparameter {
-                MutationType: OrdinalHyperparameter{
+    LowLevelHeuristic: MDNominalHyperparameter {
+        jMetalPySimulatedAnnealing: MDNominalHyperparameter {
+            MutationType: NominalHyperparameter{
+                PermutationSwapMutation: MDNominalHyperparameter{
                     MutationProbability: FloatHyperparameter{
                         [Lower = 0]
                         [Upper = 1]
+                        [Model = Experiment.LowLevelHeuristic.jMetalPySimulatedAnnealing.MutationType.PermutationSwapMutation.Model]
                     }
-                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
                 }
-            }
-            EvolutionStrategy: NominalHyperparameter {
-                mu: IntegerHyperparameter {
-                    [Lower = 1]
-                    [Upper = 1000]
-                }
-                lambda_ : IntegerHyperparameter{
-                    [Lower = 1]
-                    [Upper = 1000]
-                }
-                elitist: OrdinalHyperparameter{
-                    [Categories = {True, False}]
-                }
-                MutationType: OrdinalHyperparameter{
+                ScrambleMutation: MDNominalHyperparameter{
                     MutationProbability: FloatHyperparameter{
                         [Lower = 0]
                         [Upper = 1]
+                        [Model = Experiment.LowLevelHeuristic.jMetalPySimulatedAnnealing.MutationType.PermutationSwapMutation.Model]
                     }
-                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
                 }
             }
         }
-        jMetal {
-            EvolutionStrategy: NominalHyperparameter {
-                mu: IntegerHyperparameter {
-                    [Lower = 1]
-                    [Upper = 1000]
-                }
-                lambda_ : IntegerHyperparameter{
-                    [Lower = 1]
-                    [Upper = 1000]
-                }
-                elitist: OrdinalHyperparameter{
-                    [Categories = {True, False}]
-                }
-                MutationType: OrdinalHyperparameter{
+        jMetalPyEvolutionStrategy: MDNominalHyperparameter {
+            mu: IntegerHyperparameter {
+                [Lower = 1]
+                [Upper = 1000]
+                [Model = Experiment.LowLevelHeuristic.jMetalPyEvolutionStrategy.Model]
+            }
+            lambda_ : IntegerHyperparameter{
+                [Lower = 1]
+                [Upper = 1000]
+                [Model = Experiment.LowLevelHeuristic.jMetalPyEvolutionStrategy.Model]
+            }
+            elitist: OrdinalHyperparameter{
+                [Categories = {True, False}]
+                [Model = Experiment.LowLevelHeuristic.jMetalPyEvolutionStrategy.Model]
+            }
+            MutationType: NominalHyperparameter{
+                PermutationSwapMutation: MDNominalHyperparameter{
                     MutationProbability: FloatHyperparameter{
                         [Lower = 0]
                         [Upper = 1]
+                        [Model = Experiment.LowLevelHeuristic.jMetalPyEvolutionStrategy.MutationType.PermutationSwapMutation.Model]
                     }
-                    [Categories = {PermutationSwapMutation, ScrambleMutation}]
+                }
+                ScrambleMutation: MDNominalHyperparameter{
+                    MutationProbability: FloatHyperparameter{
+                        [Lower = 0]
+                        [Upper = 1]
+                        [Model = Experiment.LowLevelHeuristic.jMetalPyEvolutionStrategy.MutationType.PermutationSwapMutation.Model]
+                    }
                 }
             }
         }
+        jMetalEvolutionStrategy: MDNominalHyperparameter {
+            mu: IntegerHyperparameter {
+                [Lower = 1]
+                [Upper = 1000]
+                [Model = Experiment.LowLevelHeuristic.jMetalEvolutionStrategy.Model]
+            }
+            lambda_ : IntegerHyperparameter{
+                [Lower = 1]
+                [Upper = 1000]
+                [Model = Experiment.LowLevelHeuristic.jMetalEvolutionStrategy.Model]
+            }
+            elitist: OrdinalHyperparameter{
+                [Categories = {True, False}]
+                [Model = Experiment.LowLevelHeuristic.jMetalEvolutionStrategy.Model]
+            }
+            MutationProbability: FloatHyperparameter{
+                [Lower = 0]
+                [Upper = 1]
+                [Model = Experiment.LowLevelHeuristic.jMetalEvolutionStrategy.Model]
+            }
+        }
+    }
+}
+
+Context {
+    Model {
+        xor Structure {
+           Flat
+           Hierarchical
+        }
+        ModelStructure -> predefined
+        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = 8]
+        [ModelStructure = gcard.Context.Model.Structure]
     }
 }

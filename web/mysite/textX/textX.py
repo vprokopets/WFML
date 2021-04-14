@@ -40,7 +40,7 @@ cardinality_flag = None
 cardinalities_list = {}
 
 # Logging configuration.
-logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
 
 class Expression(object):
     def __init__(self, **kwargs):
@@ -2165,7 +2165,6 @@ class textX_API():
                 for index in range(0, value):
                     ret.update({path[-1] + '_' + str(index): copy.deepcopy(ret[path[-1]])})
                     logging.info(f'Global namespace was mapped {index + 1} of {value} times for clafer {key}')
-            logging.debug(f'{global_namespace[path[0]]}')
 
     def validate_clafer(self, clafer: str):
         """

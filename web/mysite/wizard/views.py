@@ -60,7 +60,10 @@ class WizardStepForm(forms.Form):
                     subparam = element + '.' + subparam
                 param_type = api.get_clafer_type(subparam)
                 if param_type != 'predefined' and check_gcard(subparam) is True:
-                    self.add_error(subparam, param['error'])
+                    self.add_error(subparam, f'This field returned error: {param["error"]}')
+                else:
+                    self.add_error(None, f'Clafer`s {param["element"]} parameter {subparam} returned error: {param["error"]}')
+
         return cd
 
     def validation(self, element: str):
@@ -243,30 +246,27 @@ class ModelInputForm(forms.Form):
 
     a = """
 
-Predictor {
-    xor Model 1 {
-        a -> string
-        b -> string
-    }
+Buttons {
+    PowerButton -> predefined
+    SoundButton -> predefined 2
+    CypherButton -> predefined 1
+    ControlButton -> predefined 0, 2..4, 7..9
+
+    [PowerButton = 1]
+    [SoundButton = 2]
+    [CypherButton = 3]
+    [ControlButton = 4]
 }
 
-Context {
-    Model {
-        xor Structure {
-           Flat
-           Hierarchical
-        }
-        ModelStructure -> predefined
-        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Model = 1 else fcard.Predictor.Model = 3]
-        [ModelStructure = gcard.Context.Model.Structure]
-   }
-}
 
-SearchSpace {
-    Model -> string
-    [Model in childs.Predictor]
+Display {
+    Type -> string
+    Size -> float
+    [Type in {AMOLED, IPS, TFT}]
+    [Size > 0]
+    [Size < 7]
+    [if Size < 3 then fcard.Buttons.CypherButton = 10 else fcard.Buttons.CypherButton = 0]
 }
-
 """
     model_field = forms.CharField(widget=forms.Textarea, initial=a)
 
@@ -405,7 +405,18 @@ class WizardClass(SessionWizardView):
                     # If there are no abstract clafers, that will match any part of gcard value, then just add this gcard.
                     # TODO check this section on fcard support.
                     if gcards == [] and flag is False:
-                        gcards.append(gcard)
+                        if gcard not in generated:
+                            repeats, struct = get_fcard(gcard)
+                        else:
+                            repeats = 1
+                        # Multiply gcard fields if fcard > 1.
+                        for repeat in range(0, repeats):
+                            if repeats > 1:
+                                name = name_generation(gcard, struct, repeat, False)
+                                api.mapping(gcard, name)
+                                gcards.append(name)
+                            else:
+                                gcards.append(gcard)
                     logging.debug(f'GCARDS FULLFILLED: {gcards}')
 
                     # Create appropriate fields in form.

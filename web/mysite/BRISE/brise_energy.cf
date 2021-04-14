@@ -40,7 +40,7 @@ TaskCondiguration {
         Priority -> integer
         ModelPriority -> integer
         ExpectedValuesRange -> floatArray
-        MaxTimeToRunTask ? -> integer
+        MaxTimeToRunTask -> integer ?
     }
     [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Objectives]
 }
@@ -204,6 +204,7 @@ StopCondition {
         }
         [Type = TimeBased]
     }
+}
 
 abstract NominalHyperparameter {
     Type -> predefined
