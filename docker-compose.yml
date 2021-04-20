@@ -1,0 +1,11 @@
+# Launch & Build.
+version: "3.7"
+services: 
+  front-end:
+    build: ./web/mysite/
+    command: python3.7 manage.py runserver 0.0.0.0:8000
+    container_name: WFML
+    tty: true
+    ports:
+        - 8000:8000
+    restart: on-failure

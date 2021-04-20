@@ -1,24 +1,84 @@
 {
-    "Buttons": {
-        "PowerButton": 1,
-        "SoundButton_0": 2,
-        "SoundButton_1": 2,
-        "ControlButton_0": 4,
-        "ControlButton_1": 4,
-        "ControlButton_2": 4,
-        "CypherButton_0": 3,
-        "CypherButton_1": 3,
-        "CypherButton_2": 3,
-        "CypherButton_3": 3,
-        "CypherButton_4": 3,
-        "CypherButton_5": 3,
-        "CypherButton_6": 3,
-        "CypherButton_7": 3,
-        "CypherButton_8": 3,
-        "CypherButton_9": 3
+    "TaskConfiguration": {
+        "TaskName": 3,
+        "Scenario": {
+            "FromFile": {
+                "WsFile": "3"
+            }
+        },
+        "Objectives_0": {
+            "Name": "3",
+            "DataType": "3",
+            "Minimization": true,
+            "Priority": 3,
+            "ModelPriority": 3,
+            "ExpectedValuesRange": "3"
+        },
+        "Objectives_1": {
+            "Name": "3",
+            "DataType": "3",
+            "Minimization": true,
+            "Priority": 3,
+            "ModelPriority": 3,
+            "ExpectedValuesRange": "3"
+        },
+        "Objectives_2": {
+            "Name": "3",
+            "DataType": "3",
+            "Minimization": false,
+            "Priority": 3,
+            "ModelPriority": 3,
+            "ExpectedValuesRange": "3"
+        }
     },
-    "Display": {
-        "Type": "TFT",
-        "Size": 2.0
+    "OutliersDetection": {
+        "Chauvenet": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 3
+        }
+    },
+    "Repeater": {
+        "AcceptableErrorBasedRepeater_0": {
+            "MaxFailedTasksPerConfiguration": 3,
+            "BaseAcceptableErrors": 3,
+            "ConfidenceLevels": 3.0,
+            "DevicesScaleAccuracies": 3,
+            "DevicesAccuracyClasses": 3,
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": 3,
+                "RatiosMax": 3
+            },
+            "MinTasksPerConfiguration": 3,
+            "MaxTasksPerConfiguration": 3
+        },
+        "AcceptableErrorBasedRepeater_1": {
+            "MaxFailedTasksPerConfiguration": 3,
+            "BaseAcceptableErrors": 3,
+            "ConfidenceLevels": 3.0,
+            "DevicesScaleAccuracies": 3,
+            "DevicesAccuracyClasses": 3,
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": 3,
+                "RatiosMax": 3
+            },
+            "MinTasksPerConfiguration": 3,
+            "MaxTasksPerConfiguration": 3
+        },
+        "AcceptableErrorBasedRepeater_2": {
+            "MaxFailedTasksPerConfiguration": 3,
+            "BaseAcceptableErrors": 3,
+            "ConfidenceLevels": 3.0,
+            "DevicesScaleAccuracies": 3,
+            "DevicesAccuracyClasses": 3,
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": 3,
+                "RatiosMax": 3
+            },
+            "MinTasksPerConfiguration": 3,
+            "MaxTasksPerConfiguration": 3
+        }
     }
 }

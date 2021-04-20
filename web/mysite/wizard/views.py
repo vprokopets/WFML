@@ -247,26 +247,27 @@ class ModelInputForm(forms.Form):
     a = """
 
 Buttons {
-    PowerButton -> predefined
-    SoundButton -> predefined 2
-    CypherButton -> predefined 1
-    ControlButton -> predefined 0, 2..4, 7..9
+    NumericButton -> integer 1
 
-    [PowerButton = 1]
-    [SoundButton = 2]
-    [CypherButton = 3]
-    [ControlButton = 4]
+    // Complex Intervals
+    ControlButton -> string 0, 2..4, 7..9
+
+    [if fcard.Buttons.NumericButton > 0 then NumericButton < 10]
 }
 
 
 Display {
     Type -> string
     Size -> float
+
     [Type in {AMOLED, IPS, TFT}]
     [Size > 0]
     [Size < 7]
-    [if Size < 3 then fcard.Buttons.CypherButton = 10 else fcard.Buttons.CypherButton = 0]
+
+    // Cross-tree constraint with Cardinalities
+    [if Size < 3 then fcard.Buttons.NumericButton = 10 else fcard.Buttons.NumericButton = 0]
 }
+
 """
     model_field = forms.CharField(widget=forms.Textarea, initial=a)
 
@@ -736,6 +737,9 @@ def check_gcard(clafer: str):
     (type = bool): check result.
     """
     global card
+    for key, value in card['fcard'].items():
+        if key == clafer and value == 0:
+            return False
     logging.debug(f'GcardTable: {card["gcard"]}')
     for key, value in card['gcard'].items():
         if key == clafer:

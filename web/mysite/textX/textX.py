@@ -1162,8 +1162,7 @@ class term(ExpressionElement):
                         return res['value']
                     elif new_op in current_namespace.keys():
                         unvalidated_params.append(new_op)
-                        return current_namespace[op]['value']
-
+                        return current_namespace[new_op]['value']
                 # Double check if local namespace variable has no value (check in global namespace).
                 if len(current_path.split('.')) > 1:
                     unvalidated_params.append(check)

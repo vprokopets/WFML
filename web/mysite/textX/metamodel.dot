@@ -11,143 +11,143 @@
     edge[dir=black,arrowtail=empty]
 
 
-140054655840368[ label="{Model|}"]
+139793134377040[ label="{Model|}"]
 
-140054655806368[ label="{*Element|}"]
+139793135014240[ label="{*Element|}"]
 
-140054656053632[ label="{Constraint|}"]
+139793134695952[ label="{Constraint|}"]
 
-140054656059760[ label="{Assertion|}"]
+139793133332832[ label="{Assertion|}"]
 
-140054656065888[ label="{Goal|gtype: Goaltype\l}"]
+139793135423552[ label="{Goal|gtype: Goaltype\l}"]
 
-140054656116736[ label="{Clafer|abstract: Abstract\lgcard: Gcard\lname: Name\lfcard: Fcard\l}"]
+139793133343520[ label="{Clafer|abstract: Abstract\lgcard: Gcard\lname: Name\lfcard: Fcard\l}"]
 
-140054656063888[ label="{*Super|}"]
+139793135448688[ label="{*Super|}"]
 
-140054655830480[ label="{*Reference|}"]
+139793135454224[ label="{*Reference|}"]
 
-140054656132992[ label="{*Init|}"]
+139793132952272[ label="{*Init|}"]
 
-140054656121328[ label="{Nested|}"]
+139793132957216[ label="{Nested|}"]
 
-38125552[ label="{prec23|op: optional\<list[OBJECT]\>\l}"]
+56834832[ label="{prec23|op: optional\<list[OBJECT]\>\l}"]
 
-38126496[ label="{prec22|op: optional\<list[OBJECT]\>\l}"]
+56835776[ label="{prec22|op: optional\<list[OBJECT]\>\l}"]
 
-38127440[ label="{prec21|op: optional\<list[OBJECT]\>\l}"]
+56836720[ label="{prec21|op: optional\<list[OBJECT]\>\l}"]
 
-38128384[ label="{prec20|op: optional\<list[OBJECT]\>\l}"]
+56837664[ label="{prec20|op: optional\<list[OBJECT]\>\l}"]
 
-38129328[ label="{prec19|op: optional\<list[OBJECT]\>\l}"]
+56838608[ label="{prec19|op: optional\<list[OBJECT]\>\l}"]
 
-38130272[ label="{prec18|op: optional\<list[OBJECT]\>\l}"]
+56839552[ label="{prec18|op: optional\<list[OBJECT]\>\l}"]
 
-38131216[ label="{prec17|op: optional\<list[OBJECT]\>\l}"]
+56840496[ label="{prec17|op: optional\<list[OBJECT]\>\l}"]
 
-38132160[ label="{prec16|op: optional\<list[OBJECT]\>\l}"]
+56841440[ label="{prec16|op: optional\<list[OBJECT]\>\l}"]
 
-38133104[ label="{prec15|op: optional\<list[OBJECT]\>\l}"]
+56842384[ label="{prec15|op: optional\<list[OBJECT]\>\l}"]
 
-38134048[ label="{prec14|op: optional\<list[OBJECT]\>\l}"]
+56843328[ label="{prec14|op: optional\<list[OBJECT]\>\l}"]
 
-38134992[ label="{prec13|op: optional\<list[OBJECT]\>\l}"]
+56844272[ label="{prec13|op: optional\<list[OBJECT]\>\l}"]
 
-38135936[ label="{prec12|op: optional\<list[OBJECT]\>\l}"]
+56845216[ label="{prec12|op: optional\<list[OBJECT]\>\l}"]
 
-38136880[ label="{prec11|op: optional\<list[OBJECT]\>\l}"]
+56846160[ label="{prec11|op: optional\<list[OBJECT]\>\l}"]
 
-38137824[ label="{prec10|op: optional\<list[OBJECT]\>\l}"]
+56847104[ label="{prec10|op: optional\<list[OBJECT]\>\l}"]
 
-38138768[ label="{prec9|op: optional\<list[OBJECT]\>\l}"]
+56848048[ label="{prec9|op: optional\<list[OBJECT]\>\l}"]
 
-38139712[ label="{prec8|op: optional\<list[OBJECT]\>\l}"]
+56848992[ label="{prec8|op: optional\<list[OBJECT]\>\l}"]
 
-38140656[ label="{prec7|op: optional\<list[OBJECT]\>\l}"]
+56849936[ label="{prec7|op: optional\<list[OBJECT]\>\l}"]
 
-38141600[ label="{prec6|op: optional\<list[OBJECT]\>\l}"]
+56850880[ label="{prec6|op: optional\<list[OBJECT]\>\l}"]
 
-38142544[ label="{prec5|op: optional\<list[OBJECT]\>\l}"]
+56851824[ label="{prec5|op: optional\<list[OBJECT]\>\l}"]
 
-38143488[ label="{prec4|op: optional\<list[OBJECT]\>\l}"]
+56852768[ label="{prec4|op: optional\<list[OBJECT]\>\l}"]
 
-38144432[ label="{prec3|op: optional\<list[OBJECT]\>\l}"]
+56853712[ label="{prec3|op: optional\<list[OBJECT]\>\l}"]
 
-38145376[ label="{prec2|op: optional\<list[OBJECT]\>\l}"]
+56854656[ label="{prec2|op: optional\<list[OBJECT]\>\l}"]
 
-38147440[ label="{prec1|op: optional\<list[OBJECT]\>\l}"]
+56856720[ label="{prec1|op: optional\<list[OBJECT]\>\l}"]
 
-38148384[ label="{prec0|op: optional\<list[OBJECT]\>\l}"]
+56857664[ label="{prec0|op: optional\<list[OBJECT]\>\l}"]
 
-38149328[ label="{term|op: OBJECT\l}"]
+56858608[ label="{term|op: OBJECT\l}"]
 
 
 
-140054655840368 -> 140054655806368[arrowtail=diamond, dir=both, headlabel="elements 0..*"]
-140054655806368 -> 140054656116736 [dir=back]
-140054655806368 -> 140054656065888 [dir=back]
-140054655806368 -> 140054656053632 [dir=back]
-140054655806368 -> 140054656059760 [dir=back]
-140054656053632 -> 38125552[arrowtail=diamond, dir=both, headlabel="name "]
-140054656059760 -> 38125552[arrowtail=diamond, dir=both, headlabel="name "]
-140054656065888 -> 38125552[arrowtail=diamond, dir=both, headlabel="name "]
-140054656116736 -> 140054656063888[arrowtail=diamond, dir=both, headlabel="super "]
-140054656116736 -> 140054655830480[arrowtail=diamond, dir=both, headlabel="reference "]
-140054656116736 -> 140054656132992[arrowtail=diamond, dir=both, headlabel="init "]
-140054656116736 -> 140054656121328[arrowtail=diamond, dir=both, headlabel="nested 0..*"]
-140054656063888 -> 38148384 [dir=back]
-140054655830480 -> 38144432 [dir=back]
-140054656132992 -> 38125552 [dir=back]
-140054656121328 -> 140054655806368[arrowtail=diamond, dir=both, headlabel="child 1..*"]
-140054655864512[ label="{*OBJECT|}"]
+139793134377040 -> 139793135014240[arrowtail=diamond, dir=both, headlabel="elements 0..*"]
+139793135014240 -> 139793133343520 [dir=back]
+139793135014240 -> 139793135423552 [dir=back]
+139793135014240 -> 139793134695952 [dir=back]
+139793135014240 -> 139793133332832 [dir=back]
+139793134695952 -> 56834832[arrowtail=diamond, dir=both, headlabel="name "]
+139793133332832 -> 56834832[arrowtail=diamond, dir=both, headlabel="name "]
+139793135423552 -> 56834832[arrowtail=diamond, dir=both, headlabel="name "]
+139793133343520 -> 139793135448688[arrowtail=diamond, dir=both, headlabel="super "]
+139793133343520 -> 139793135454224[arrowtail=diamond, dir=both, headlabel="reference "]
+139793133343520 -> 139793132952272[arrowtail=diamond, dir=both, headlabel="init "]
+139793133343520 -> 139793132957216[arrowtail=diamond, dir=both, headlabel="nested 0..*"]
+139793135448688 -> 56857664 [dir=back]
+139793135454224 -> 56853712 [dir=back]
+139793132952272 -> 56834832 [dir=back]
+139793132957216 -> 139793135014240[arrowtail=diamond, dir=both, headlabel="child 1..*"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
-140054655864512[ label="{*OBJECT|}"]
+139793133885696[ label="{*OBJECT|}"]
 
 match_rules [ shape=plaintext, label=< <table>
 	<tr>
