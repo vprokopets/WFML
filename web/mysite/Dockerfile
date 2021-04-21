@@ -19,3 +19,5 @@ COPY . /root
 RUN rm /root/Dockerfile
 
 WORKDIR /root
+RUN python3.7 manage.py makemigrations
+RUN python3.7 manage.py migrate
