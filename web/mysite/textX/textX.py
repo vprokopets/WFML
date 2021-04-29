@@ -9,50 +9,20 @@ import re
 from collections import defaultdict
 from functools import reduce
 import networkx as nx
-from os.path import join, dirname
+from os.path import join, dirname, abspath
 from textx import metamodel_from_file, get_location
 from textx.export import metamodel_export, model_export
 
 # Global variables.
-global_namespace = {}
-abstract_namespace = {}
-current_namespace = {}
-current_path = ''
-cross_tree_clafers = []
-cross_tree_clafers_full = []
-cross_tree_list = []
-cycles = {}
+wfml_data = {}
+initial_data = {}
 keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
             'if', 'in', 'lone', 'max', 'maximize', 'min',
             'minimize', 'mux', 'no', 'not', 'one', 'opt',
             'or', 'product', 'some', 'sum', 'then', 'xor', '_', 'fcard', 'gcard']
-exception_flag = False
-cross_tree_check = False
-current_cross_tree = None
-unvalidated_params = []
-abstract_clafers = []
-abstract_dependencies = {}
-mappings = {}
-mapping_iter_sum = 1
-mapping_iter = 0
-mapping_current = []
-cardinality_flag = None
-cardinalities_list = {}
 
 # Logging configuration.
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
-
-class Expression(object):
-    def __init__(self, **kwargs):
-        self.expression = kwargs.pop('expressions')
-
-    @property
-    def value(self):
-        # Evaluate variables in the order of definition
-        res = []
-        for a in self.expression:
-            res.append(a.value)
-        return res
 
 
 class ExpressionElement(object):
@@ -66,6 +36,76 @@ class ExpressionElement(object):
         self.op = kwargs['op']
 
         super(ExpressionElement, self).__init__()
+
+    def update_wfml_data(self, path: str, data, duplicates=True):
+        global wfml_data
+        full_path = path
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.')[:-1]:
+                wfml_data_section = wfml_data_section[section]
+            path = path.split('.')[-1]
+        else:
+            wfml_data_section = wfml_data
+
+        if type(wfml_data_section[path]) is dict:
+            wfml_data_section[path].update(data)
+        elif type(wfml_data_section[path]) is list and duplicates is True:
+            wfml_data_section[path].append(data)
+        elif type(wfml_data_section[path]) is list and duplicates is False:
+            if data not in wfml_data_section[path]:
+                wfml_data_section[path].append(data)
+        else:
+            wfml_data_section[path] = data
+        logging.debug(f'WFML data for {full_path} was updated. New value is {data}.')
+
+    def reset_wfml_data(self, path: str):
+        global wfml_data, initial_data
+        full_path = path
+        wfml_data_init = initial_data
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.')[:-1]:
+                wfml_data_section = wfml_data_section[section]
+                wfml_data_init = wfml_data_init[section]
+            path = path.split('.')[-1]
+        else:
+            wfml_data_section = wfml_data
+
+        wfml_data_section[path] = copy.deepcopy(wfml_data_init[path])
+        logging.debug(f'WFML data for {full_path} was reset to {wfml_data_section[path]}.')
+        logging.debug(f'{self.get_wfml_data(full_path)}')
+
+    def get_wfml_data(self, path: str):
+        global wfml_data
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.'):
+                wfml_data_section = wfml_data_section[section]
+        else:
+            wfml_data_section = wfml_data[path]
+        return wfml_data_section
+
+    def mapping_check(self):
+        for part in self.op:
+            if isinstance(part, ExpressionElement):
+                part.mapping_check()
+
+    def cross_tree_check(self):
+        for part in self.op:
+            if isinstance(part, ExpressionElement):
+                part.cross_tree_check()
+
+    def initial_super_reference_check(self):
+        return self.op[0].initial_super_reference_check()
+
+    def initial_type_reference_check(self):
+        return self.op[0].initial_type_reference_check()
+
+    @property
+    def fcard_validation(self):
+        ret = self.op[0].fcard_validation
+        return ret
 
 class prec23(ExpressionElement):
     @property
@@ -81,23 +121,14 @@ class prec23(ExpressionElement):
         ret (variable type): previous level object if no prec23 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag, cardinality_flag
         self.exception_flag = False
         for operator, statement, true_exp in zip(self.op[0::4], self.op[1::4], self.op[2::4]):
-            if operator == 'if' and cross_tree_check:
-                statement.value
-                true_exp.value
-                if len(self.op) > 3:
-                    else_exp = self.op[3]
-                    else_exp.value
-                ret = None
-
-            elif operator == 'if':
+            if operator == 'if':
                 logging.debug("Level 23 IF THEN ELSE statement.")
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 23 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 # Perform IF expression check.
@@ -105,8 +136,8 @@ class prec23(ExpressionElement):
 
                 # Release global exception flag to perform THEN or ELSE expression.
                 if self.exception_flag is True:
-                    exception_flag = False
-                cardinality_flag = None
+                    self.update_wfml_data('Flags.Exception', False)
+                self.reset_wfml_data('Flags.Cardinality')
 
                 # If 'IF' expression was true, ther perform THEN expression.
                 if ret:
@@ -132,7 +163,7 @@ class prec23(ExpressionElement):
 
         # Double check to release global exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -153,20 +184,15 @@ class prec22(ExpressionElement):
         ret (variable type): previous level object if no prec22 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '<=>' and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == '<=>':
+            if operation == '<=>':
                 logging.debug("Level 22 boolean IFF operation")
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 22 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 ret = self.op[0].value
@@ -184,7 +210,7 @@ class prec22(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -205,19 +231,15 @@ class prec21(ExpressionElement):
         ret (variable type): previous level object if no prec21 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '=>' and cross_tree_check:
-                self.op[0].value
-                operand.value
-            elif operation == '=>':
+            if operation == '=>':
                 logging.debug("Level 21 boolean IMPLIES operation")
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 21 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 ret = self.op[0].value
@@ -235,7 +257,7 @@ class prec21(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -256,20 +278,15 @@ class prec20(ExpressionElement):
         ret (variable type): previous level object if no prec20 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '||' and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == '||':
+            if operation == '||':
                 logging.debug("Level 20 boolean OR operation")
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 20 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 ret = self.op[0].value
@@ -287,7 +304,7 @@ class prec20(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -308,19 +325,14 @@ class prec19(ExpressionElement):
         ret (variable type): previous level object if no prec19 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == 'xor' and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == 'xor':
+            if operation == 'xor':
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 19 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 logging.debug("Level 19 boolean XOR operation")
@@ -339,7 +351,7 @@ class prec19(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -360,21 +372,16 @@ class prec18(ExpressionElement):
         ret (variable type): previous level object if no prec18 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation == '&&' and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == '&&':
+            if operation == '&&':
                 logging.debug("Level 18 boolean AND operation")
 
                 # Take exception flag if it was still not taken.
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 18 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 ret = self.op[0].value
@@ -392,7 +399,7 @@ class prec18(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -446,17 +453,13 @@ class prec14(ExpressionElement):
         ret (variable type): previous level object if no prec14 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global exception_flag
         self.exception_flag = False
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
-            if operation == '!' and cross_tree_check:
-                operand.value
-
             # Take exception flag if it was still not taken.
             if operation == '!':
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 14 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
 
                 logging.debug("Level 14 boolean NO operation")
@@ -468,7 +471,7 @@ class prec14(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -496,17 +499,17 @@ class prec13(ExpressionElement):
         ret (variable type): previous level object if no prec13 operations are not presented in constraint
                             operation result in opposite case.
         """
-        global mapping_current
-        global exception_flag
         self.exception_flag = False
         ret = False
+        mapping_iter = self.get_wfml_data('Iterable.Mapping.Current')
+        mapping_iter_sum = self.get_wfml_data('Iterable.Mapping.Total')
         if mapping_iter == 0:
             mapping_current = []
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
             # Take exception flag if it was still not taken.
-            if exception_flag is False:
+            if self.get_wfml_data('Flags.Exception') is False:
                 logging.debug("Level 13 Exception flag.")
-                exception_flag = True
+                self.update_wfml_data('Flags.Exception', True)
                 self.exception_flag = True
             operand.value
 
@@ -519,10 +522,6 @@ class prec13(ExpressionElement):
             if mapping_iter == mapping_iter_sum - 1 and len(self.op) > 1:
                 number = mapping_current.count(True)
                 logging.debug(f'Check Operation {operation}. Values {mapping_current}')
-
-                if operation in ['no', 'none', 'lone', 'one', 'some'] and cross_tree_check:
-                    self.exception_flag = False
-                    operand.value
 
                 if operation == 'no' or operation == 'none':
                     if number == 0:
@@ -546,7 +545,7 @@ class prec13(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -569,26 +568,20 @@ class prec12(ExpressionElement):
                             operation result in opposite case.
         """
         ret = self.op[0].value
-        global exception_flag
         self.exception_flag = False
 
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
 
             # Take exception flag if it was still not taken.
             if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in']:
-                if exception_flag is False:
+                if self.get_wfml_data('Flags.Exception') is False:
                     logging.debug("Level 12 Exception flag.")
-                    exception_flag = True
+                    self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
                 ret = self.op[0].value
                 logging.debug(f'{ret} {operation} {operand.value}')
 
-            if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in'] and cross_tree_check:
-                self.exception_flag = False
-                self.op[0].value
-                operand.value
-
-            elif operation == '<':
+            if operation == '<':
                 ret = ret < operand.value
                 logging.debug("Level 12 comparison < operation")
 
@@ -631,7 +624,7 @@ class prec12(ExpressionElement):
 
         # Release exception flag.
         if self.exception_flag is True:
-            exception_flag = False
+            self.update_wfml_data('Flags.Exception', False)
 
         # If there are no this level operations, just perform lover-lever operation.
         if len(self.op) == 1:
@@ -650,14 +643,10 @@ class prec11(ExpressionElement):
         """
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            if operation in ['requires', 'excludes'] and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == 'requires':
+            if operation == 'requires':
                 flag_left = False
                 flag_right = False
-                for element in model.elements:
+                for element in self.get_wfml_data('Model').elements:
                     if element.name == ret:
                         flag_left = True
                     elif element.name == operand.value:
@@ -670,7 +659,7 @@ class prec11(ExpressionElement):
             elif operation == 'excludes':
                 flag_left = False
                 flag_right = False
-                for element in model.elements:
+                for element in self.get_wfml_data('Model').elements:
                     if element.name == ret:
                         flag_left = True
                     elif element.name == operand.value:
@@ -689,112 +678,49 @@ class prec10(ExpressionElement):
         ret (variable type): previous level object if no prec10 operations are not presented in constraint
                             operation result in opposite case.
         """
-        ret = self.op[0].value
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
-            right_value = operand.value
-            if operation == '=' and cross_tree_check:
-                self.op[0].value
-                operand.value
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        else:
+            for operation, operand in zip(self.op[1::2], self.op[2::2]):
+                self.update_wfml_data('Flags.Update', True)
+                ret = self.op[0].value
+                self.update_wfml_data('Flags.Update', False)
+                right_value = operand.value
+                if operation == '=':
+                    cardinality_flag = self.get_wfml_data('Flags.Cardinality')
+                    logging.debug(f"Level 10 assignment operation: {ret} {operation} {right_value} {cardinality_flag}")
 
-            elif operation == '=':
-                check = self.op[0].update
-                logging.debug(f"Level 10 assignment operation: {check} {operation} {right_value} {cardinality_flag}")
+                    # Assign to complex path variable.
+                    if re.match(r'(\w+\.)+\w+', ret) and cardinality_flag is None:
+                        path = ret.split('.')
+                        path.append('value')
 
-                # Assign to complex path variable.
-                if re.match(r'(\w+\.)+\w+', check) and cardinality_flag is None:
-                    path = check.split('.')
-                    path.append('value')
+                        # Double check Python literal structures values if they are presented in str object.
+                        try:
+                            assign = right_value if type(right_value) != str else ast.literal_eval(right_value)
+                        except ValueError:
+                            assign = right_value
 
-                    # Double check Python literal structures values if they are presented in str object.
-                    try:
-                        assign = right_value if type(right_value) != str else ast.literal_eval(right_value)
-                    except ValueError:
-                        assign = right_value
+                        self.update_wfml_data('Namespace.' + path, {'value': assign})
 
-                    # Try find and assign value to variable in local namespace.
-                    try:
-                        global current_namespace
-                        ret = current_namespace
-                        for section in path:
-                            ret = ret[section]
-                        current_namespace = self.update_nested_dict(current_namespace, path, assign)
+                    # If cardinality flag was set, then update cardinality value instead of variable in namespace.
+                    elif re.match(r'(\w+\.)+\w+', ret) and cardinality_flag == 'fcard':
+                        self.update_wfml_data('Cardinalities.Feature', {ret.split('.', 1)[1]: right_value})
 
-                    # If previous was not succeed, then try to do the same in global namespace.
-                    except Exception:
-                        global global_namespace
-                        ret = global_namespace
-                        for section in path:
-                            ret = ret[section]
-                        global_namespace = self.update_nested_dict(global_namespace, path, assign)
-                        ret = global_namespace
-                        for section in path:
-                            ret = ret[section]
-
-                # If cardinality flag was set, then update cardinality value instead of variable in namespace.
-                elif re.match(r'(\w+\.)+\w+', check) and cardinality_flag == 'fcard':
-                    from wizard.views import card_update
-                    card_update('fcard', {check: right_value})
-
-                # If path to variable is simple, just assign value to variable in local namespace.
                 else:
-                    try:
-                        current_namespace[check]['value'] = right_value if type(right_value) != str else ast.literal_eval(right_value)
-                    except ValueError:
-                        current_namespace[check]['value'] = right_value
-            else:
-                raise Exception(f'Parameter {ret} is not defined.')
+                    raise Exception(f'Parameter {ret} is not defined.')
         return ret
 
-    def find_in_obj(self, obj, condition, path=None):
-        ''' generator finds full path to nested dict key when key is at an unknown level
-            borrowed from http://stackoverflow.com/a/31625583/5456148'''
-        if path is None:
-            path = []
+    def cross_tree_check(self):
+        if len(self.op) > 1 and self.op[1] == '=':
+            self.update_wfml_data('Flags.Update', True)
 
-        # In case this is a list
-        if isinstance(obj, list):
-            for index, value in enumerate(obj):
-                new_path = list(path)
-                new_path.append(index)
-                for result in self.find_in_obj(value, condition, path=new_path):
-                    yield result
-
-        # In case this is a dictionary
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                new_path = list(path)
-                new_path.append(key)
-                for result in self.find_in_obj(value, condition, path=new_path):
-                    yield result
-
-                if condition == key:
-                    new_path = list(path)
-                    new_path.append(key)
-                    yield new_path
-
-    def set_nested_value(self, nested_dict, path_list, value):
-        ''' add or update a value in a nested dict using passed list as path
-            borrowed from http://stackoverflow.com/a/11918901/5456148'''
-        cur = nested_dict
-        logging.debug(f'Full path: {path_list}')
-        for path_item in path_list[:-1]:
-            try:
-                cur = cur[path_item]
-            except KeyError:
-                cur = cur[path_item] = {}
-
-        cur[path_list[-1]] = value
-        logging.debug(f'Value was set {path_list[-1]} {value}')
-        return nested_dict
-
-    def update_nested_dict(self, nested_dict, path, updateval):
-        ''' finds and updates values in nested dicts with find_in_dict(), set_nested_value()'''
-        return self.set_nested_value(
-            nested_dict,
-            path,
-            updateval
-        )
-
+        for part in self.op:
+            if isinstance(part, ExpressionElement):
+                part.cross_tree_check()
+            else:
+                self.update_wfml_data('Flags.Update', False)
+        self.update_wfml_data('Flags.Update', False)
 
 class prec9(ExpressionElement):
     @property
@@ -809,10 +735,7 @@ class prec9(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation in ['+', '-'] and cross_tree_check:
-                self.op[0].value
-                operand.value
-            elif operation == '+':
+            if operation == '+':
                 logging.debug(f"Level 9 addition operation: {ret} {operation} {right_value}")
                 ret += right_value
             elif operation == '-':
@@ -820,9 +743,6 @@ class prec9(ExpressionElement):
                 ret -= right_value
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec8(ExpressionElement):
     @property
@@ -837,11 +757,7 @@ class prec8(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation in ['*', '/', '%'] and cross_tree_check:
-                self.op[0].value
-                operand.value
-
-            elif operation == '*':
+            if operation == '*':
                 logging.debug(f"Level 8 multiplication operation: {ret} {operation} {right_value}")
                 ret *= right_value
 
@@ -854,9 +770,6 @@ class prec8(ExpressionElement):
                 ret %= right_value
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec7(ExpressionElement):
     @property
@@ -870,10 +783,7 @@ class prec7(ExpressionElement):
         """
         # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
-            if operation in ['min', 'max'] and cross_tree_check:
-                operand.value
-
-            elif operation == 'min':
+            if operation == 'min':
                 logging.debug(f"Level 8 min operation: {operation}")
                 ret = min(operand.value)
 
@@ -885,9 +795,6 @@ class prec7(ExpressionElement):
 
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec6(ExpressionElement):
     @property
@@ -901,10 +808,7 @@ class prec6(ExpressionElement):
         """
         # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
-            if operation in ['sum', 'product', '#'] and cross_tree_check:
-                operand.value
-
-            elif operation == 'sum':
+            if operation == 'sum':
                 logging.debug(f"Level 7 sum operation: {operation}")
                 ret = sum(operand.value)
 
@@ -919,9 +823,6 @@ class prec6(ExpressionElement):
             ret = self.op[0].value
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec5(ExpressionElement):
     @property
@@ -933,9 +834,6 @@ class prec5(ExpressionElement):
                 pass
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec4(ExpressionElement):
     @property
@@ -947,9 +845,6 @@ class prec4(ExpressionElement):
                 pass
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec3(ExpressionElement):
     @property
@@ -964,12 +859,9 @@ class prec3(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation in [',', '++'] and cross_tree_check:
-                self.op[0].value
-                operand.value
 
             # Perform list union if such operation exist.
-            elif operation == ',' or operation == '++':
+            if operation == ',' or operation == '++':
                 if type(ret) == list and type(right_value) == list:
                     ret = list(set(ret) | set(right_value))
                 elif type(ret) != list:
@@ -979,9 +871,6 @@ class prec3(ExpressionElement):
 
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec2(ExpressionElement):
     @property
@@ -996,12 +885,9 @@ class prec2(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation == '--' and cross_tree_check:
-                self.op[0].value
-                operand.value
 
             # Perform list difference if such operation exist.
-            elif operation == '--' and type(ret) == list and type(right_value) == list:
+            if operation == '--' and type(ret) == list and type(right_value) == list:
                 ret = list(set(ret) - set(right_value))
             elif operation == '--' and type(ret) != list:
                 raise Exception(f'Parameter {ret} is not list.')
@@ -1009,9 +895,6 @@ class prec2(ExpressionElement):
                 raise Exception(f'Parameter {right_value} is not list.')
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec1(ExpressionElement):
     @property
@@ -1027,12 +910,9 @@ class prec1(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation == '**' and cross_tree_check:
-                self.op[0].value
-                operand.value
 
             # Perform list merge (without duplicates) if such operation exist.
-            elif operation == '**' and type(ret) == list and type(right_value) == list:
+            if operation == '**' and type(ret) == list and type(right_value) == list:
                 ret = list(set(ret) & set(right_value))
             elif operation == '**' and type(ret) != list:
                 raise Exception(f'Parameter {ret} is not list.')
@@ -1041,9 +921,6 @@ class prec1(ExpressionElement):
 
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
 
 class prec0(ExpressionElement):
     @property
@@ -1058,9 +935,6 @@ class prec0(ExpressionElement):
         ret = self.op[0].value
         for operation, operand in zip(self.op[1::2], self.op[2::2]):
             right_value = operand.value
-            if operation in ['..', '&'] and cross_tree_check:
-                self.op[0].value
-                operand.value
 
             # Perform list concatenation (with duplicates) if such operation exist.
             if operation == '..' and type(ret) == list and type(right_value) == list:
@@ -1079,10 +953,6 @@ class prec0(ExpressionElement):
                 raise Exception(f'Parameter {right_value} is not list.')
         return ret
 
-    @property
-    def update(self):
-        return self.op[0].update
-
 
 class term(ExpressionElement):
     @property
@@ -1094,235 +964,195 @@ class term(ExpressionElement):
         op (variable type): variable, number, string, etc.
         """
         op = self.op
-        global unvalidated_params, mapping_iter_sum
 
-        # Cross-tree section finds whether variable is assigned to parent clafer or not.
-        if cross_tree_check:
-            if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
-                forbidden_flag = False
-                path = op.split('.')
-
-                # Check for cardinality keyword and remove it.
-                if path[0] == 'fcard' or path[0] == 'gcard':
-                    path = path[1:]
-
-                # Forbid to add to cross-tree clafers own clafers written in full-path form.
-                if path[0] == current_path.split('.')[0]:
-                    forbidden_flag = True
-                try:
-                    res = current_namespace
-                    for section in path:
-                        res = res[section]
-                except Exception:
-                    try:
-                        res = global_namespace
-                        for section in path:
-                            res = res[section]
-                        if forbidden_flag is False:
-                            global cross_tree_clafers, cross_tree_clafers_full
-                            cross_tree_clafers.append([current_cross_tree, path[0]])
-                            cross_tree_clafers_full.append(op)
-                    except Exception:
-                        logging.debug('ok')
-        else:
-            # In case of int or float value, just return it
-            if type(op) in {int, float}:
-                logging.debug(f"Operation object: {op} with type {type(op)}")
-                return op
-
-            # In case of ExpressionElement object (another constraint), return its validated value.
-            elif isinstance(op, ExpressionElement):
-                logging.debug(f"Operation object: {op} with value {type(op)}")
-                return op.value
-
-            # In case of top-level variable in global namespace return its value.
-            # TODO same logic as in local namespace section
-            elif op in global_namespace and global_namespace[op] is not None:
-                logging.debug("Variable in global namespace.")
-                return global_namespace[op]['value']
-
-            # In case of simple name variable (without delimiters) in local namespace return its value.
-            elif op in current_namespace and current_namespace[op] is not None:
-                # Check for existing mappings
-                logging.debug("Variable in local namespace")
-                check = current_path + '.' + op
-                logging.debug(f'Check: {check}, current path {current_path}')
-
-                # If check was success then change basic path on current mapping value.
-                if check in mappings.keys():
-                    global mapping_iter_sum
-                    mapping_iter_sum = len(mappings[check])
-                    new_op = mappings[check][mapping_iter].split('.')[-1]
-                    if new_op not in current_namespace.keys() or new_op == op:
-                        path = mappings[check][mapping_iter].split('.')
-                        res = global_namespace
-                        for section in path:
-                            res = res[section]
-                        unvalidated_params.append(mappings[check][mapping_iter])
-                        return res['value']
-                    elif new_op in current_namespace.keys():
-                        unvalidated_params.append(new_op)
-                        return current_namespace[new_op]['value']
-                # Double check if local namespace variable has no value (check in global namespace).
-                if len(current_path.split('.')) > 1:
-                    unvalidated_params.append(check)
-                    if current_namespace[op]['value'] is None:
-                        try:
-                            res = global_namespace
-                            path = check.split('.')
-                            for section in path:
-                                res = res[section]
-                            return res['value']
-                        except KeyError:
-                            raise Exception(f'Such variable {op} does not exist')
-                else:
-                    unvalidated_params.append(check)
-                return current_namespace[op]['value']
-
-            # In case of bool value, just return it.
-            elif type(op) is bool:
-                return op
-
-            # In case of string value, launch additional checks.
-            elif type(op) is str and op not in keywords:
-                logging.debug(f"String object: {op}")
-
-                # If string pattern match list object ('{a, b}'), transform it to python list object.
-                if re.match(r'\{.+\}', op):
-                    op = op.replace('{', '').replace('}', '').replace(' ', '')
-                    logging.debug("List object")
-                    op = op.split(',')
-                    for index, element in enumerate(op):
-                        try:
-                            op[index] = int(element)
-                        except ValueError:
-                            try:
-                                op[index] = float(element)
-                            except ValueError:
-                                if element in current_namespace and current_namespace[element] is not None:
-                                    op[index] = current_namespace[element]
-                    logging.debug(op)
-
-                # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
-                elif re.match(r'(\w+\.)+\w+', op):
-                    # Check for mappings
-                    if op in mappings.keys() and op.split('.')[0] not in ['fcard', 'gcard']:
-                        mapping_iter_sum = len(mappings[op])
-                        op = mappings[op][mapping_iter]
-                    path = op.split('.')
-
-                    # Perform feature of group cardinality search if first part of string is a appropriate keyword.
-                    if path[0] == 'fcard' or path[0] == 'gcard':
-                        global cardinality_flag
-                        cardinality_flag = path[0]
-                        from wizard.views import get_card
-                        card = get_card()
-                        path = path[1:]
-
-                        # Rebuild path string without keyword.
-                        f_p = ''
-                        for section in path:
-                            if f_p == '':
-                                f_p = section
-                            else:
-                                f_p = f_p + '.' + section
-
-                        # Build full path (Cardinalities are presented as full path records).
-                        full_path = f_p
-                        try:
-                            res = card[cardinality_flag][full_path]
-                        except KeyError:
-                            raise Exception(f'No such key {full_path} in {card[cardinality_flag]}')
-
-                    elif path[0] == 'childs':
-                        path = path[1:]
-                        res = global_namespace
-                        for section in path:
-                            res = res[section]
-                        res = list(res.keys())
-
-                    # If no cardinalities keyword presented in path, then try to find variable using this path.
-                    else:
-
-                        # Firstly in local namespace.
-                        try:
-                            unvalidated_params.append(op)
-                            res = current_namespace
-                            for section in path:
-                                res = res[section]
-                            res = res['value']
-
-                        # Then in global.
-                        except Exception:
-                            res = global_namespace
-                            for section in path:
-                                res = res[section]
-                            res = res['value']
-                    op = res
-                    logging.debug(res)
-                return op
-            else:
-                raise Exception('Unknown variable "{}" at position {}'
-                                .format(op, self._tx_position))
-
-    @property
-    def update(self):
-        """
-        Function to check, whether variable is present in local/global namespace.
-
-        RETURN
-        op (type = str): path to required variable in the namespace.
-        """
-        op = self.op
-        global mapping_iter_sum
-
-        # Check local namespace.
-        if op in current_namespace:
-            logging.debug("Namespace update")
-            check = current_path + '.' + op
-            logging.debug(f'Check: {check}, current path {current_path}')
-            if check in mappings.keys():
-                mapping_iter_sum = len(mappings[check])
-                new_op = mappings[check][mapping_iter].split('.')[-1]
-                if new_op not in current_namespace.keys() or new_op == op:
-                    path = mappings[check][mapping_iter].split('.')
-                    res = global_namespace
-                    for section in path:
-                        res = res[section]
-                op = mappings[check][mapping_iter]
+        # In case of int or float value, just return it
+        if type(op) in {int, float}:
+            logging.debug(f"Operation object: {op} with type {type(op)}")
             return op
 
-        # Check global namespace. Also this section finds cardinalities.
-        elif re.match(r'(\w+\.)+\w+', op):
-            if op in mappings.keys():
-                mapping_iter_sum = len(mappings[op])
-                op = mappings[op][mapping_iter]
-            path = op.split('.')
-            if path[0] == 'fcard' or path[0] == 'gcard':
-                global cardinality_flag
-                cardinality_flag = path[0]
-                path = path[1:]
-                op = ''
-                for elem in path:
-                    if op == '':
-                        op = elem
-                    else:
-                        op = op + '.' + elem
-            else:
+        # In case of ExpressionElement object (another constraint), return its validated value.
+        elif isinstance(op, ExpressionElement):
+            logging.debug(f"Operation object: {op} with value {type(op)}")
+            return op.value
+
+        # In case of top-level variable in global namespace return its value.
+        elif op in self.get_wfml_data('Namespace').keys():
+            logging.debug("Variable in global namespace.")
+            return self.get_wfml_data('Namespace')[op]['value']
+
+        # In case of bool value, just return it.
+        elif type(op) is bool:
+            return op
+
+        # In case of string value, launch additional checks.
+        elif type(op) is str and op not in keywords:
+            logging.debug(f"String object: {op}")
+            if op not in self.get_wfml_data('Namespace').keys() and not re.match(r'(\w+\.)+\w+', op):
+                check = f'{self.get_wfml_data("Path")}.{op}'
+                if check in self.get_wfml_data('Iterable.Mapping.Structure').keys():
+                    check = self.map_variable(check)
+                namespace = self.get_wfml_data('Namespace')
                 try:
-                    res = current_namespace
+                    for part in check.split('.'):
+                        namespace = namespace[part]
+                    op = check
+                except KeyError:
+                    logging.debug('No such key exist.')
+            # If string pattern match list object ('{a, b}'), transform it to python list object.
+            if re.match(r'\{.+\}', op):
+                op = op.replace('{', '').replace('}', '').replace(' ', '')
+                logging.debug("List object")
+                op = op.split(',')
+                for index, element in enumerate(op):
+                    op[index] = self.autoconvert(element)
+                logging.debug(op)
+
+            # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
+            elif re.match(r'(\w+\.)+\w+', op):
+                # Check for mappings
+                if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
+                    op = self.map_variable()
+                self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
+                path = op.split('.')
+
+                # Perform feature of group cardinality search if first part of string is a appropriate keyword.
+                if path[0] == 'fcard' or path[0] == 'gcard':
+                    self.update_wfml_data('Flags.Cardinality', path[0])
+                    path = path[1:]
+
+                    # Rebuild path string without keyword.
+                    f_p = ''
+                    for section in path:
+                        if f_p == '':
+                            f_p = section
+                        else:
+                            f_p = f_p + '.' + section
+
+                    # Build full path (Cardinalities are presented as full path records).
+                    full_path = f_p
+                    try:
+                        cardinality_flag = self.get_wfml_data('Flags.Cardinality')
+                        if cardinality_flag == 'fcard':
+                            res = self.get_wfml_data('Cardinalities.Feature')[full_path]
+                        elif cardinality_flag == 'gcard':
+                            res = self.get_wfml_data('Cardinalities.Group')[full_path]
+                    except KeyError:
+                        raise Exception(f'No such cardinality exist {full_path} for type {cardinality_flag}')
+
+                elif path[0] == 'childs':
+                    path = path[1:]
+                    res = self.get_wfml_data('Namespace')
+                    for section in path:
+                        res = res[section]
+                    res = list(res.keys())
+
+                # If no cardinalities keyword presented in path, then try to find variable using this path.
+                else:
+                    res = self.get_wfml_data('Namespace')
                     for section in path:
                         res = res[section]
                     res = res['value']
-                except Exception:
-                    logging.info(f'Local Namespace does not contain variable {op}')
-                    res = global_namespace
-                    for section in path:
-                        res = res[section]
-            logging.debug(f'Return {op} value')
+                if self.get_wfml_data('Flags.Update') is False:
+                    op = res
             return op
         else:
-            raise Exception(f'Global namespace does not contain variable {op}')
+            raise Exception('Unknown variable "{}" at position {}'
+                            .format(op, self._tx_position))
+        return self.op
+
+    def map_variable(self, feature=None):
+        if feature is None:
+            feature = self.op
+        threshold = self.get_wfml_data('Iterable.Mapping.Total')
+        repeat = self.get_wfml_data('Iterable.Mapping.Current')
+        mappings = self.get_wfml_data('Iterable.Mapping.Structure')
+        for key, value in mappings.items():
+            threshold = threshold / len(mappings[feature])
+            suffix = repeat / threshold
+            repeat = repeat % threshold
+            if key == feature:
+                break
+        return f'{feature}_{str(int(suffix))}'
+
+    def mapping_check(self):
+        if isinstance(self.op, str) and not re.match(r'(\w+\.)+\w+', self.op):
+            check = f'{self.get_wfml_data("Path")}.{self.op}'
+            if check in self.get_wfml_data('Features.Mapped').keys():
+                op = check
+            else:
+                op = self.op
+        else:
+            op = self.op
+        if op in self.get_wfml_data('Dependencies.Mappings').keys():
+            self.update_wfml_data('Iterable.Mapping.Total',
+                                  self.get_wfml_data('Iterable.Mapping.Total') * len(
+                                      self.get_wfml_data('Dependencies.Mappings')[op]))
+            self.update_wfml_data('Iterable.Mapping.Structure',
+                                  {op: self.get_wfml_data('Dependencies.Mappings')[op]})
+
+    def initial_super_reference_check(self):
+        if self.op in self.get_wfml_data('Namespace').keys():
+            return self.op
+        else:
+            ol = self._tx_position_end - self._tx_position
+            msg = ''.join((f'No such super feature exist in the model : {self.op}!\n',
+                           f'Error position: Line {get_location(self)["line"]},',
+                           f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                           f' Filename {get_location(self)["filename"]}\n'))
+            raise Exception(msg)
+
+    def initial_type_reference_check(self):
+        allowed_types = ['integer', 'float', 'string', 'predefined', 'array', 'integerArray', 'floatArray']
+        if self.op in allowed_types:
+            return self.op
+        else:
+            ol = self._tx_position_end - self._tx_position
+            msg = ''.join((f'Type {self.op} is not allowed to use!\n',
+                           f'Allowed types: {allowed_types}.\n',
+                           f'Error position: Line {get_location(self)["line"]},',
+                           f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                           f' Filename {get_location(self)["filename"]}\n'))
+            raise Exception(msg)
+
+    def cross_tree_check(self):
+        op = self.op
+        if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
+            forbidden_flag = False
+            path = op.split('.')
+
+            # Check for cardinality keyword and remove it.
+            if path[0] == 'fcard' or path[0] == 'gcard':
+                path = path[1:]
+
+            # Forbid to add to cross-tree features own features written in full-path form.
+            if path[0] == self.get_wfml_data('Path').split('.')[0]:
+                forbidden_flag = True
+
+            try:
+                res = self.get_wfml_data('Namespace')
+                for section in path:
+                    res = res[section]
+                if forbidden_flag is False and self.get_wfml_data('Flags.Update') is False:
+                    self.update_wfml_data('Dependencies.CrossTree', [self.get_wfml_data('Path').split('.')[0], path[0]], False)
+                elif forbidden_flag is False and self.get_wfml_data('Flags.Update') is True:
+                    self.update_wfml_data('Dependencies.CrossTree', [path[0], self.get_wfml_data('Path').split('.')[0]], False)
+            except Exception:
+                logging.debug('ok')
+
+    def boolify(self, string):
+        if string == 'True':
+            return True
+        if string == 'False':
+            return False
+        raise ValueError('String value is not Boolean.')
+
+    def autoconvert(self, string):
+        for fn in (self.boolify, int, float):
+            try:
+                return fn(string)
+            except ValueError:
+                pass
+        return string
 
 
 class textX_API():
@@ -1339,56 +1169,196 @@ class textX_API():
         """
         return o.__class__.__name__
 
-    def constraint(self, constraint):
+    def constraint_validation(self, constraint):
         """
         Perform constraint execution.
         """
-        exp = constraint.name
-        exp.value
+        self.reset_wfml_data('Iterable.Mapping.Current')
+        self.reset_wfml_data('Iterable.Mapping.Total')
+        self.reset_wfml_data('Iterable.Mapping.Structure')
+        self.reset_wfml_data('Flags.Cardinality')
+        constraint.name.mapping_check()
+        logging.debug(f'Constraint name: {constraint.name}')
 
-    def root_clafer(self, clafer, namespace=None):
+        while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
+            self.reset_wfml_data('Iterable.UnvalidatedFeatures')
+            if self.get_wfml_data('Flags.CrossTreeCheck') is True:
+                constraint.name.cross_tree_check()
+            else:
+                constraint.name.value
+            self.update_wfml_data('Iterable.Mapping.Current', self.get_wfml_data('Iterable.Mapping.Current') + 1)
+
+        if self.get_wfml_data('Flags.Cardinality') == 'fcard':
+            self.mapping()
+
+    def validate_common_constraints(self):
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == "Constraint":
+                self.update_wfml_data('Flags.Exception', False)
+                self.constraint_validation(element)
+
+    def define_feature(self, feature, parent_namespace=None):
         """
         ! This method is recursive.
 
-        Function to define clafers.
+        Function to define features.
 
         INPUTS
-        clafer (type = clafer): clafer to define.
-        namespace (type = dict): top-level clafer namespace to fullfill.
+        feature (type = feature): feature to define.
+        parent_namespace (type = dict): parent feature namespace to fullfill.
 
         RETURN
-        namespace (type = dict): clafer`s namespace. Only for not top-level clafers.
+        parent_namespace (type = dict): fullfilled parent namespace. Only for not top-level features.
         """
-        if namespace is None:
-            return_trigger = False
-        else:
-            return_trigger = True
-        logging.debug(f"This is Clafer: {clafer.name}")
-        logging.debug(f"Is it abstract: {clafer.abstract}")
-        logging.debug(f"Its group cardinality: {clafer.gcard}")
-        logging.debug(f"Its feature cardinality: {clafer.fcard}")
-        if clafer.super is not None:
-            logging.debug(f"It has super instance: {clafer.super.value}")
-        else:
-            logging.debug(f"It has super instance: {clafer.super}")
-        logging.debug(f"It has reference: {clafer.reference}")
-        logging.debug(f"It has init expression: {clafer.init}")
-        group = {}
+        feature.namespace = {}
+        feature.super_direct = []
+        feature.super_indirect = []
 
-        for child in clafer.nested:
+        for child in feature.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer" and child1.reference is None:
-                    group = self.root_clafer(child1, group)
-                elif self.cname(child1) == "Clafer" and child1.reference is not None:
-                    group = self.property_clafer(child1, group)
+                if self.cname(child1) == 'Feature':
+                    feature.namespace.update(self.define_feature(child1, feature.namespace))
 
-        clafer.namespace = group
-        clafer.super_direct = []
-        clafer.super_indirect = []
-        logging.debug(f"Clafer namespace: {clafer.namespace}")
-        if return_trigger:
-            namespace[clafer.name] = group
-            return namespace
+        if feature.reference is not None:
+            feature.namespace.update({'value': None, 'type': feature.reference.initial_type_reference_check()})
+
+        if parent_namespace is not None:
+            parent_namespace.update({feature.name: feature.namespace})
+            logging.info(f'Subfeature {feature.name} was defined.')
+            return parent_namespace
+        else:
+            self.update_wfml_data('Namespace', {feature.name: feature.namespace})
+            logging.info(f'Top-level feature {feature.name} was defined.')
+
+    def update_wfml_data(self, path: str, data, duplicates=True):
+        global wfml_data
+        full_path = path
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.')[:-1]:
+                wfml_data_section = wfml_data_section[section]
+            path = path.split('.')[-1]
+        else:
+            wfml_data_section = wfml_data
+
+        if type(wfml_data_section[path]) is dict:
+            wfml_data_section[path].update(data)
+        elif type(wfml_data_section[path]) is list and duplicates is True:
+            wfml_data_section[path].append(data)
+        elif type(wfml_data_section[path]) is list and duplicates is False:
+            if data not in wfml_data_section[path]:
+                wfml_data_section[path].append(data)
+        else:
+            wfml_data_section[path] = data
+        logging.debug(f'WFML data for {full_path} was updated. New value is {data}.')
+
+    def reset_wfml_data(self, path: str):
+        global wfml_data, initial_data
+        full_path = path
+        wfml_data_init = initial_data
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.')[:-1]:
+                wfml_data_section = wfml_data_section[section]
+                wfml_data_init = wfml_data_init[section]
+            path = path.split('.')[-1]
+        else:
+            wfml_data_section = wfml_data
+
+        wfml_data_section[path] = copy.deepcopy(wfml_data_init[path])
+        logging.debug(f'WFML data for {full_path} was reset to {wfml_data_section[path]}.')
+        logging.debug(f'{self.get_wfml_data(full_path)}')
+
+    def get_wfml_data(self, path: str):
+        global wfml_data
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.'):
+                wfml_data_section = wfml_data_section[section]
+        else:
+            wfml_data_section = wfml_data[path]
+        return wfml_data_section
+
+    def map_wfml_data(self, path: str, record):
+        global wfml_data
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.'):
+                wfml_data_section = wfml_data_section[section]
+        else:
+            wfml_data_section = wfml_data[path]
+
+        if path == 'Namespace':
+            self.map_namespace(wfml_data_section, path, record)
+        elif path == 'Cardinalities.Group':
+            self.map_gcard(wfml_data_section, path, record)
+        else:
+            raise AttributeError('Wrong mapping type.')
+        logging.debug(f'WFML record {record} in path {path} was successfully mapped. {wfml_data_section}')
+
+    def map_gcard(self, wfml_data_section, path: str, record):
+        additional_keys = {}
+        remove_keys = []
+        flag = False
+        for key in wfml_data_section.keys():
+            name = ''
+            for part in key.split('.'):
+                if name == '':
+                    name = part
+                else:
+                    name = f'{name}.{part}'
+                if name == record:
+                    flag = True
+                    remove_keys.append(record)
+                    break
+            if flag is True:
+                for mapping in self.get_wfml_data('Dependencies.Mappings')[record]:
+                    additional_keys.update({mapping: self.get_wfml_data('CardinalitiesInitial.Group')[key]})
+        for key in remove_keys:
+            del wfml_data_section[key]
+        self.update_wfml_data('Cardinalities.Group', additional_keys)
+        self.update_wfml_data('Flags.ExtraStep', True)
+
+    def map_namespace(self, wfml_data_section, path: str, record):
+        wfml_data_section_init = self.get_wfml_data('NamespaceInitial')
+        if len(record.split('.')) == 1:
+            if (record in wfml_data_section.keys() or record in self.get_wfml_data('Features.Mapped')) and \
+                    record in self.get_wfml_data('Dependencies.Mappings').keys():
+                for mapping in self.get_wfml_data('Dependencies.Mappings')[record]:
+                    wfml_data_section[mapping] = copy.deepcopy(wfml_data_section_init[record])
+                del wfml_data_section[record]
+        else:
+            original = None
+            for part in record.split('.')[:-1]:
+                wfml_data_section_init = wfml_data_section_init[part]
+            for mapping in self.get_wfml_data('Dependencies.Mappings')[record]:
+                wfml_data_section_sub = wfml_data_section
+                for part in mapping.split('.')[:-1]:
+                    wfml_data_section_sub = wfml_data_section_sub[part]
+                if original is None:
+                    original = copy.deepcopy(wfml_data_section_init[record.split('.')[-1]])
+                wfml_data_section_sub[mapping.split('.')[-1]] = copy.deepcopy(original)
+                try:
+                    del wfml_data_section_sub[record.split('.')[-1]]
+                except KeyError:
+                    pass
+            logging.debug(f'{wfml_data_section_sub}')
+
+    def apply_group_cardinalities(self):
+        for key, value in self.get_wfml_data('Cardinalities.Group').items():
+            remove_keys = []
+            sub_namespace = self.get_wfml_data('Namespace')
+            for part in key.split('.'):
+                sub_namespace = sub_namespace[part]
+            for subkey in sub_namespace.keys():
+                if subkey not in value and subkey not in remove_keys:
+                    remove_keys.append(subkey)
+            for subkey in remove_keys:
+                del sub_namespace[subkey]
+
+    def show_wfml_data(self):
+        global wfml_data
+        return wfml_data
 
     def get_model_cardinalities(self):
         """
@@ -1400,11 +1370,14 @@ class textX_API():
         """
         fcard = {}
         gcard = {}
-        for element in model.elements:
-            if self.cname(element) == "Clafer":
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature':
                 fcard.update(self.clafer_fcard(element))
                 gcard.update(self.clafer_gcard(element))
-        return fcard, gcard
+        self.update_wfml_data('CardinalitiesInitial.Feature', fcard)
+        self.update_wfml_data('CardinalitiesInitial.Group', gcard)
+        self.update_wfml_data('Cardinalities.Feature', fcard)
+        self.update_wfml_data('Cardinalities.Group', gcard)
 
     def clafer_fcard(self, clafer, prefix=None):
         """
@@ -1426,10 +1399,12 @@ class textX_API():
             name = clafer.name
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer":
+                if self.cname(child1) == 'Feature':
                     fcard.update(self.clafer_fcard(child1, name))
         if clafer.fcard:
             fcard.update({name: clafer.fcard})
+        else:
+            fcard.update({name: 1})
         return fcard
 
     def clafer_gcard(self, clafer, prefix=None):
@@ -1452,7 +1427,7 @@ class textX_API():
             name = clafer.name
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer":
+                if self.cname(child1) == 'Feature':
                     gcard.update(self.clafer_gcard(child1, name))
         if clafer.gcard:
             gcard.update({name: clafer.gcard})
@@ -1471,7 +1446,8 @@ class textX_API():
         True (type = bool): if check was successfull;
         Raise Exception if not.
         """
-        fcard, gcard = self.get_model_cardinalities()
+        fcard = self.get_wfml_data('Cardinalities.Feature')
+        gcard = self.get_wfml_data('Cardinalities.Group')
         if card_type == 'fcard':
             card = fcard[clafer]
         else:
@@ -1519,32 +1495,27 @@ class textX_API():
         else:
             return Exception(f'Result: {x} not lies in interval {card}')
 
-    def get_abstract_clafers(self):
-        global abstract_clafers
-        return abstract_clafers
-
     def update_abstract_clafers(self):
         """
-        Function to find all abstract clafers.
+        Function to find all abstract features.
         """
-        global abstract_clafers
-        for element in model.elements:
-            if self.cname(element) == "Clafer":
-                for element in self.clafer_abstract(element):
-                    abstract_clafers.append(element)
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature':
+                for feature in self.clafer_abstract(element):
+                    self.update_wfml_data('Features.Abstract', {feature: element})
 
     def clafer_abstract(self, clafer, prefix=None):
         """
         ! This method is recursive.
 
-        Function to find all abstract clafers.
+        Function to find all abstract features.
 
         INPUTS
         clafer (type = clafer): top-level clafer to check for abstract.
         prefix (type = str): prefix to create full path.
 
         RETURN
-        abstr_clafers (type = list): list of abstract clafers.
+        abstr_clafers (type = list): list of abstract features.
         """
         abstr_clafers = []
         if prefix:
@@ -1553,7 +1524,7 @@ class textX_API():
             name = clafer.name
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer":
+                if self.cname(child1) == 'Feature':
                     res = self.clafer_abstract(child1, name)
                     abstr_clafers = abstr_clafers + res
         if clafer.abstract:
@@ -1563,30 +1534,29 @@ class textX_API():
     def fullfill_abstract_dependencies(self):
         """
         Function to fullfill abstract clafer dependencies.
-        This depencendies are presented as dict(abstract clafer: [list of clafers inherited from it])
+        This depencendies are presented as dict(abstract clafer: [list of features inherited from it])
         """
-        global abstract_dependencies, model
-        for clafer in abstract_clafers:
+        for feature in self.get_wfml_data('Features.Abstract').keys():
             res = []
-            for element in model.elements:
-                if self.cname(element) == "Clafer":
-                    for elem in self.find_abstract(element, clafer):
+            for element in self.get_wfml_data('Model').elements:
+                if self.cname(element) == 'Feature':
+                    for elem in self.find_abstract(element, feature):
                         res.append(elem)
-            abstract_dependencies.update({clafer: res})
-        logging.info(f'Abstract dependencies fullfiled: {abstract_dependencies}')
+            self.update_wfml_data('Dependencies.Abstract', {feature: res})
+        logging.info('Abstract dependencies fullfiled.')
 
     def find_abstract(self, clafer, abstract, prefix=None):
         """
         ! This method is recursive.
 
-        Function to find all clafers with concrete abstract clafer.
+        Function to find all features with concrete abstract clafer.
 
         INPUTS
         clafer (type = clafer): clafer to check for abstract.
         abstract (type = clafer): abstract clafer to check.
 
         RETURN
-        abstr_clafers (type = list): list of clafers with concrete abstract clafer.
+        abstr_clafers (type = list): list of features with concrete abstract clafer.
         """
         abstr_clafers = []
         if prefix:
@@ -1595,16 +1565,13 @@ class textX_API():
             name = clafer.name
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer":
+                if self.cname(child1) == 'Feature':
                     res = self.find_abstract(child1, abstract, name)
                     abstr_clafers = abstr_clafers + res
         if abstract in clafer.super_direct or abstract in clafer.super_indirect:
             abstr_clafers.append(name)
         return abstr_clafers
 
-    def get_abstract_dependencies(self):
-        global abstract_dependencies
-        return abstract_dependencies
 
     def get_clafer_type(self, clafer: str):
         """
@@ -1617,9 +1584,9 @@ class textX_API():
         type (type = str): clafer type if clafer is parametric.
         unspecified : if clafer is group.
         """
-        global global_namespace
+        self.get_wfml_data('Namespace')
         path = clafer.split('.')
-        gn_copy = global_namespace
+        gn_copy = self.get_wfml_data('Namespace')
         try:
             for section in path:
                 gn_copy = gn_copy[section]
@@ -1634,14 +1601,14 @@ class textX_API():
 
     def topological_sort(self, dependency_pairs):
         """
-        Subfunction to define sequence of clafers to validate. The analogue of directed graph path.
+        Subfunction to define sequence of features to validate. The analogue of directed graph path.
 
         INPUTS
         dependency_pairs: list of cross-tree dependencies pairs.
 
         RETURN
-        ordered (type = list): sequence of independent clafers to validate.
-        cyclic (type = list): list of cyclic clafers.
+        ordered (type = list): sequence of independent features to validate.
+        cyclic (type = list): list of cyclic features.
         """
         num_heads = defaultdict(int)
         tails = defaultdict(list)
@@ -1658,77 +1625,69 @@ class textX_API():
         cyclic = [n for n, heads in num_heads.items() if heads]
         return ordered, cyclic
 
-
     def staging(self, cross_tree_dependencies: list):
         """
-        Function to define sequence of clafers to validate.
+        Function to define sequence of features to validate.
 
         INPUTS
         cross_tree_dependencies: list of cross-tree dependencies.
 
         RETURN
-        ret_val (type = list): sequence of clafers to validate.
+        ret_val (type = list): sequence of features to validate.
         """
-        global cycles, cross_tree_list
 
-        # Define cross-tree and independent clafers
+        # Define cross-tree and independent features
         ctl = []
-        all_clafers = list(global_namespace.keys())
+        all_clafers = list(self.get_wfml_data('Namespace').keys())
         cross_clafers = []
         for dep in cross_tree_dependencies:
             cross_clafers.append(dep[0])
             cross_clafers.append(dep[1])
             ctl.append(dep[1])
-        cross_tree_list = list(dict.fromkeys(ctl))
+
         cross_clafers = list(dict.fromkeys(cross_clafers))
         s = set(cross_clafers)
-        independent_clafers = [x for x in all_clafers if x not in s]
+        a = self.get_wfml_data('Features.Abstract').keys()
+        independent_clafers = [x for x in all_clafers if x not in s and x not in a]
+
+        for element in self.get_wfml_data('Model').elements:
+            for feature in independent_clafers:
+                if element.name == feature and element.abstract is None:
+                    self.update_wfml_data('Features.Independent', {feature: element})
+            for feature in s:
+                if element.name == feature:
+                    self.update_wfml_data('Features.CrossTree', {feature: element})
 
         # Create networkx graph object
         G = nx.DiGraph(cross_tree_dependencies)
         index = 0
-        new_dep = []
-        cycled = []
+        remove_dependencies = []
 
-        # Find all cycles in graph
+        # Find all cycles in graph. Create list of cycle dependencies.
         for cycle in nx.simple_cycles(G):
             index += 1
             logging.debug(f'Cycle cycle{index} contain elements: {cycle}')
-            cycles[f'cycle{index}'] = cycle
-            for element in cycle:
-                cycled.append(element)
-                for dep in cross_tree_dependencies:
-                    if element == dep[0] and dep[1] not in cycle:
-                        new_dep.append([f'cycle{index}', dep[1]])
-                    elif element == dep[1] and dep[0] not in cycle:
-                        new_dep.append([dep[0], f'cycle{index}'])
+            self.update_wfml_data('Features.Cycles', {f'cycle{index}': cycle})
+            for dep in cross_tree_dependencies:
+                if dep[0] in cycle and dep[1] not in cycle:
+                    dep[0] = f'cycle{index}'
+                elif dep[0] not in cycle and dep[1] in cycle:
+                    dep[1] = f'cycle{index}'
+                elif dep[0] in cycle and dep[1] in cycle:
+                    remove_dependencies.append(dep)
+        for dep in remove_dependencies:
+            try:
+                cross_tree_dependencies.remove(dep)
+            except ValueError:
+                logging.debug(f'Dependency {dep} already removed.')
 
-        # Remove cycle dependencies duplicates
-        new_k = []
-        for elem in new_dep:
-            if elem not in new_k:
-                new_k.append(elem)
-        new_dep = new_k
-        new_dep1 = cross_tree_dependencies
-        new_dep2 = []
+        self.reset_wfml_data('Dependencies.CrossTree')
+        for dep in cross_tree_dependencies:
+            self.update_wfml_data('Dependencies.CrossTree', dep)
 
-        # Copy all dependencies not related to any cycle
-        for dep in new_dep1:
-            flag = False
-            for element in cycled:
-                if element in dep:
-                    flag = True
-            if flag is False:
-                new_dep2.append(dep)
-
-        # Add cardinalities
-        fcard, gcard = self.get_model_cardinalities()
-        fcardinalities = [{'fcard': fcard}]
-        gcardinalities = [{'gcard': gcard}]
-
-        # Combine cycle and not-cycle dependencies to form final list
-        res = new_dep2 + new_dep
-        res = self.topological_sort(res)
+        # Perform topological sort for dependencies.
+        res = self.topological_sort(cross_tree_dependencies)
+        res[0].reverse()
         result = res[0] + independent_clafers
 
         # Add independent cycles
@@ -1737,12 +1696,12 @@ class textX_API():
             index += 1
             if f'cycle{index}' not in result:
                 result.append(f'cycle{index}')
-        # result.reverse()
-        ret_val = fcardinalities + gcardinalities + result
+        ret_val = ['FeatureCardinalities'] + ['GroupCardinalities'] + result
         logging.info(f'There are {len(res[0])} stages for cross-tree dependencies: {res[0]}')
-        logging.info(f'Cycled clafers: {cycled}')
-        logging.info(f'Additional independent clafers: {independent_clafers}')
+        logging.info(f'Cycled features: {self.get_wfml_data("Features.Cycles")}')
+        logging.info(f'Additional independent features: {independent_clafers}')
         logging.info(f'Final result: {result}')
+        self.update_wfml_data('Stages.List', ret_val)
         return ret_val
 
     def recursive_items(self, dictionary: dict, prefix=None):
@@ -1753,7 +1712,7 @@ class textX_API():
 
         INPUTS
         dictionary: dictionary to read value from.
-        prefix (type = str): prefix to create full path for nested clafers.
+        prefix (type = str): prefix to create full path for nested features.
 
         RETURN
         (type = list): tuple of key-value records.
@@ -1784,8 +1743,8 @@ class textX_API():
         INPUTS
         new: dict with values to update.
         """
-        global global_namespace
-        inner = global_namespace
+        self.get_wfml_data('Namespace')
+        inner = self.get_wfml_data('Namespace')
 
         for k, v in new.items():
             if re.match(r'(\w+\.)+\w+', k):
@@ -1823,26 +1782,9 @@ class textX_API():
                         else:
                             inner_copy[k[-1]] = copy.deepcopy(v)
 
-    def read_keys(self):
-        """
-        Function to read all keys in global namespace.
-
-        RETURN
-        keys (type = dict): dict(top-level key: all nested keys).
-        """
-        top_keys = global_namespace.keys()
-        keys = {}
-        for topkey in top_keys:
-            logging.debug(topkey)
-            subkey = []
-            for key, value in self.recursive_items(global_namespace[topkey]):
-                subkey.append({key: value})
-            keys[topkey] = subkey
-        return keys
-
     def read_certain_key(self, path: str, only_childs: bool):
         """
-        ! This method is only used to read group cardinalities (including inherited from abstract clafers).
+        ! This method is only used to read group cardinalities (including inherited from abstract features).
 
         Function to read values from global namespace.
 
@@ -1853,56 +1795,32 @@ class textX_API():
         RETURN
         key (type = dict): read value.
         """
-        abs_flag = False
-        path_flag = True
-        path_check = global_namespace
-        check = ''
-        logging.debug(f'Read path {path}')
-        for part in path.split('.'):
-            try:
-                path_check = path_check[part]
-            except KeyError:
-                logging.debug(f'No such key in namespace {path}.')
-                logging.debug(f'Global namespace: {global_namespace}')
-                path_flag = False
-            if check == '':
-                check = part
-            else:
-                check = check + '.' + part
-            for dep in abstract_dependencies.keys():
-                if check.split('_')[0] in abstract_dependencies[dep]:
-                    check = dep
-            if check in abstract_clafers:
-                abs_flag = True
         key = {}
-        if path_flag is True:
-            ns = global_namespace
-            # logging.debug(f'Take Global namespace {ns}')
-            p = path
-        elif path_flag is False and abs_flag is True:
-            ns = abstract_namespace
-            p = check
-            logging.debug(f'Take Abstract namespace {ns}')
+
+        if path in self.get_wfml_data('Dependencies.Mappings').keys():
+            path = self.get_wfml_data('Dependencies.Mappings')[path]
         else:
-            raise Exception(f'No such clafer exist {path}')
-        subkey = []
-        path_s = p.split('.')
-        for elem in path_s:
-            ns = ns[elem]
-        if only_childs:
-            for k in ns.keys():
-                subkey.append(k)
-        else:
-            for k, v in self.recursive_items(ns):
-                subkey.append({k: v})
-        key[path] = subkey
+            path = [path]
+        for subpath in path:
+            namespace = self.get_wfml_data('Namespace')
+            for part in subpath.split('.'):
+                namespace = namespace[part]
+            subkey = {}
+
+            if only_childs:
+                for k, v in namespace.items():
+                    subkey.update({k: v})
+            else:
+                for k, v in self.recursive_items(namespace):
+                    subkey.update({k: v})
+            key[subpath] = subkey
         return key
 
     def get_cycle_keys(self):
-        return cycles
+        return self.get_wfml_data('Features.Cycles')
 
     def get_namespace(self):
-        return global_namespace
+        return self.get_wfml_data('Namespace')
 
     def get_mappings(self):
         return mappings
@@ -1933,36 +1851,15 @@ class textX_API():
         group = {}
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer" and child1.reference is None:
+                if self.cname(child1) == 'Feature' and child1.reference is None:
                     self.group_clafer(child1, group)
-                elif self.cname(child1) == "Clafer" and child1.reference is not None:
+                elif self.cname(child1) == 'Feature' and child1.reference is not None:
                     self.property_clafer(child1, group)
         namespace[clafer.name] = group
         clafer.namespace = group
         return namespace
 
-    def property_clafer(self, clafer, namespace: dict):
-        """
-        ! Property clafer is a clafer that refers to some type. This clafer has no childs.
-
-        Function to update parent namespace with the property clafer.
-
-        INPUTS
-        clafer (type = textX.clafer): clafer to define.
-        namespace: parent namespace.
-
-        RETURN
-        namespace (type = dict): parent namespace with this clafer record.
-        """
-        logging.debug(f"This is property Clafer: {clafer.name}")
-        logging.debug(f"It has reference: {clafer.reference}")
-        sub = {'value': None, 'type': clafer.reference.value}
-        clafer.super_direct = []
-        clafer.super_indirect = []
-        namespace[clafer.name] = sub
-        return namespace
-
-    def root_clafer_constraints(self, clafer, isroot, gcard_check=True):
+    def feature_constraints_validation(self, clafer, isroot):
         """
         ! This method is recursive.
 
@@ -1978,76 +1875,62 @@ class textX_API():
         clafer.namespace (type = dict): clafer namespace after constraints validation.
         """
         logging.info(f'Clafer {clafer.name} constraint validation.')
-        global global_namespace, current_namespace, unvalidated_params, current_path
 
         # According to isroot flag update current_path variable.
         if isroot is True:
-            current_path = clafer.name
+            self.update_wfml_data('Path', clafer.name)
         else:
-            local_path = current_path
-            current_path = current_path + '.' + clafer.name
+            local_path = self.get_wfml_data('Path')
+            self.update_wfml_data('Path', f'{local_path}.{clafer.name}')
 
-        # According to gcard_check flag perform gcard check (is this clafer is valid gcard choice).
-        from wizard.views import check_gcard
-        if gcard_check is False:
-            check = check_gcard(current_path)
-            logging.debug(f'GC_CHECK: {check}')
-        else:
-            check = True
+        for child in clafer.nested:
+            for child1 in child.child:
+                constraints_validated = 0
+                # Perform constraint validation using clafer mappings if such are exist.
+                if self.cname(child1) == "Constraint":
+                    self.reset_wfml_data('Iterable.Mapping.Current')
+                    self.reset_wfml_data('Iterable.Mapping.Total')
+                    self.reset_wfml_data('Iterable.Mapping.Structure')
+                    self.reset_wfml_data('Flags.Cardinality')
+                    child1.name.mapping_check()
+                    logging.debug(f'Constraint name: {child1.name}')
 
-        if check is True:
-            current_namespace = clafer.namespace
-            counter = 0
-            for child in clafer.nested:
-                for child1 in child.child:
-                    unvalidated_params = []
-
-                    # Perform constraint validation using clafer mappings if such are exist.
-                    if self.cname(child1) == "Constraint":
-                        counter += 1
-                        global mapping_iter, mapping_iter_sum, cardinality_flag
-                        cardinality_flag = None
-                        mapping_iter = 0
-                        mapping_iter_sum = 1
-                        logging.debug(f'Constraint name: {child1.name}')
-                        while mapping_iter < mapping_iter_sum:
-                            unvalidated_params = []
+                    while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
+                        self.reset_wfml_data('Iterable.UnvalidatedFeatures')
+                        if self.get_wfml_data('Flags.CrossTreeCheck') is True:
+                            child1.name.cross_tree_check()
+                        else:
                             child1.name.value
-                            mapping_iter += 1
-                        clafer.namespace = current_namespace
-                        if isroot is True:
-                            global_namespace[clafer.name] = current_namespace
+                            constraints_validated += 1
+                        self.update_wfml_data('Iterable.Mapping.Current', self.get_wfml_data('Iterable.Mapping.Current') + 1)
 
-                    # Perform constraint validation for nested clafers.
-                    elif self.cname(child1) == 'Clafer' and isinstance(child1.reference, type(None)):
-                        logging.info(f'CLAFR {clafer.namespace}')
-                        clafer.namespace[child1.name].update(self.root_clafer_constraints(child1, False, gcard_check))
-                        current_namespace = clafer.namespace
+                    if self.get_wfml_data('Flags.Cardinality') == 'fcard':
+                        self.mapping()
 
-            current_namespace = {}
-            logging.info(f'For clafer {clafer.name} there is/are {counter} constraint expression(s) evaluated.')
-            logging.debug(f'Clafer namespace: {clafer.namespace}')
+                # Perform constraint validation for nested features.
+                elif self.cname(child1) == 'Clafer' and isinstance(child1.reference, type(None)):
+                    logging.info(f'CLAFR {clafer.namespace}')
+                    self.feature_constraints_validation(child1, False)
+            logging.info(f'For clafer {clafer.name} there is/are {constraints_validated} constraint expression(s) validated.')
 
         # Reset current_path variable.
         if isroot is True:
-            current_path = ''
+            self.update_wfml_data('Path', '')
         else:
-            current_path = local_path
+            self.update_wfml_data('Path', local_path)
         return clafer.namespace
 
-    def cardinalities_upd(self, card):
-        global cardinalities_list
-        cardinalities_list = card
+    def cardinalities_update(self, data):
+        for record in data:
+            if record[0] == 'fcard':
+                self.update_wfml_data('Cardinalities.Feature', record[1])
+                self.mapping(record[1])
+            elif record[0] == 'gcard':
+                self.update_wfml_data('Cardinalities.Group', record[1])
+            else:
+                raise ValueError('Incorrect cardinality type.')
 
-    def get_card(self):
-        global cardinalities_list
-        return cardinalities_list
-
-    def get_cross_tree_list(self):
-        global cross_tree_list, cross_tree_clafers_full
-        return cross_tree_list, cross_tree_clafers_full
-
-    def super_clafer(self, clafer):
+    def add_super_relations(self, clafer):
         """
         ! This method is recursive.
 
@@ -2057,8 +1940,8 @@ class textX_API():
         clafer (type = textX.clafer): clafer to check for super relation.
         """
         if clafer.super is not None:
-            for element in model.elements:
-                if element.name == clafer.super.value:
+            for element in self.get_wfml_data('Model').elements:
+                if element.name == clafer.super.initial_super_reference_check():
                     super_copy = copy.deepcopy(element.namespace)
                     clafer.namespace.update(super_copy)
                     if len(element.nested) > 0:
@@ -2070,7 +1953,7 @@ class textX_API():
                                 for child1 in child.child:
                                     repl.append(child1)
                                 child.child = repl
-                        # If clafer has childs, merge both clafers nested elements.
+                        # If clafer has childs, merge both features nested elements.
                         else:
                             for child in clafer.nested:
                                 for child1 in element.nested:
@@ -2090,17 +1973,12 @@ class textX_API():
                     logging.info(f'For clafer {clafer.name} super clafer namespace was merged')
         for child in clafer.nested:
             for child1 in child.child:
-                if self.cname(child1) == "Clafer":
-                    self.super_clafer(child1)
+                if self.cname(child1) == 'Feature':
+                    self.add_super_relations(child1)
 
     def reset_exception_flag(self):
-        global exception_flag
-        exception_flag = False
-        logging.debug(f'Global exception flag was reset: {exception_flag}')
-
-    def get_unvalidated_params(self):
-        global unvalidated_params
-        return unvalidated_params
+        self.update_wfml_data('Flags.Exception', False)
+        logging.debug('Global exception flag was reset')
 
     def to_json(self):
         """
@@ -2112,20 +1990,20 @@ class textX_API():
         result (type = dict): copies of global namespace records or element namespace.
         """
         result = {}
-        for element in model.elements:
-            if self.cname(element) == "Clafer" and element.abstract is None:
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature' and element.abstract is None:
                 if element.reference is not None:
-                    result[element.name] = global_namespace[element.name]
+                    result[element.name] = self.get_wfml_data('Namespace')[element.name]
                 else:
                     result[element.name] = element.namespace
         return result
 
-    def mapping(self, original, copy):
+    def mapping(self):
         """
-        ! This method is only used for clafers with cardinalities != 1
+        ! This method is only used for features with cardinalities != 1
 
         Create new mapping instance. This mapping will be used for constraints validation.
-        For example, fcard (a) = 2, then 2 clafers will be created -> a0, a1.
+        For example, fcard (a) = 2, then 2 features will be created -> a0, a1.
         Mapping presented as a dict: {a: [a0, a1]}
         For constraint [a > 5] two constraints will be validated instead this one:
         [a0 > 5]
@@ -2135,12 +2013,28 @@ class textX_API():
         original: original clafer name.
         copy: copy of original clafer name with added suffix _x, where x is sequentional mapping number.
         """
-        global mappings
-        if original not in mappings.keys():
-            mappings.update({original: []})
-        mappings[original].append(copy)
-        mappings[original] = list(dict.fromkeys(mappings[original]))
-        logging.debug(f'New mapping was added: {original}: {copy}')
+        for original in self.sort_fcards():
+            if original not in self.get_wfml_data('Dependencies.Mappings').keys():
+                copies = []
+                full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
+                if isinstance(full_feature_cardinality, int) and full_feature_cardinality > 1:
+                    for iteration in range(0, full_feature_cardinality):
+                        copies.append(self.name_generation(original, structure, iteration))
+                    self.update_wfml_data('Dependencies.Mappings', {original: copies})
+                    logging.debug(f'New mapping was added: {original}: {copies}')
+                    self.map_wfml_data('Namespace', original)
+                    if original in self.get_wfml_data('Cardinalities.Group').keys():
+                        self.map_wfml_data('Cardinalities.Group', original)
+                    self.update_wfml_data('Features.Mapped', {original: len(copies)})
+            else:
+                full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
+                if isinstance(full_feature_cardinality, int) and full_feature_cardinality > 1:
+                    if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings').keys()):
+                        copies = []
+                        for iteration in range(0, full_feature_cardinality):
+                            copies.append(self.name_generation(original, structure, iteration))
+                        self.update_wfml_data('Dependencies.Mappings', {original: copies})
+                        logging.debug(f'Mapping was updated: {original}: {copies}')
 
     def update_global_namespace(self, key: str, value: int):
         """
@@ -2152,10 +2046,10 @@ class textX_API():
         key: cardinality identification name.
         value: cardinality value.
         """
-        global global_namespace
+        self.get_wfml_data('Namespace')
         k_s = key.split('_')
         if k_s[0] == 'fcard' and len(k_s[1].split('.')) >= 1 and value > 1:
-            ret = global_namespace
+            ret = self.get_wfml_data('Namespace')
             path = k_s[1].split('.')
             for section in path[:-1]:
                 ret = ret[section]
@@ -2176,51 +2070,28 @@ class textX_API():
         True (type = bool): if clafer was successfully validated;
         e (type = Exception): if not.
         """
-        global exception_flag, mappings, current_path, unvalidated_params
-        current_path = ''
+        self.update_wfml_data('Path', '')
         try:
-            for element in model.elements:
-                if self.cname(element) == "Constraint":
-                    exception_flag = False
-                    self.constraint(element)
-            for element in model.elements:
-                if self.cname(element) == "Clafer" and element.name == clafer:
-                    exception_flag = False
-                    self.root_clafer_constraints(element, True, False)
-            current_path = ''
-            unvalidated_params = []
+            for element in self.get_wfml_data('Model').elements:
+                if self.cname(element) == 'Feature' and element.name == clafer:
+                    self.update_wfml_data('Flags.Exception', False)
+                    self.feature_constraints_validation(element, True)
+            self.update_wfml_data('Path', '')
             return True
         except Exception as e:
             logging.info(f'! Exception: {e}.')
-            current_path = ''
+            self.update_wfml_data('Path', '')
             return e
 
     def reset_global_variables(self):
         """
         Clear all shared variables.
         """
-        global global_namespace, current_namespace, current_path, cross_tree_clafers, cross_tree_list
-        global cycles, exception_flag, cross_tree_check, current_cross_tree, unvalidated_params
-        global abstract_clafers, abstract_dependencies, mappings, mapping_iter_sum
-        global mapping_iter, cardinalities_list, abstract_namespace, cross_tree_clafers_full
-        global_namespace = {}
-        abstract_namespace = {}
-        current_namespace = {}
-        current_path = ''
-        cross_tree_clafers = []
-        cross_tree_clafers_full = []
-        cross_tree_list = []
-        cycles = {}
-        exception_flag = False
-        cross_tree_check = False
-        current_cross_tree = None
-        unvalidated_params = []
-        abstract_clafers = []
-        abstract_dependencies = {}
-        mappings = {}
-        mapping_iter_sum = 1
-        mapping_iter = 0
-        cardinalities_list = {}
+        global wfml_data, initial_data
+        directory = dirname(abspath(__file__))
+        pattern = open(f'{directory}/shared_data_pattern.json')
+        wfml_data = json.load(pattern)
+        initial_data = copy.deepcopy(wfml_data)
 
     def clear_json_trash(self, dictionary: dict):
         """
@@ -2287,8 +2158,8 @@ class textX_API():
         res (type = dict): final result
         """
 
-        global global_namespace
-        preprint = copy.deepcopy(global_namespace)
+        self.get_wfml_data('Namespace')
+        preprint = copy.deepcopy(self.get_wfml_data('Namespace'))
         preprocessed_preprint = self.clear_json_trash(preprint)
         res = self.preprocess_json(preprocessed_preprint)
         logging.info('Final result was successfully created.')
@@ -2298,52 +2169,145 @@ class textX_API():
             json.dump(res, f, ensure_ascii=False, indent=4)
         return res
 
-    def define_clafers(self):
+    def define_features(self):
         """
-        Calls clafer definition function for all clafers in the model.
+        Calls clafer definition function for all features in the model.
         """
-        global model
-        for element in model.elements:
-            if self.cname(element) == "Clafer":
-                self.root_clafer(element)
-        logging.info('All clafers are successfully defined.')
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature':
+                self.define_feature(element)
+        logging.info('All features are successfully defined.')
 
     def define_super_relations(self):
         """
-        Calls super relations definition function for all clafers in the modell.
+        Calls super relations definition function for all features in the modell.
         """
-        global model
-        for element in model.elements:
-            if self.cname(element) == "Clafer":
-                self.super_clafer(element)
-        logging.info('For all clafers super relations are defined.')
-
-    def initialize_global_namespace(self):
-        """
-        Create dict with the nested structure of model.
-        """
-        global model
-        for element in model.elements:
-            if self.cname(element) == "Clafer" and element.abstract is None:
-                global_namespace[element.name] = element.namespace
-        logging.info('Global namespace successfully fullfilled.')
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature':
+                self.add_super_relations(element)
+        logging.info('For all features super relations are defined.')
 
     def cross_tree_check(self):
         """
         Find all cross-tree dependencies in model constraints.
         """
-        global cross_tree_check, exception_flag, current_cross_tree
-        cross_tree_check = True
-        for element in model.elements:
-            exception_flag = False
-            if self.cname(element) == "Constraint":
-                self.constraint(element)
-        for element in model.elements:
-            exception_flag = False
-            if self.cname(element) == "Clafer" and element.abstract is None:
-                current_cross_tree = element.name
-                self.root_clafer_constraints(element, True)
+        self.update_wfml_data('Flags.CrossTreeCheck', True)
+
+        for element in self.get_wfml_data('Model').elements:
+            self.update_wfml_data('Flags.Exception', True)
+            if self.cname(element) == 'Feature' and element.abstract is None:
+                self.feature_constraints_validation(element, True)
+
+        self.update_wfml_data('Flags.CrossTreeCheck', False)
         logging.info('Model was successfully checked for cross-tree dependencies.')
+
+    def get_full_feature_cardinality(self, clafer: str):
+        """
+        Get complex feature cardinality of clafer. This includes cardinalities of all super direct
+        and super indirect clafers.
+
+        INPUTS
+        clafer: clafer name
+
+        RETURN
+        ret (type = int): clafer complex feature cardinality;
+        struct (type = dict): structure of complex cardinality (clafer name: cardinality)
+        For example,
+        a 2 {
+            b 3
+        }
+        ret: 6
+        struct: {a: 2, b: 3}
+        """
+        ret = 1
+        struct = {}
+        abstract_clafers = self.get_wfml_data('Dependencies.Abstract')
+        name = ''
+
+        # Check for abstract clafer.
+        for part in clafer.split('.'):
+            check = True
+            if name == '':
+                name = part
+            else:
+                name = f'{name}.{part}'
+            if name in abstract_clafers.keys():
+                check = False
+            if name in clafer and check is True:
+                if name not in abstract_clafers.keys():
+                    struct.update({part: self.get_wfml_data('Cardinalities.Feature')[name]})
+                    ret = ret * self.get_wfml_data('Cardinalities.Feature')[name]
+        logging.debug(f'RET: {ret}, STRUCT: {struct}')
+        return ret, struct
+
+    def clear_abstract_features(self):
+        namespace_rm_keys = []
+        cardinalities_rm_keys = []
+        for feature in self.get_wfml_data('Features.Abstract').keys():
+            if feature in self.get_wfml_data('Namespace').keys():
+                namespace_rm_keys.append(feature)
+            for cardinality in self.get_wfml_data('Cardinalities.Group').keys():
+                if feature == cardinality.split('.')[0]:
+                    cardinalities_rm_keys.append(cardinality)
+
+        for key in namespace_rm_keys:
+            del self.get_wfml_data('Namespace')[key]
+
+        for key in cardinalities_rm_keys:
+            del self.get_wfml_data('Cardinalities.Group')[key]
+
+    def name_generation(self, original_name: str, struct: dict, repeat: int, flag=True):
+        """
+        Generate name for clafer with cardinality > 1 according to complex cardinality structure.
+
+        INPUTS
+        original_name: original clafer name;
+        struct: structure of complex cardinality (clafer name: cardinality);
+        repeat: sequentional number of generated clafer.
+
+        RETURN
+        ret (type = str): generated name
+
+        For example, 6 sequentilnal function execution with different repeat values will generate:
+        a 2 {
+            b 3
+        }
+        complex cardinality: 6
+        original name: b
+        struct: {a: 2, b: 3}
+        repeat: 0..5
+        result: a0.b0, a0.b1, a0.b2, a1.b0, a1.b1, a1.b2
+        """
+        from functools import reduce
+        threshold = reduce((lambda x, y: x * y), struct.values())
+        name = original_name.split('.')
+        res = ''
+        for part in name:
+            if part in struct.keys() and struct[part] > 1:
+                threshold = threshold / struct[part]
+                suffix = repeat / threshold
+                repeat = repeat % threshold
+                name = part + '_' + str(int(suffix))
+            else:
+                name = part
+            if res == '':
+                res = name
+            else:
+                res = f'{res}.{name}'
+        logging.debug(f'Original {original_name} -> generated: {res}')
+        return res
+
+    def sort_fcards(self):
+        fcards = self.get_wfml_data('Cardinalities.Feature')
+        x = {}
+        for key, value in fcards.items():
+            if isinstance(value, str) or (isinstance(value, int) and value > 1):
+                x.update({key: len(key.split('.'))})
+        sort = dict(sorted(x.items(), key=lambda item: item[1]))
+        for key, value in fcards.items():
+            if isinstance(value, str) or (isinstance(value, int) and value > 1):
+                sort.update({key: value})
+        return sort
 
     def initialize_product(self, description: dict):
         """
@@ -2355,7 +2319,6 @@ class textX_API():
         RETURN
         stages (type = list): sequence of clafer to perform constraint solving.
         """
-        global model, cross_tree_check, cross_tree_clafers
 
         # Read language grammar and create textX metamodel object from it.
         this_folder = dirname(__file__)
@@ -2370,28 +2333,34 @@ class textX_API():
         # Reset shared info variables and create textX model object from description.
         self.reset_global_variables()
         model = mm.model_from_str(description)
+        self.update_wfml_data('Model', model)
 
         # Export both metamodel and model in .dot format for class diagram construction.
         metamodel_export(mm, join(this_folder, 'metamodel.dot'))
         model_export(model, join(this_folder, 'model.dot'))
 
         # Perform basic initialization
-        self.define_clafers()
+        self.define_features()
         self.define_super_relations()
 
-        # Define all abstract clafers and dependencies to them.
+        # Define all abstract features and dependencies to them.
         self.update_abstract_clafers()
         self.fullfill_abstract_dependencies()
 
-        # Initialize global namespace and perform cross-tree check.
-        self.initialize_global_namespace()
+        self.update_wfml_data('NamespaceInitial', copy.deepcopy(self.get_wfml_data('Namespace')))
+        self.get_model_cardinalities()
+
+        # Perform cross-tree dependencies check.
         self.cross_tree_check()
 
-        # Define constraint solving sequence
+        # Define constraint solving sequence.
+        cross_tree_clafers = self.get_wfml_data('Dependencies.CrossTree')
         cross_tree_clafers.sort()
         res_cross_tree = list(k for k, _ in itertools.groupby(cross_tree_clafers))
         stages = self.staging(res_cross_tree)
-        cross_tree_check = False
+
+        self.mapping()
+        self.clear_abstract_features()
         return stages
 
     def solve_constraints(self):
@@ -2400,19 +2369,12 @@ class textX_API():
 
         Performs solving for all types of constraints.
         """
-        global exception_flag
-        for element in model.elements:
-            if self.cname(element) == "Constraint":
-                exception_flag = False
-                self.constraint(element)
-        for element in model.elements:
-            if self.cname(element) == "Clafer" and element.abstract is None:
-                exception_flag = False
-                self.root_clafer_constraints(element, True)
+        for element in self.get_wfml_data('Model').elements:
+            if self.cname(element) == 'Feature' and element.abstract is None:
+                self.update_wfml_data('Flags.Exception', False)
+                self.feature_constraints_validation(element, True)
 
-        logging.info(json.dumps(self.to_json(model), sort_keys=True, indent=4))
-        with open('test.json', 'w', encoding='utf-8') as f:
-            json.dump(self.to_json(model), f, ensure_ascii=False, indent=4)
+        self.save_json()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from django import forms
 from collections import OrderedDict
 from textX.textX import textX_API
 import copy
+import pprint
 import logging
 
 model = {}
@@ -56,10 +57,8 @@ class WizardStepForm(forms.Form):
         for param in self.up:
             element = param['element']
             for subparam in param['params']:
-                if element not in subparam.split('.')[0]:
-                    subparam = element + '.' + subparam
                 param_type = api.get_clafer_type(subparam)
-                if param_type != 'predefined' and check_gcard(subparam) is True:
+                if param_type != 'predefined' and subparam in self.fields:
                     self.add_error(subparam, f'This field returned error: {param["error"]}')
                 else:
                     self.add_error(None, f'Clafer`s {param["element"]} parameter {subparam} returned error: {param["error"]}')
@@ -77,7 +76,7 @@ class WizardStepForm(forms.Form):
         res = api.validate_clafer(element)
         if res is not True:
             logging.debug(f'Result: {res}')
-            up = api.get_unvalidated_params()
+            up = api.get_wfml_data('Iterable.UnvalidatedFeatures')
             self.up.append({'element': element, 'params': list(dict.fromkeys(up)), 'error': res})
             logging.debug(f"Unvalidated parameter: {up}")
 
@@ -98,13 +97,13 @@ class FCardinalityForm(forms.Form):
         cd = self.cleaned_data
 
         # Get required data from API.
-        self.ad = api.get_abstract_dependencies()
-        self.card = api.get_card()
-        self.ctl, self.ctlf = api.get_cross_tree_list()
+        self.ad = api.get_wfml_data('Dependencies.Abstract')
+        self.card = api.get_wfml_data('Cardinalities')
+        self.ctl = api.get_wfml_data('Features.CrossTree')
         uk = {}
         logging.debug(f'Cleaned data: {cd}')
         logging.debug(f'Abstract dependencies: {self.ad}')
-        logging.debug(f'Cross-tree list: {self.ctlf}')
+        logging.debug(f'Cross-tree list: {self.ctl.keys()}')
 
         # Perform printed cardinalities validation.
         for key, value in cd.items():
@@ -126,9 +125,10 @@ class FCardinalityForm(forms.Form):
         # Check cross-tree cardinalities.
         # Note, that if some clafer is presented in any constraint of another clafer,
         # then this clafer cardinality MUST me equal 1.
-        for clafer in self.ctl:
+        disabled = True
+        for clafer in self.ctl.keys():
             res = self.check_cross_tree_cardinalities(clafer)
-            if res is not True:
+            if res is not True and disabled is False:
                 uk.update({None: res})
 
         # Assign errors to form fields, if exist.
@@ -161,8 +161,8 @@ class FCardinalityForm(forms.Form):
         if key in cd_t.keys():
             value = cd_t[key]
         # From predefined record in model if there are.
-        elif key in self.card['fcard'].keys():
-            value = self.card['fcard'][key]
+        elif key in self.card['Feature'].keys():
+            value = self.card['Feature'][key]
         else:
             # value = 1 UNCOMMENT IF NEED STRICTLY DEFINE ABSTRACT CLAFER REPEATS
             return True  # IF NOT
@@ -174,8 +174,8 @@ class FCardinalityForm(forms.Form):
             if dependency in cd_t.keys():
                 add_value = cd_t[dependency]
             # From predefined record in model if there are.
-            elif dependency in self.card['fcard'].keys():
-                add_value = self.card['fcard'][dependency]
+            elif dependency in self.card['Feature'].keys():
+                add_value = self.card['Feature'][dependency]
             # If cardinality is not defined anywhere, then cardinality = 1.
             else:
                 add_value = 1
@@ -213,8 +213,8 @@ class FCardinalityForm(forms.Form):
         if key in cd_t.keys():
             value = cd_t[key]
         # From predefined record in model if there are.
-        elif key in self.card['fcard'].keys():
-            value = self.card['fcard'][key]
+        elif key in self.card['Feature'].keys():
+            value = self.card['Feature'][key]
         # If cardinality is not defined anywhere, then cardinality = 1.
         else:
             value = 1
@@ -246,6 +246,21 @@ class ModelInputForm(forms.Form):
 
     a = """
 
+
+abstract Button
+
+Button1: Button
+
+Button2 {
+    a -> integer
+    [a > Button3.a]
+}
+
+Button3 {
+    a -> integer
+    [a < Button2.a]
+}
+
 Buttons {
     NumericButton -> integer 1
 
@@ -272,6 +287,7 @@ Display {
     model_field = forms.CharField(widget=forms.Textarea, initial=a)
 
 class WizardClass(SessionWizardView):
+
     def done(self, form_list, **kwargs):
         """
         ! This method is automatically called after the last step of wizard was successfully validated.
@@ -301,13 +317,10 @@ class WizardClass(SessionWizardView):
         if step is None:
             step = self.steps.current
 
-        logging.info(f'CALLFORM {step}')
-        logging.info(f'WIZARD: {self.form_list}')
-        form = super(WizardClass, self).get_form(step, data, files)
-        import copy
-        # Get all required data from API.
-        keys = api.read_keys()
-        ad = api.get_abstract_dependencies()
+        logging.info(f'Wizard step {step}.')
+        self.form = super(WizardClass, self).get_form(step, data, files)
+
+        self.ad = api.get_wfml_data('Dependencies.Abstract')
         generated_steps = list(dict.fromkeys(generated_steps))
         if step not in generated_steps:
             extra_step_counter = 0
@@ -317,224 +330,113 @@ class WizardClass(SessionWizardView):
             current_step = model_steps[int(step) - extra_step_counter]
         else:
             current_step = copy.deepcopy(card_initial)
-        cycles = api.get_cycle_keys()
 
         # Fill form label and head.
-        form.label = current_step
-        form.head = 'Cardinalities' if isinstance(form, type(FCardinalityForm())) or isinstance(form, type(GCardinalityForm())) else 'Clafer'
+        self.form.label = current_step
+        self.form.head = 'Cardinalities' if isinstance(self.form, type(FCardinalityForm())) \
+            or isinstance(self.form, type(GCardinalityForm())) else 'Feature'
         logging.debug(f'Current step: {step} {current_step}')
-        logging.debug(f'Keys: {keys}')
 
-        # Construct FCardinalityForm for the first step.
-        if isinstance(form, type(FCardinalityForm())):
-            if steps_validated[int(step)] is False:
-                card_update('fcard', current_step['fcard'])
-                card_initial.update(copy.deepcopy(card))
-            for fcard, value in current_step['fcard'].items():
-                logging.debug(f'FCARD: {fcard} value {value}')
-                if type(value) is not int and fcard not in ignore_fields and fcard not in ad.keys():
-                    allowed = None
-                    if value == '*':
-                        allowed = '0..inf'
-                    elif value == '+':
-                        allowed = '1..inf'
-                    elif value == '?':
-                        allowed = '0 or 1'
-                    else:
-                        allowed = value
-                    form.fields[f'fcard_{fcard}'] = forms.IntegerField(label=f'Feature cardinality for clafer {fcard}. Allowed values: {allowed}')
+        # Construct FCardinalityForm for Feature Cardinality definition steps.
+        if isinstance(self.form, type(FCardinalityForm())):
+            self.construct_feature_cardinality_form()
 
-        # Construct GCardinalityForm for the first step.
-        elif isinstance(form, type(GCardinalityForm())):
-            # Update cardinalities according to fcard data from the previous step.
-            if step == '1':
-                if steps_validated[int(step)] is False:
-                    card_update('gcard', current_step['gcard'])
-                    card_initial.update(copy.deepcopy(card))
-                    upd_gcard()
-            else:
-                copyd = {'gcard': {}}
-                for item in extra_fields:
-                    for key in item.keys():
-                        copyd['gcard'].update({key: current_step['gcard'][key.split('_')[0]]})
-                current_step = copyd
-            # Create fields for each gcard record.
-            for gcard, value in current_step['gcard'].items():
-                logging.debug(f'GCARD: {gcard} value {value}')
-                logging.debug(f'IGNORE: {ignore_fields}')
-
-                # For number type gcard create integer field.
-                # TODO check this functionality.
-                if type(value) is not int and value not in ['xor', 'or', 'mux', 'opt'] and gcard not in ignore_fields:
-                    form.fields[f'gcard_{gcard}'] = forms.IntegerField(label=f'Feature cardinality for clafer {gcard}. Allowed values: {value}')
-
-                # For xor or or cardinality create choices list or checkboxes respectively.
-                elif value == 'xor' or value == 'or':
-                    abstract_clafers = api.get_abstract_dependencies()
-                    gcards = []
-                    check = ''
-                    flag = False
-                    for part in gcard.split('.'):
-                        # If gcard is defined for abstract clafer, then such cardinality will be applied
-                        # to all clafers, thar are inherited from this abstract clafer.
-                        # Step by step reconstruct gcard value, and check each step for presence in abstract clafers.
-                        if flag is False:
-                            if check == '':
-                                check = part
-                            else:
-                                check = check + '.' + part
-                            if check in abstract_clafers.keys():
-                                for k in abstract_clafers[check]:
-                                    if k not in generated:
-                                        repeats, struct = get_fcard(k)
-                                    else:
-                                        repeats = 1
-                                    # Multiply gcard fields if fcard > 1.
-                                    for repeat in range(0, repeats):
-                                        if repeats > 1:
-                                            name = name_generation(k, struct, repeat, False)
-                                            api.mapping(k, name)
-                                            gcards.append(name)
-                                        else:
-                                            gcards.append(k)
-                                flag = True
-                        # If abstract clafer is matched with step value, then just add last steps to ALL multiplied gcard records.
-                        else:
-                            for gc in range(0, len(gcards)):
-                                gcards[gc] = gcards[gc] + '.' + part
-
-                    # If there are no abstract clafers, that will match any part of gcard value, then just add this gcard.
-                    # TODO check this section on fcard support.
-                    if gcards == [] and flag is False:
-                        if gcard not in generated:
-                            repeats, struct = get_fcard(gcard)
-                        else:
-                            repeats = 1
-                        # Multiply gcard fields if fcard > 1.
-                        for repeat in range(0, repeats):
-                            if repeats > 1:
-                                name = name_generation(gcard, struct, repeat, False)
-                                api.mapping(gcard, name)
-                                gcards.append(name)
-                            else:
-                                gcards.append(gcard)
-                    logging.debug(f'GCARDS FULLFILLED: {gcards}')
-
-                    # Create appropriate fields in form.
-                    for item in gcards:
-                        key = api.read_certain_key(item, True)
-                        values = key[item]
-                        choises_list = []
-                        for v in values:
-                            choises_list.append((v, v))
-                        # Ignore fields are used to ensure correctness of form.
-                        # SessionWizardView validates each form twice: right after their filling and in the end.
-
-                        # If some field, that should not be in the model according to their cardinality
-                        # will not be added to ignore fields, then SessionWizardView will require to fill these fields
-                        # during the final validation.
-                        if item not in ignore_fields:
-                            ignore_fields.append(item)
-                        flag = check_gcard(item)
-                        if value == 'xor' and flag is True:
-                            form.fields[f'gcard_{item}'] = forms.ChoiceField(choices=choises_list)
-                        elif value == 'or' and flag is True:
-                            form.fields[f'gcard_{item}'] = forms.MultipleChoiceField(choices=choises_list, widget=forms.CheckboxSelectMultiple)
+        # Construct GCardinalityForm for Group Cardinality definition steps.
+        elif isinstance(self.form, type(GCardinalityForm())):
+            self.construct_group_cardinality_form()
 
         # Construct WizardStepForm for the all other steps.
         else:
+            cycles = api.get_cycle_keys()
             extra_fields = []
             # If step contains cycle, then get all cycle items and perform field initialization for all of them.
             if current_step in cycles.keys():
                 for element in cycles[current_step]:
-                    logging.debug(f'Element: {element}')
-                    keys_step = keys[element]
-                    for keypair in keys_step:
-                        for key, value in keypair.items():
-                            logging.debug(key, value)
-                            key = element + '.' + key
-
-                            # Generated list is used to prevent field multiplication during form revalidation.
-                            # During form initialization if fcard of field > 1, then copies of this field are generated.
-                            # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
-                            # multiplication of generated fields.
-                            if key not in generated:
-                                repeats, struct = get_fcard(key)
-                            else:
-                                repeats = 1
-                            logging.debug(f'REPEATS: {repeats}')
-
-                            # Create fields for all records (generated and standard).
-                            for repeat in range(0, repeats):
-                                if repeats > 1:
-                                    name = name_generation(key, struct, repeat)
-                                    api.mapping(key, name)
-                                    if key not in ignore_fields:
-                                        ignore_fields.append(key)
-                                else:
-                                    name = key
-                                # Check if this field is allowed by chosen group cardinality.
-                                flag = check_gcard(key)
-                                if value['type'] == 'integer' and name not in ignore_fields and flag is True:
-                                    form.fields[name] = forms.IntegerField(label=name)
-                                elif value['type'] == 'float' and name not in ignore_fields and flag is True:
-                                    form.fields[name] = forms.FloatField(label=name)
-                                elif value['type'] == 'string' and name not in ignore_fields and flag is True:
-                                    form.fields[name] = forms.CharField(label=name)
-                                elif value['type'] == 'boolean' and name not in ignore_fields and flag is True:
-                                    choises_list = []
-                                    for v in [True, False]:
-                                        choises_list.append((v, v))
-                                    form.fields[name] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
+                    self.construct_step_form(element)
             else:
-                keys_step = keys[current_step]
-                logging.debug(f'KEYS STEP: {keys_step}')
-                for keypair in keys_step:
-                    for key, value in keypair.items():
-                        key = current_step + '.' + key
-                        # Generated list is used to prevent field multiplication during form revalidation.
-                        # During form initialization if fcard of field > 1, then copies of this field are generated.
-                        # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
-                        # multiplication of generated fields.
-                        if key not in generated:
-                            repeats, struct = get_fcard(key)
-                        else:
-                            repeats = 1
-                        logging.debug(f'REPEATS: {repeats}')
-                        logging.debug(f'Key: {key}, Value: {value}')
+                self.construct_step_form(current_step)
+        return self.form
 
-                        for repeat in range(0, repeats):
-                            if repeats > 1:
-                                name = name_generation(key, struct, repeat)
-                                api.mapping(key, name)
-                                if key not in ignore_fields:
-                                    ignore_fields.append(key)
-                            else:
-                                name = key
-                            # Check if this field is allowed by chosen group cardinality.
-                            flag = check_gcard(name)
+    def construct_feature_cardinality_form(self):
+        feature_cardinalities = api.get_wfml_data('Cardinalities.Feature')
+        for fcard, value in feature_cardinalities.items():
+            logging.debug(f'FCARD: {fcard} value {value}')
+            if type(value) is not int and fcard not in ignore_fields and fcard not in self.ad.keys():
+                allowed = None
+                if value == '*':
+                    allowed = '0..inf'
+                elif value == '+':
+                    allowed = '1..inf'
+                elif value == '?':
+                    allowed = '0 or 1'
+                else:
+                    allowed = value
+                self.form.fields[f'fcard_{fcard}'] = forms.IntegerField(label=f'Feature Cardinality for Feature {fcard}. Allowed values: {allowed}')
 
-                            if value['type'] == 'integer' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.IntegerField(label=name)
-                            elif value['type'] == 'float' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.FloatField(label=name)
-                            elif value['type'] == 'string' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.CharField(label=name)
-                            elif value['type'] == 'array' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.CharField(label=name)
-                            elif value['type'] == 'integerArray' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.CharField(label=name)
-                            elif value['type'] == 'floatArray' and name not in ignore_fields and flag is True:
-                                form.fields[name] = forms.CharField(label=name)
-                            elif value['type'] == 'boolean' and name not in ignore_fields and flag is True:
-                                choises_list = []
-                                for v in [True, False]:
-                                    choises_list.append((v, v))
-                                form.fields[name] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
-                # Sort fields by names. This will group generated fields.
-                form.fields = OrderedDict(sorted(form.fields.items()))
-        api.cardinalities_upd(card)
-        return form
+    def construct_group_cardinality_form(self):
+        # Create fields for each gcard record.
+        group_cardinalities = api.get_wfml_data('Cardinalities.Group')
+        for gcard, value in group_cardinalities.items():
+            logging.debug(f'GCARD: {gcard} value {value}')
+            logging.debug(f'IGNORE: {ignore_fields}')
+
+            # For number type gcard create integer field.
+            # TODO check this functionality.
+            if type(value) is not int and value not in ['xor', 'or', 'mux', 'opt'] and gcard not in ignore_fields:
+                self.form.fields[f'gcard_{gcard}'] = forms.IntegerField(label=f'Feature cardinality for clafer {gcard}. Allowed values: {value}')
+
+            # For xor or or cardinality create choices list or checkboxes respectively.
+            elif value == 'xor' or value == 'or':
+                # Create appropriate fields in form.
+                key = api.read_certain_key(gcard, True)
+                values = key[gcard]
+                choises_list = []
+                for v in values:
+                    choises_list.append((v, v))
+                # Ignore fields are used to ensure correctness of form.
+                # SessionWizardView validates each form twice: right after their filling and in the end.
+
+                # If some field, that should not be in the model according to their cardinality
+                # will not be added to ignore fields, then SessionWizardView will require to fill these fields
+                # during the final validation.
+                if gcard not in ignore_fields:
+                    ignore_fields.append(gcard)
+                if value == 'xor':
+                    self.form.fields[f'gcard_{gcard}'] = forms.ChoiceField(choices=choises_list)
+                elif value == 'or':
+                    self.form.fields[f'gcard_{gcard}'] = forms.MultipleChoiceField(choices=choises_list,
+                                                                                    widget=forms.CheckboxSelectMultiple)
+
+    def construct_step_form(self, step):
+        keys_step = api.read_certain_key(step, False)
+        logging.debug(f'KEYS STEP: {keys_step}')
+        for key, values in keys_step.items():
+            for subkey, value in values.items():
+                field_name = f'{key}.{subkey}'
+                # Generated list is used to prevent field multiplication during form revalidation.
+                # During form initialization if fcard of field > 1, then copies of this field are generated.
+                # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
+                # multiplication of generated fields.
+
+                logging.debug(f'Key: {key}, Value: {value}')
+                # Check if this field is allowed by chosen group cardinality.
+
+                if value['type'] == 'integer':
+                    self.form.fields[field_name] = forms.IntegerField(label=field_name)
+                elif value['type'] == 'float':
+                    self.form.fields[field_name] = forms.FloatField(label=field_name)
+                elif value['type'] == 'string' or \
+                        value['type'] == 'array' or \
+                        value['type'] == 'integerArray' or \
+                        value['type'] == 'floatArray':
+                    self.form.fields[field_name] = forms.CharField(label=field_name)
+                elif value['type'] == 'boolean':
+                    choises_list = []
+                    for v in [True, False]:
+                        choises_list.append((v, v))
+                    self.form.fields[field_name] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
+        # Sort fields by names. This will group generated fields.
+        self.form.fields = OrderedDict(sorted(self.form.fields.items()))
 
     def process_step(self, form):
         """
@@ -553,8 +455,19 @@ class WizardClass(SessionWizardView):
             logging.info(f'STEP {step} CARDINALITIES: {cd}')
             for key, value in cd.items():
                 key_split = key.split('_', 1)
-                card_update(key_split[0], {key_split[1]: value})
+                if key_split[0] == 'fcard':
+                    api.update_wfml_data('Cardinalities.Feature', {key_split[1]: value})
+                else:
+                    api.update_wfml_data('Cardinalities.Group', {key_split[1]: value})
+
+        if isinstance(form, type(FCardinalityForm())):
+            api.validate_common_constraints()
+            api.mapping()
+        elif isinstance(form, type(GCardinalityForm())):
+            api.apply_group_cardinalities()
+        api.update_wfml_data('Iterable.Stage', step)
         logging.info(f'STEP {step} FINISHED. CARDINALITIES: {card}')
+        logging.debug(pprint.pprint(api.show_wfml_data()))
         return self.get_form_step_data(form)
 
     def render_next_step(self, form, **kwargs):
@@ -562,8 +475,8 @@ class WizardClass(SessionWizardView):
         This method gets called when the next step/form should be rendered.
         `form` contains the last/current form.
         """
-        global extra_step_flag, generated_steps
-        if extra_step_flag is True:
+        global generated_steps
+        if api.get_wfml_data('Flags.ExtraStep') is True and self.steps.current != '0':
             for index in range(len(self.form_list) - 1, int(self.steps.current), -1):
                 self.form_list[str(index + 1)] = self.form_list[str(index)]
             self.form_list[str(int(self.steps.current) + 1)] = GCardinalityForm
@@ -582,8 +495,7 @@ class WizardClass(SessionWizardView):
         )
         # change the stored current step
         self.storage.current_step = next_step
-        if extra_step_flag is True:
-            extra_step_flag = False
+        api.update_wfml_data('Flags.ExtraStep', False)
         return self.render(new_form, **kwargs)
 
 def initial_page(request, *args, **kwargs):
@@ -603,15 +515,14 @@ def initial_page(request, *args, **kwargs):
             model = form.cleaned_data['model_field']
             logging.info(f'Model: {model}')
             model_steps = api.initialize_product(model)
-            abstr_clafers = api.get_abstract_clafers()
-            global steps_validated, ignore_fields, generated, extra_step_flag, extra_fields, form_list
+            abstr_clafers = api.get_wfml_data('Features.Abstract').keys()
+            global steps_validated, ignore_fields, generated, extra_fields, form_list
             steps_validated = {}
             ignore_fields = []
             generated = []
             generated_steps = []
             extra_fields = []
             form_list = OrderedDict()
-            extra_step_flag = False
             card_initial = {}
             card = {}
             for step in range(len(model_steps)):
@@ -650,190 +561,7 @@ def factory_wizard(request, *args, **kwargs):
             else:
                 ret_form_list.append(WizardStepForm)
 
-
     class ReturnClass(WizardClass):
         form_list = ret_form_list
     return ReturnClass.as_view()(request, *args, **kwargs)
 
-def card_update(card_type: str, card_value):
-    """
-    Update card table according to card type.
-
-    INPUTS
-    card_type (variable type): type of cardinality (fcard, gcard)
-    card_value: cardinality value
-    not_initial_flag (type = bool): flag shows that function is calles not in feature cardinalities definition step.
-    """
-    global card
-    logging.debug(card)
-    for key in ['fcard', 'gcard']:
-        if key not in card.keys():
-            card.update({key: {}})
-    if card_type == 'fcard':
-        card['fcard'].update(card_value)
-    else:
-        card['gcard'].update(card_value)
-    logging.debug(f'Card is updated: {card}')
-
-    if card_type == 'fcard':
-        upd_gcard()
-        for k, v in card_value.items():
-            if type(v) is int:
-                api.update_global_namespace('fcard_' + k, v)
-                logging.debug(f'Global namespace mappings for clafer {k}, was created {v} times.')
-
-def get_fcard(clafer: str):
-    """
-    Get complex feature cardinality of clafer. This includes cardinalities of all super direct
-    and super indirect clafers.
-
-    INPUTS
-    clafer: clafer name
-
-    RETURN
-    ret (type = int): clafer complex feature cardinality;
-    struct (type = dict): structure of complex cardinality (clafer name: cardinality)
-    For example,
-    a 2 {
-        b 3
-    }
-    ret: 6
-    struct: {a: 2, b: 3}
-    """
-    global card
-    ret = 1
-    struct = {}
-    abstract_clafers = api.get_abstract_dependencies()
-    check = ''
-
-    # Check for abstract clafer.
-    for part in clafer.split('.'):
-        if check == '':
-            check = part
-        else:
-            check = check + '.' + part
-        for k, v in abstract_clafers.items():
-            if check in v:
-                check = k
-    logging.debug(f'ABSTR: {abstr_clafers}')
-    logging.debug(f'CARD: {card}')
-    logging.debug(f'CHECK: {check}')
-    for key in card['fcard'].keys():
-        if key in clafer or key in check:
-            if key not in abstr_clafers:
-                struct.update({key.split('.')[-1]: card['fcard'][key]})
-                ret = ret * card['fcard'][key]
-    logging.debug(f'RET: {ret}, STRUCT: {struct}')
-    return ret, struct
-
-def check_gcard(clafer: str):
-    """
-    Check, whether clafer is allowed according to group cardinality.
-
-    INPUTS
-    clafer: clafer to check.
-
-    RETURN
-    (type = bool): check result.
-    """
-    global card
-    for key, value in card['fcard'].items():
-        if key == clafer and value == 0:
-            return False
-    logging.debug(f'GcardTable: {card["gcard"]}')
-    for key, value in card['gcard'].items():
-        if key == clafer:
-            return True
-        if type(value) is not list:
-            value = [value]
-        # This method checks all parts of clafer full path to be sure, that all cardinalities are valid.
-        for item in value:
-            check = key + '.' + item
-            if check in clafer:
-                return True
-        if key in clafer:
-            return False
-    return True
-
-def upd_gcard():
-    """
-    Update group cardinality if it was multiplied according to feature cardinality.
-    """
-    global card, extra_step_flag, extra_fields
-    rm_keys = []
-    add_keys = []
-    fcard = 1
-    for key, value in card['gcard'].items():
-        repeats, struct = get_fcard(key)
-        for repeat in range(0, repeats):
-            if repeats > 1:
-                name = name_generation(key, struct, repeat)
-                if name not in card['gcard'].keys():
-                    if steps_validated[1] is True:
-                        logging.info('Extra Step Flag was set!')
-                        extra_step_flag = True
-                    api.mapping(key, name)
-                    if key not in ignore_fields:
-                        ignore_fields.append(key)
-                    if key not in rm_keys:
-                        rm_keys.append(key)
-                    for index in range(0, fcard):
-                        add_keys.append({name: value})
-            else:
-                name = key
-    # If gcard was multiplied, we need to add generated keys and remove the original key from card table.
-    logging.debug(f'RM KEYS {rm_keys}')
-    logging.debug(f'ADD KEYS {add_keys}')
-    if extra_fields == []:
-        extra_fields = add_keys
-    for key in rm_keys:
-        card['gcard'].pop(key, None)
-    for key in add_keys:
-        card['gcard'].update(key)
-    logging.debug(f'CARD WAS UPD {card["gcard"]}')
-
-def get_card():
-    return card
-
-def name_generation(original_name: str, struct: dict, repeat: int, flag=True):
-    """
-    Generate name for clafer with cardinality > 1 according to complex cardinality structure.
-
-    INPUTS
-    original_name: original clafer name;
-    struct: structure of complex cardinality (clafer name: cardinality);
-    repeat: sequentional number of generated clafer.
-
-    RETURN
-    ret (type = str): generated name
-
-    For example, 6 sequentilnal function execution with different repeat values will generate:
-    a 2 {
-        b 3
-    }
-    complex cardinality: 6
-    original name: b
-    struct: {a: 2, b: 3}
-    repeat: 0..5
-    result: a0.b0, a0.b1, a0.b2, a1.b0, a1.b1, a1.b2
-    """
-    from functools import reduce
-    threshold = reduce((lambda x, y: x * y), struct.values())
-    name = original_name.split('.')
-    res = ''
-    for part in name:
-        if part in struct.keys():
-            threshold = threshold / struct[part]
-            suffix = repeat / threshold
-            repeat = repeat % threshold
-            name = part + '_' + str(int(suffix))
-        else:
-            name = part
-        if res == '':
-            res = name
-        else:
-            res = res + '.' + name
-    logging.debug(f'Original {original_name} -> generated: {res}')
-    if flag:
-        generated.append(res)
-    return res

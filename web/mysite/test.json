@@ -1,84 +1,26 @@
 {
-    "TaskConfiguration": {
-        "TaskName": 3,
-        "Scenario": {
-            "FromFile": {
-                "WsFile": "3"
+    "Context": {
+        "Experiment": {
+            "Task": {
+                "Objectives_0": {
+                    "o": 3
+                },
+                "Objectives_1": {
+                    "o": 3
+                }
+            }
+        }
+    },
+    "RepetitionManagement": {
+        "Repeater_0": {
+            "AcceptableErrorBased": {
+                "a": 3
             }
         },
-        "Objectives_0": {
-            "Name": "3",
-            "DataType": "3",
-            "Minimization": true,
-            "Priority": 3,
-            "ModelPriority": 3,
-            "ExpectedValuesRange": "3"
-        },
-        "Objectives_1": {
-            "Name": "3",
-            "DataType": "3",
-            "Minimization": true,
-            "Priority": 3,
-            "ModelPriority": 3,
-            "ExpectedValuesRange": "3"
-        },
-        "Objectives_2": {
-            "Name": "3",
-            "DataType": "3",
-            "Minimization": false,
-            "Priority": 3,
-            "ModelPriority": 3,
-            "ExpectedValuesRange": "3"
-        }
-    },
-    "OutliersDetection": {
-        "Chauvenet": {
-            "MinActiveNumberOfTasks": 3,
-            "MaxActiveNumberOfTasks": 3
-        }
-    },
-    "Repeater": {
-        "AcceptableErrorBasedRepeater_0": {
-            "MaxFailedTasksPerConfiguration": 3,
-            "BaseAcceptableErrors": 3,
-            "ConfidenceLevels": 3.0,
-            "DevicesScaleAccuracies": 3,
-            "DevicesAccuracyClasses": 3,
-            "ExperimentAwareness": {
-                "isEnabled": true,
-                "MaxAcceptableErrors": 3,
-                "RatiosMax": 3
-            },
-            "MinTasksPerConfiguration": 3,
-            "MaxTasksPerConfiguration": 3
-        },
-        "AcceptableErrorBasedRepeater_1": {
-            "MaxFailedTasksPerConfiguration": 3,
-            "BaseAcceptableErrors": 3,
-            "ConfidenceLevels": 3.0,
-            "DevicesScaleAccuracies": 3,
-            "DevicesAccuracyClasses": 3,
-            "ExperimentAwareness": {
-                "isEnabled": true,
-                "MaxAcceptableErrors": 3,
-                "RatiosMax": 3
-            },
-            "MinTasksPerConfiguration": 3,
-            "MaxTasksPerConfiguration": 3
-        },
-        "AcceptableErrorBasedRepeater_2": {
-            "MaxFailedTasksPerConfiguration": 3,
-            "BaseAcceptableErrors": 3,
-            "ConfidenceLevels": 3.0,
-            "DevicesScaleAccuracies": 3,
-            "DevicesAccuracyClasses": 3,
-            "ExperimentAwareness": {
-                "isEnabled": true,
-                "MaxAcceptableErrors": 3,
-                "RatiosMax": 3
-            },
-            "MinTasksPerConfiguration": 3,
-            "MaxTasksPerConfiguration": 3
+        "Repeater_1": {
+            "QuantityBased": {
+                "q": 3
+            }
         }
     }
 }

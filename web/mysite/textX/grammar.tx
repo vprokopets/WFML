@@ -1,6 +1,6 @@
 Model: elements*=Element;
 
-Element: Clafer | Goal | Constraint | Assertion;
+Element: Feature | Goal | Constraint | Assertion;
 
 Constraint: "[" name=prec23 "]";
 Assertion: "assert" "[" name=prec23 "]";
@@ -12,7 +12,7 @@ Goal:
 ;
 
 Goaltype: "min" | "max" | "minimize" | "maximize";
-Clafer: 
+Feature: 
     abstract=Abstract?
     gcard=Gcard?
     name=Name
