@@ -23,6 +23,8 @@ extra_step_flag = False
 extra_fields = []
 form_list = OrderedDict()
 generated_steps = []
+step = ''
+done = False
 
 class WizardStepForm(forms.Form):
     """
@@ -37,6 +39,9 @@ class WizardStepForm(forms.Form):
         RETURN
         cd (type = dict): cleaned data, that was printed to form fields.
         """
+        global step_current, done
+        if done is False:
+            api.get_stage_snap(step_current)
         cd = self.cleaned_data
         self.up = []
         logging.debug(f'Cleaned Data: {cd}')
@@ -94,6 +99,9 @@ class FCardinalityForm(forms.Form):
         RETURN
         cd (type = dict): cleaned data, that was printed to form fields.
         """
+        global step_current, done
+        if done is False:
+            api.get_stage_snap(step_current)
         cd = self.cleaned_data
 
         # Get required data from API.
@@ -236,7 +244,20 @@ class GCardinalityForm(forms.Form):
     """
 
     def clean(self):
+        global step_current, done
+        if done is False:
+            api.get_stage_snap(step_current)
+        uk = {}
         cd = self.cleaned_data
+        gcards = api.get_wfml_data('CardinalitiesInitial.Group')
+        for card in cd.keys():
+            subcard_type = card.split('_', 1)[0]
+            subcard = card.split('_', 1)[1]
+            if gcards[subcard] not in ('or', 'xor') and api.cardinality_solver(subcard, subcard_type, len(cd[card])) is not True:
+                msg = f'Wrong number of {card} Group Cardinality items (Total {len(cd[card])} items: {cd[card]}). Correct value is: {gcards[subcard]}'
+                uk.update({card: msg})
+        for key, error in uk.items():
+            self.add_error(key, error)
         return cd
 
 class ModelInputForm(forms.Form):
@@ -313,10 +334,12 @@ class WizardClass(SessionWizardView):
         """
 
         # Create form object.
-        global model_steps, card, extra_fields, card_initial, extra_step_flag, generated_steps
+        global model_steps, card, extra_fields, card_initial, extra_step_flag, generated_steps, step_current, done
         if step is None:
             step = self.steps.current
-
+        step_current = step
+        if done is False:
+            api.get_stage_snap(step)
         logging.info(f'Wizard step {step}.')
         self.form = super(WizardClass, self).get_form(step, data, files)
 
@@ -380,32 +403,25 @@ class WizardClass(SessionWizardView):
             logging.debug(f'GCARD: {gcard} value {value}')
             logging.debug(f'IGNORE: {ignore_fields}')
 
-            # For number type gcard create integer field.
-            # TODO check this functionality.
-            if type(value) is not int and value not in ['xor', 'or', 'mux', 'opt'] and gcard not in ignore_fields:
-                self.form.fields[f'gcard_{gcard}'] = forms.IntegerField(label=f'Feature cardinality for clafer {gcard}. Allowed values: {value}')
+            # Create appropriate fields in form.
+            key = api.read_certain_key(gcard, True)
+            values = key[gcard]
+            choises_list = []
+            for v in values:
+                choises_list.append((v, v))
+            # Ignore fields are used to ensure correctness of form.
+            # SessionWizardView validates each form twice: right after their filling and in the end.
 
-            # For xor or or cardinality create choices list or checkboxes respectively.
-            elif value == 'xor' or value == 'or':
-                # Create appropriate fields in form.
-                key = api.read_certain_key(gcard, True)
-                values = key[gcard]
-                choises_list = []
-                for v in values:
-                    choises_list.append((v, v))
-                # Ignore fields are used to ensure correctness of form.
-                # SessionWizardView validates each form twice: right after their filling and in the end.
-
-                # If some field, that should not be in the model according to their cardinality
-                # will not be added to ignore fields, then SessionWizardView will require to fill these fields
-                # during the final validation.
-                if gcard not in ignore_fields:
-                    ignore_fields.append(gcard)
-                if value == 'xor':
-                    self.form.fields[f'gcard_{gcard}'] = forms.ChoiceField(choices=choises_list)
-                elif value == 'or':
-                    self.form.fields[f'gcard_{gcard}'] = forms.MultipleChoiceField(choices=choises_list,
-                                                                                    widget=forms.CheckboxSelectMultiple)
+            # If some field, that should not be in the model according to their cardinality
+            # will not be added to ignore fields, then SessionWizardView will require to fill these fields
+            # during the final validation.
+            if gcard not in ignore_fields:
+                ignore_fields.append(gcard)
+            if value == 'xor':
+                self.form.fields[f'gcard_{gcard}'] = forms.ChoiceField(choices=choises_list)
+            else:
+                self.form.fields[f'gcard_{gcard}'] = forms.MultipleChoiceField(choices=choises_list,
+                                                                                widget=forms.CheckboxSelectMultiple)
 
     def construct_step_form(self, step):
         keys_step = api.read_certain_key(step, False)
@@ -466,6 +482,7 @@ class WizardClass(SessionWizardView):
         elif isinstance(form, type(GCardinalityForm())):
             api.apply_group_cardinalities()
         api.update_wfml_data('Iterable.Stage', step)
+        api.snap_step_data(step)
         logging.info(f'STEP {step} FINISHED. CARDINALITIES: {card}')
         logging.debug(pprint.pprint(api.show_wfml_data()))
         return self.get_form_step_data(form)
@@ -498,6 +515,34 @@ class WizardClass(SessionWizardView):
         api.update_wfml_data('Flags.ExtraStep', False)
         return self.render(new_form, **kwargs)
 
+    def render_done(self, form, **kwargs):
+        """
+        This method gets called when all forms passed. The method should also
+        re-validate all steps to prevent manipulation. If any form fails to
+        validate, `render_revalidation_failure` should get called.
+        If everything is fine call `done`.
+        """
+        global done
+        done = True
+        final_forms = OrderedDict()
+        # walk through the form list and try to validate the data again.
+        for form_key in self.get_form_list():
+            form_obj = self.get_form(
+                step=form_key,
+                data=self.storage.get_step_data(form_key),
+                files=self.storage.get_step_files(form_key)
+            )
+            # if not form_obj.is_valid():
+            #     return self.render_revalidation_failure(form_key, form_obj, **kwargs)
+            final_forms[form_key] = form_obj
+
+        # render the done view and reset the wizard before returning the
+        # response. This is needed to prevent from rendering done with the
+        # same data twice.
+        done_response = self.done(list(final_forms.values()), form_dict=final_forms, **kwargs)
+        self.storage.reset()
+        return done_response
+
 def initial_page(request, *args, **kwargs):
     """
     ! This method is automatically called to render initial page (GET request)
@@ -511,12 +556,12 @@ def initial_page(request, *args, **kwargs):
         # Create a form instance and populate it with data from the request (binding):
         form = ModelInputForm(request.POST)
         if form.is_valid():
-            global model, model_steps, abstr_clafers, generated_steps, card_initial, card
+            global model, model_steps, abstr_clafers, generated_steps, card_initial, card, step_current
             model = form.cleaned_data['model_field']
             logging.info(f'Model: {model}')
             model_steps = api.initialize_product(model)
             abstr_clafers = api.get_wfml_data('Features.Abstract').keys()
-            global steps_validated, ignore_fields, generated, extra_fields, form_list
+            global steps_validated, ignore_fields, generated, extra_fields, form_list, done
             steps_validated = {}
             ignore_fields = []
             generated = []
@@ -525,6 +570,8 @@ def initial_page(request, *args, **kwargs):
             form_list = OrderedDict()
             card_initial = {}
             card = {}
+            step_current = ''
+            done = False
             for step in range(len(model_steps)):
                 steps_validated.update({step: False})
             return HttpResponseRedirect(reverse('factory_wizard'))
@@ -544,24 +591,32 @@ def factory_wizard(request, *args, **kwargs):
     RETURN
     wizard
     """
-    step_number = len(model_steps)
-    ret_form_list = []
-    if form_list == OrderedDict():
-        ret_form_list.append(FCardinalityForm)
-        ret_form_list.append(GCardinalityForm)
-        for step in range(step_number - 2):
-            ret_form_list.append(WizardStepForm)
+    if request.method == 'POST' and 'mybtn2' in request.POST.keys():
+        print(f'DSADAD {request.POST.keys()}')
+        res = api.save_json()
+        logging.info(f'! Product configuration was not finished. You could always continue from this place: {res}')
+
+        return render(request, 'done.html', {
+            'form_data': res,
+        })
     else:
-        for index in form_list:
-            form = form_list[index]
-            if form == type(FCardinalityForm()):
-                ret_form_list.append(FCardinalityForm)
-            elif form == type(GCardinalityForm()):
-                ret_form_list.append(GCardinalityForm)
-            else:
+        step_number = len(model_steps)
+        ret_form_list = []
+        if form_list == OrderedDict():
+            ret_form_list.append(FCardinalityForm)
+            ret_form_list.append(GCardinalityForm)
+            for step in range(step_number - 2):
                 ret_form_list.append(WizardStepForm)
+        else:
+            for index in form_list:
+                form = form_list[index]
+                if form == type(FCardinalityForm()):
+                    ret_form_list.append(FCardinalityForm)
+                elif form == type(GCardinalityForm()):
+                    ret_form_list.append(GCardinalityForm)
+                else:
+                    ret_form_list.append(WizardStepForm)
 
-    class ReturnClass(WizardClass):
-        form_list = ret_form_list
-    return ReturnClass.as_view()(request, *args, **kwargs)
-
+        class ReturnClass(WizardClass):
+            form_list = ret_form_list
+        return ReturnClass.as_view()(request, *args, **kwargs)

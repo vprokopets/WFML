@@ -14,8 +14,14 @@
         "Mappings": {}
     },
     "Stages": {
-        "Additional": {},
-        "Cumulative": {},
+        "Additional": {
+            "Namespace": {},
+            "Cardinalities": {}
+        },
+        "Cumulative": {
+            "Namespace": {},
+            "Cardinalities": {}
+        },
         "Generated":[],
         "List": []
     },
@@ -47,5 +53,6 @@
         "UnvalidatedFeatures": []
     },
     "Path": "",
-    "Model": ""
+    "Model": "",
+    "ModelDescription": ""
 }

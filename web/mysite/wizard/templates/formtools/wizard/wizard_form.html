@@ -57,4 +57,10 @@
 {% endif %}
 <input type="submit" value="{% trans "Next step" %}"/>
 </form>
+<br>
+<form action="" method="post">{% csrf_token %}
+    {% csrf_token %}
+    <button type="submit" name='mybtn2' value={{done}}>Download configuration pickle.</button>
+</form>
+    
 {% endblock %}

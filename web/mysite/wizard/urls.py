@@ -1,5 +1,5 @@
 from django.urls import path
-from wizard.views import factory_wizard, initial_page
+from wizard.views import factory_wizard, initial_page, done
 
 urlpatterns = [
     path('create_wizard/', factory_wizard, name='factory_wizard'),

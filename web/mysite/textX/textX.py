@@ -4,9 +4,12 @@ import json
 import itertools
 import logging
 import pandas as pd
+import pickle
+import pprint
 import re
 
 from collections import defaultdict
+from deepdiff import DeepDiff
 from functools import reduce
 import networkx as nx
 from os.path import join, dirname, abspath
@@ -1252,6 +1255,27 @@ class textX_API():
             wfml_data_section[path] = data
         logging.debug(f'WFML data for {full_path} was updated. New value is {data}.')
 
+    def clear_wfml_data(self, path: str):
+        global wfml_data
+        full_path = path
+        wfml_data_section = wfml_data
+        if re.match(r'(\w+\.)+\w+', path):
+            for section in path.split('.')[:-1]:
+                wfml_data_section = wfml_data_section[section]
+            path = path.split('.')[-1]
+        else:
+            wfml_data_section = wfml_data
+
+        if isinstance(wfml_data_section[path], dict) or isinstance(wfml_data_section[path], list):
+            wfml_data_section[path].clear()
+        elif isinstance(wfml_data_section[path], str):
+            wfml_data_section[path] = ''
+        elif isinstance(wfml_data_section[path], int) or isinstance(wfml_data_section[path], float):
+            wfml_data_section[path] = 0
+        else:
+            raise TypeError(f'Wrong type of {full_path}.')
+        logging.debug(f'WFML data for {full_path} was cleared.')
+
     def reset_wfml_data(self, path: str):
         global wfml_data, initial_data
         full_path = path
@@ -1268,6 +1292,28 @@ class textX_API():
         wfml_data_section[path] = copy.deepcopy(wfml_data_init[path])
         logging.debug(f'WFML data for {full_path} was reset to {wfml_data_section[path]}.')
         logging.debug(f'{self.get_wfml_data(full_path)}')
+
+    def pickle_wfml_data(self):
+        global wfml_data
+        pickle_data = dict(wfml_data)
+        del pickle_data['Model']
+        with open('configuration.pkl', 'wb') as output:
+            for key in pickle_data.keys():
+                pickle.dump({key: wfml_data[key]}, output, pickle.HIGHEST_PROTOCOL)
+
+    def load_wfml_data(self, pickle_obj):
+        global wfml_data
+        objects = []
+        while True:
+            try:
+                objects.append(pickle.load(pickle_obj))
+            except EOFError:
+                break
+        wfml_data = objects
+
+    def initial_snap(self):
+        self.update_wfml_data('Stages.Cumulative.Namespace', {'-1': copy.deepcopy(self.get_wfml_data('Namespace'))})
+        self.update_wfml_data('Stages.Cumulative.Cardinalities', {'-1': copy.deepcopy(self.get_wfml_data('Cardinalities'))})
 
     def get_wfml_data(self, path: str):
         global wfml_data
@@ -1317,6 +1363,7 @@ class textX_API():
         for key in remove_keys:
             del wfml_data_section[key]
         self.update_wfml_data('Cardinalities.Group', additional_keys)
+        self.update_wfml_data('CardinalitiesInitial.Group', additional_keys)
         self.update_wfml_data('Flags.ExtraStep', True)
 
     def map_namespace(self, wfml_data_section, path: str, record):
@@ -1338,11 +1385,13 @@ class textX_API():
                 if original is None:
                     original = copy.deepcopy(wfml_data_section_init[record.split('.')[-1]])
                 wfml_data_section_sub[mapping.split('.')[-1]] = copy.deepcopy(original)
-                try:
-                    del wfml_data_section_sub[record.split('.')[-1]]
-                except KeyError:
-                    pass
-            logging.debug(f'{wfml_data_section_sub}')
+            try:
+                wfml_data_section_sub = wfml_data_section
+                for part in record.split('.')[:-1]:
+                    wfml_data_section_sub = wfml_data_section_sub[part]
+                del wfml_data_section_sub[record.split('.')[-1]]
+            except KeyError:
+                pass
 
     def apply_group_cardinalities(self):
         for key, value in self.get_wfml_data('Cardinalities.Group').items():
@@ -1493,6 +1542,7 @@ class textX_API():
             logging.debug(f'Result: {x} lies in interval {card}')
             return True
         else:
+            logging.debug(f'Result: {x} not lies in interval {card}')
             return Exception(f'Result: {x} not lies in interval {card}')
 
     def update_abstract_clafers(self):
@@ -1502,7 +1552,33 @@ class textX_API():
         for element in self.get_wfml_data('Model').elements:
             if self.cname(element) == 'Feature':
                 for feature in self.clafer_abstract(element):
-                    self.update_wfml_data('Features.Abstract', {feature: element})
+                    self.update_wfml_data('Features.Abstract', {feature: 'Stub'})
+
+    def snap_step_data(self, step):
+        if step not in self.get_wfml_data('Stages.Cumulative').keys():
+            self.update_wfml_data('Stages.Cumulative.Namespace', {step: {}})
+            self.update_wfml_data('Stages.Cumulative.Cardinalities', {step: {}})
+            self.update_wfml_data('Stages.Additional.Namespace', {step: {}})
+            self.update_wfml_data('Stages.Additional.Cardinalities', {step: {}})
+        self.update_wfml_data(f'Stages.Cumulative.Namespace.{step}', copy.deepcopy(self.get_wfml_data('Namespace')))
+        self.update_wfml_data(f'Stages.Cumulative.Cardinalities.{step}', copy.deepcopy(self.get_wfml_data('Cardinalities')))
+        self.update_wfml_data(f'Stages.Additional.Namespace.{step}',
+                              DeepDiff(self.get_wfml_data(f'Stages.Cumulative.Namespace.{str(int(step) - 1)}'),
+                                       self.get_wfml_data('Namespace')))
+        self.update_wfml_data(f'Stages.Additional.Cardinalities.{step}',
+                              DeepDiff(self.get_wfml_data(f'Stages.Cumulative.Cardinalities.{str(int(step) - 1)}'),
+                                       self.get_wfml_data('Cardinalities')))
+
+    def get_stage_snap(self, step):
+        self.update_wfml_data('Namespace', copy.deepcopy(self.get_wfml_data(f'Stages.Cumulative.Namespace.{str(int(step) - 1)}')))
+        self.update_wfml_data('Cardinalities', copy.deepcopy(self.get_wfml_data(f'Stages.Cumulative.Cardinalities.{str(int(step) - 1)}')))
+
+        for key in self.get_wfml_data('Stages.Cumulative.Namespace').keys():
+            if int(key) >= int(step):
+                self.clear_wfml_data(f'Stages.Cumulative.Namespace.{str(key)}')
+                self.clear_wfml_data(f'Stages.Additional.Namespace.{str(key)}')
+                self.clear_wfml_data(f'Stages.Cumulative.Cardinalities.{str(key)}')
+                self.clear_wfml_data(f'Stages.Additional.Cardinalities.{str(key)}')
 
     def clafer_abstract(self, clafer, prefix=None):
         """
@@ -1653,10 +1729,10 @@ class textX_API():
         for element in self.get_wfml_data('Model').elements:
             for feature in independent_clafers:
                 if element.name == feature and element.abstract is None:
-                    self.update_wfml_data('Features.Independent', {feature: element})
+                    self.update_wfml_data('Features.Independent', {feature: 'Stub'})
             for feature in s:
                 if element.name == feature:
-                    self.update_wfml_data('Features.CrossTree', {feature: element})
+                    self.update_wfml_data('Features.CrossTree', {feature: 'Stub'})
 
         # Create networkx graph object
         G = nx.DiGraph(cross_tree_dependencies)
@@ -1821,9 +1897,6 @@ class textX_API():
 
     def get_namespace(self):
         return self.get_wfml_data('Namespace')
-
-    def get_mappings(self):
-        return mappings
 
     def write_to_keys(self, input_data=None):
         """
@@ -2017,7 +2090,7 @@ class textX_API():
             if original not in self.get_wfml_data('Dependencies.Mappings').keys():
                 copies = []
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
-                if isinstance(full_feature_cardinality, int) and full_feature_cardinality > 1:
+                if isinstance(full_feature_cardinality, int) and full_feature_cardinality != 1:
                     for iteration in range(0, full_feature_cardinality):
                         copies.append(self.name_generation(original, structure, iteration))
                     self.update_wfml_data('Dependencies.Mappings', {original: copies})
@@ -2028,12 +2101,15 @@ class textX_API():
                     self.update_wfml_data('Features.Mapped', {original: len(copies)})
             else:
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
-                if isinstance(full_feature_cardinality, int) and full_feature_cardinality > 1:
+                if isinstance(full_feature_cardinality, int) and full_feature_cardinality != 1:
                     if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings').keys()):
                         copies = []
                         for iteration in range(0, full_feature_cardinality):
                             copies.append(self.name_generation(original, structure, iteration))
                         self.update_wfml_data('Dependencies.Mappings', {original: copies})
+                        self.map_wfml_data('Namespace', original)
+                        if original in self.get_wfml_data('Cardinalities.Group').keys():
+                            self.map_wfml_data('Cardinalities.Group', original)
                         logging.debug(f'Mapping was updated: {original}: {copies}')
 
     def update_global_namespace(self, key: str, value: int):
@@ -2160,13 +2236,15 @@ class textX_API():
 
         self.get_wfml_data('Namespace')
         preprint = copy.deepcopy(self.get_wfml_data('Namespace'))
-        preprocessed_preprint = self.clear_json_trash(preprint)
-        res = self.preprocess_json(preprocessed_preprint)
+        # preprocessed_preprint = self.clear_json_trash(preprint)
+        res = self.preprocess_json(preprint)
         logging.info('Final result was successfully created.')
         logging.debug(f'Final Model {res}')
 
-        with open('test.json', 'w', encoding='utf-8') as f:
+        with open('configuration.json', 'w', encoding='utf-8') as f:
             json.dump(res, f, ensure_ascii=False, indent=4)
+
+        self.pickle_wfml_data()
         return res
 
     def define_features(self):
@@ -2301,11 +2379,11 @@ class textX_API():
         fcards = self.get_wfml_data('Cardinalities.Feature')
         x = {}
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value > 1):
+            if isinstance(value, str) or (isinstance(value, int) and value != 1):
                 x.update({key: len(key.split('.'))})
         sort = dict(sorted(x.items(), key=lambda item: item[1]))
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value > 1):
+            if isinstance(value, str) or (isinstance(value, int) and value != 1):
                 sort.update({key: value})
         return sort
 
@@ -2322,7 +2400,7 @@ class textX_API():
 
         # Read language grammar and create textX metamodel object from it.
         this_folder = dirname(__file__)
-        mm = metamodel_from_file(f'{this_folder}/grammar.tx',
+        mm = metamodel_from_file(join(this_folder, 'grammar.tx'),
                                  classes=[prec0, prec1, prec2, prec3,
                                           prec4, prec5, prec6, prec7, prec8,
                                           prec9, prec10, prec11, prec12, prec13,
@@ -2334,6 +2412,7 @@ class textX_API():
         self.reset_global_variables()
         model = mm.model_from_str(description)
         self.update_wfml_data('Model', model)
+        self.update_wfml_data('ModelDescription', description)
 
         # Export both metamodel and model in .dot format for class diagram construction.
         metamodel_export(mm, join(this_folder, 'metamodel.dot'))
@@ -2361,6 +2440,9 @@ class textX_API():
 
         self.mapping()
         self.clear_abstract_features()
+
+        logging.debug(pprint.pprint(self.show_wfml_data()))
+        self.initial_snap()
         return stages
 
     def solve_constraints(self):
@@ -2369,13 +2451,128 @@ class textX_API():
 
         Performs solving for all types of constraints.
         """
-        for element in self.get_wfml_data('Model').elements:
-            if self.cname(element) == 'Feature' and element.abstract is None:
-                self.update_wfml_data('Flags.Exception', False)
-                self.feature_constraints_validation(element, True)
+        logging.debug('Solving constraints...')
+        print(self.get_wfml_data('Stages.List'))
+        for stage in self.get_wfml_data('Stages.List')[0]:
+            logging.debug(f'For stage {stage}')
+            if stage != "FeatureCardinalities" and stage != "GroupCardinalities":
+                cycles = api.get_cycle_keys()
+                if stage in cycles.keys():
+                    for element in cycles[stage]:
+                        self.validate_clafer(element)
+                else:
+                    self.validate_clafer(stage)
 
-        self.save_json()
+        # self.save_json()
+
+    def key_check(self, part, region, wrong_keys):
+        logging.debug(f'Checking {part} for {region}.')
+        for key, value in part.items():
+            logging.debug(f'Checking {key}.')
+            if len(key.split('.')) > 1:
+                check_value = key.split('.')[-1]
+            else:
+                check_value = key
+            if check_value not in region.keys():
+                additional_check = False
+                if len(check_value.split('_')) > 1 and isinstance(int(check_value.split('_')[1]), int):
+                    additional_check = self.feature_cardinality_check(key)
+                    if additional_check is not True:
+                        wrong_keys.update({key: 'Wrong Feature Cardinality'})
+                else:
+                    additional_check = self.group_cardinality_check(key)
+                    if additional_check is not True:
+                        wrong_keys.update({key: 'Wrong Group Cardinality'})
+                    else:
+                        wrong_keys.update({key: 'No such key exist'})
+            if isinstance(value, dict) and check_value in region.keys():
+                for subkey, subvalue in value.items():
+                    wrong_keys.update(self.key_check({f'{check_value}.{subkey}': subvalue}, region[check_value], wrong_keys))
+        return wrong_keys
+
+    def feature_cardinality_check(self, key):
+        logging.debug(f'Checking feature cardinality for {key}.')
+        base_feature = key.split('_')
+        print(f'Base Feature: {base_feature}')
+        base_subfeature = base_feature[0].split('.')
+        print(f'Base SubFeature: {base_subfeature}')
+        res = ''
+        if len(base_subfeature) > 1:
+            for subfeature in base_subfeature[:-1]:
+                if res == '':
+                    res = subfeature
+                else:
+                    res = f'{res}.{subfeature}'
+            region = self.get_wfml_data(f'Namespace.{res}')
+        else:
+            region = self.get_wfml_data('Namespace')
+        print(f'Region: {region.keys()}')
+        counter = 0
+        for feature in region.keys():
+            if base_subfeature[-1] == feature.split('_')[0]:
+                counter += 1
+        logging.debug(f'Counter: {counter}')
+        result = self.cardinality_solver(base_feature[0], 'fcard', counter)
+        return result
+
+    def group_cardinality_check(self, key):
+        logging.debug(f'Checking group cardinality for {key}.')
+        gcards = self.get_wfml_data('Cardinalities.Group')
+        print(gcards)
+        base_feature = key.split('.')
+        logging.debug(f'Base Feature: {base_feature}')
+        res = ''
+        if len(base_feature) > 1:
+            for subfeature in base_feature[:-1]:
+                if res == '':
+                    res = subfeature
+                else:
+                    res = f'{res}.{subfeature}'
+            region = self.get_wfml_data(f'Namespace.{res}')
+            counter = len(region.keys())
+            if res in gcards.keys():
+                key_cardinality = gcards[base_feature[0]]
+                if key_cardinality == 'xor':
+                    if counter != 1:
+                        result = False
+                    else:
+                        result = True
+                elif key_cardinality == 'or':
+                    result = True
+                else:
+                    result = self.cardinality_solver(key, 'fcard', counter)
+            else:
+                result = True
+        else:
+            result = True
+        return result
+
+    def keys_check(self, configuration, region):
+        keys = {}
+        for key, value in configuration.items():
+            keys = self.key_check({key: value}, region, keys)
+        return keys
+
+    def check_configuration(self, description, configuration):
+        self.initialize_product(description)
+        self.clear_wfml_data('Namespace')
+        for key in configuration.keys():
+            self.update_wfml_data('Namespace', {key: configuration[key]})
+
+        self.solve_constraints()
+        logging.debug(pprint.pprint(self.show_wfml_data()))
+        keys = self.keys_check(configuration, self.get_wfml_data('NamespaceInitial'))
+
+        print(keys)
 
 
 if __name__ == '__main__':
+    this_folder = dirname(__file__)
+    print(this_folder)
+    description = open(join(this_folder, 'configuration.tx')).read()
+    print(description)
+    with open(join(this_folder, 'configuration.json')) as json_file:
+        configuration = json.load(json_file)
+    api = textX_API()
+    api.check_configuration(description, configuration)
     pass
