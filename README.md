@@ -1,4 +1,4 @@
-![alt text](WFML_logo(1).png)
+![alt text](WFML_logo.png)
 
 
 **WFML** (_Wizard Feature Modelling Language_) is a DSL that aims at variability management of dynamic multi-model surrogate optimization.
