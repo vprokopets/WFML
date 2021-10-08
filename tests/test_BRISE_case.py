@@ -3,11 +3,15 @@
 from os.path import dirname, abspath
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver import FirefoxOptions
 
 
 class TestBRISEUPD():
     def setup_method(self):
-        self.driver = webdriver.Firefox(executable_path=f'{dirname(dirname(abspath(__file__)))}/geckodriver')
+        opts = FirefoxOptions()
+        opts.add_argument("--headless")
+        self.driver = webdriver.Firefox(options=opts,
+                                        executable_path=f'{dirname(dirname(abspath(__file__)))}/geckodriver')
         self.vars = {}
 
     def teardown_method(self):
