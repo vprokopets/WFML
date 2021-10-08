@@ -3,7 +3,8 @@
 
 **WFML** (_Wizard Feature Modelling Language_) is a DSL that aims at variability management of dynamic multi-model surrogate optimization.
 
-![GitHub](https://img.shields.io/github/license/vprokopets/WFML) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/vprokopets/WFML) [![CI build](https://github.com/vprokopets/WFML/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/vprokopets/WFML/actions/workflows/python-app.yml)
+![GitHub](https://img.shields.io/github/license/vprokopets/WFML?label=license) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/vprokopets/WFML) [![CI build](https://github.com/vprokopets/WFML/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/vprokopets/WFML/actions/workflows/python-app.yml)
+
 ## Main implementation moments
 
 #### A basis for grammar 
