@@ -1,6 +1,5 @@
 import copy
 import logging
-import os
 
 from core.wfml import textX_API
 from django.shortcuts import render
