@@ -44,4 +44,5 @@ jobs:
         seleniumbase install geckodriver
     - name: Test with pytest
       run: |
-        pytest
+        ./wfml.sh up &
+        pytest &
