@@ -1,0 +1,115 @@
+{
+    "General": {
+        "NumberOfWorkers": 3,
+        "result_storage": "./Results/"
+    },
+    "SelectionAlgorithm": {
+        "type": "Sobol"
+    },
+    "OD": {
+        "Dixon": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 30
+        },
+        "Grubbs": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Chauvenet": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Quartiles": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Mad": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        }
+    },
+    "Repeater": {
+        "AcceptableErrorBasedRepeater": {
+            "MaxFailedTasksPerConfiguration": 5,
+            "BaseAcceptableErrors": [
+                5
+            ],
+            "ConfidenceLevels": [
+                0.95
+            ],
+            "DevicesScaleAccuracies": [
+                0
+            ],
+            "DevicesAccuracyClasses": [
+                0
+            ],
+            "ExperimentAwareness": {
+                "isEnabled": true,
+                "MaxAcceptableErrors": [
+                    50
+                ],
+                "RatiosMax": [
+                    10
+                ]
+            },
+            "MinTasksPerConfiguration": 2,
+            "MaxTasksPerConfiguration": 10
+        }
+    },
+    "Predictor": {
+        "WindowSize": 1.0,
+        "Models": {
+            "TPE": {
+                "Parameters": {
+                    "TopNPercent": 30,
+                    "RandomFraction": 0,
+                    "BandwidthFactor": 3,
+                    "MinBandwirth": 0.001,
+                    "SamplingSize": 96
+                }
+            }
+        }
+    },
+    "StopConditionTriggerLogic": {
+        "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased",
+        "InspectionParameters": {
+            "RepetitionPerion": 1,
+            "TimeUnit": "seconds"
+        }
+    },
+    "StopCondition": {
+        "QuantityBasedSC": {
+            "Parameters": {
+                "MaxConfigs": 15
+            },
+            "Name": "QBSC",
+            "Type": "QuantityBased"
+        },
+        "GuaranteedSC": {
+            "Name": "GSC",
+            "Type": "Guaranted"
+        },
+        "BadConfigurationBasedSC": {
+            "Parameters": {
+                "MaxBadConfigurations": 10
+            },
+            "Name": "BCBSC",
+            "Type": "BadConfigurationBased"
+        },
+        "ImprovementBasedSC": {
+            "Parameters": {
+                "MaxConfigsWithoutImprovement": 5
+            },
+            "Name": "IBSC",
+            "Type": "ImprovementBased"
+        },
+        "TimeBasedSC": {
+            "Parameters": {
+                "MaxRunTime": 10,
+                "TimeUnit": "minutes"
+            },
+            "Name": "TBSC",
+            "Type": "TimeBased"
+        }
+    }
+}
