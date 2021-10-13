@@ -6,7 +6,13 @@
     "SelectionAlgorithm": {
         "type": "Sobol"
     },
-    "OD": {
+    "DefaultConfigurationHandler": {
+        "type": "Random"
+    },
+    "DomainDescription": {
+        "DataFile": "./Resources/EnergyExperiment/EnergyExperimentData.json"
+    },
+    "OutliersDetection": {
         "Dixon": {
             "MinActiveNumberOfTasks": 3,
             "MaxActiveNumberOfTasks": 30
@@ -31,26 +37,14 @@
     "Repeater": {
         "AcceptableErrorBasedRepeater": {
             "MaxFailedTasksPerConfiguration": 5,
-            "BaseAcceptableErrors": [
-                5
-            ],
-            "ConfidenceLevels": [
-                0.95
-            ],
-            "DevicesScaleAccuracies": [
-                0
-            ],
-            "DevicesAccuracyClasses": [
-                0
-            ],
+            "BaseAcceptableErrors": 5,
+            "ConfidenceLevels": 0.95,
+            "DevicesScaleAccuracies": 0,
+            "DevicesAccuracyClasses": 0,
             "ExperimentAwareness": {
                 "isEnabled": true,
-                "MaxAcceptableErrors": [
-                    50
-                ],
-                "RatiosMax": [
-                    10
-                ]
+                "MaxAcceptableErrors": 50,
+                "RatiosMax": 10
             },
             "MinTasksPerConfiguration": 2,
             "MaxTasksPerConfiguration": 10
@@ -59,21 +53,24 @@
     "Predictor": {
         "WindowSize": 1.0,
         "Models": {
-            "TPE": {
-                "Parameters": {
-                    "TopNPercent": 30,
-                    "RandomFraction": 0,
-                    "BandwidthFactor": 3,
-                    "MinBandwirth": 0.001,
-                    "SamplingSize": 96
+            "Model": {
+                "TPE": {
+                    "Parameters": {
+                        "TopNPercent": 30,
+                        "RandomFraction": 0,
+                        "BandwidthFactor": 3,
+                        "MinBandwirth": 0.001,
+                        "SamplingSize": 96
+                    },
+                    "Type": "brise.TreeParzenEstimator"
                 }
             }
         }
     },
     "StopConditionTriggerLogic": {
-        "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased",
+        "Expression": "\"(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased\"",
         "InspectionParameters": {
-            "RepetitionPerion": 1,
+            "RepetitionPeriod": 1,
             "TimeUnit": "seconds"
         }
     },
@@ -82,25 +79,25 @@
             "Parameters": {
                 "MaxConfigs": 15
             },
-            "Name": "QBSC",
+            "Name": "QuantityBased",
             "Type": "QuantityBased"
         },
         "GuaranteedSC": {
-            "Name": "GSC",
+            "Name": "Guaranteed",
             "Type": "Guaranted"
         },
         "BadConfigurationBasedSC": {
             "Parameters": {
                 "MaxBadConfigurations": 10
             },
-            "Name": "BCBSC",
+            "Name": "BadConfigurationBased",
             "Type": "BadConfigurationBased"
         },
         "ImprovementBasedSC": {
             "Parameters": {
                 "MaxConfigsWithoutImprovement": 5
             },
-            "Name": "IBSC",
+            "Name": "ImprovementBased",
             "Type": "ImprovementBased"
         },
         "TimeBasedSC": {
@@ -108,8 +105,109 @@
                 "MaxRunTime": 10,
                 "TimeUnit": "minutes"
             },
-            "Name": "TBSC",
+            "Name": "TimeBased",
             "Type": "TimeBased"
+        }
+    },
+    "TransferLearning": {
+        "isEnabled": true,
+        "TransferExpediencyDetermination": {
+            "ComparatorType": "NormDifferenceComparator",
+            "MinNumberOfSamples": 10,
+            "NumberOfSimilarExperiments": {
+                "Categorical": {
+                    "Value": "use_clustering"
+                }
+            },
+            "ClusteringAlgorithm": "MeanShiftClustering"
+        },
+        "MultiTaskLearning": {
+            "isEnabled": true,
+            "isFewShotEnabled": true,
+            "OldNewConfigsRatio": 2.416424349152367,
+            "TransferBestConfigsOnly": true,
+            "TransferFromMostSimilarExperimentsFirst": false
+        },
+        "DynamicModelsRecommendation": {
+            "isEnabled": true,
+            "isFewShotEnabled": true,
+            "RecommendationGranularity": {
+                "Finite": {
+                    "Value": 15
+                }
+            }
+        }
+    },
+    "Context": {
+        "Experiment": {
+            "TaskConfiguration": {
+                "TaskName": "energy_consumption",
+                "Scenario": {
+                    "FromFile": {
+                        "WsFile": "search_space_96/Radix-500mio_full.csv"
+                    }
+                },
+                "Objectives": {
+                    "Name": "energy",
+                    "DataType": "ffloat",
+                    "Minimization": true,
+                    "Priority": 1,
+                    "ModelPriority": 1,
+                    "ExpectedValuesRange": [
+                        0.0,
+                        150000.0
+                    ],
+                    "MaxTimeToRunTask": 10
+                }
+            },
+            "Experiment": {
+                "Energy": {
+                    "Frequency": {
+                        "Type": "FloatOrdinalHyperparameter",
+                        "Categories": [
+                            1200.0,
+                            1300.0,
+                            1400.0,
+                            1600.0,
+                            1700.0,
+                            1800.0,
+                            1900.0,
+                            2000.0,
+                            2200.0,
+                            2300.0,
+                            2400.0,
+                            2500.0,
+                            2700.0,
+                            2800.0,
+                            2900.0,
+                            2901.0
+                        ],
+                        "Default": 2900.0,
+                        "Model": null
+                    },
+                    "Threads": {
+                        "Type": "IntegerOrdinalHyperparameter",
+                        "Categories": [
+                            1,
+                            2,
+                            4,
+                            8,
+                            16,
+                            32
+                        ],
+                        "Default": 32,
+                        "Model": null
+                    },
+                    "Type": "NominalHyperparameter"
+                },
+                "Type": "NominalHyperparameter"
+            }
+        },
+        "Model": {
+            "Structure": {
+                "Flat": {}
+            },
+            "ModelStructure": null
         }
     }
 }
