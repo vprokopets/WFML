@@ -57,7 +57,7 @@
                 "TPE": {
                     "Parameters": {
                         "TopNPercent": 30,
-                        "RandomFraction": 0,
+                        "RandomFraction": 3,
                         "BandwidthFactor": 3,
                         "MinBandwirth": 0.001,
                         "SamplingSize": 96
@@ -122,18 +122,21 @@
             "ClusteringAlgorithm": "MeanShiftClustering"
         },
         "MultiTaskLearning": {
-            "isEnabled": true,
-            "isFewShotEnabled": true,
-            "OldNewConfigsRatio": 2.416424349152367,
-            "TransferBestConfigsOnly": true,
-            "TransferFromMostSimilarExperimentsFirst": false
+            "Standard": {
+                "Filters": {
+                    "FewShot": true
+                },
+                "OldNewConfigsRatio": 2.416424349152367,
+                "TransferBestConfigsOnly": true,
+                "TransferFromMostSimilarExperimentsFirst": false
+            }
         },
-        "DynamicModelsRecommendation": {
-            "isEnabled": true,
-            "isFewShotEnabled": true,
-            "RecommendationGranularity": {
-                "Finite": {
-                    "Value": 15
+        "ModelsRecommendation": {
+            "DynamicModelsRecommendation": {
+                "RecommendationGranularity": {
+                    "Finite": {
+                        "Value": 15
+                    }
                 }
             }
         }
@@ -149,7 +152,7 @@
                 },
                 "Objectives": {
                     "Name": "energy",
-                    "DataType": "ffloat",
+                    "DataType": "float",
                     "Minimization": true,
                     "Priority": 1,
                     "ModelPriority": 1,

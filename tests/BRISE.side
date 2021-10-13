@@ -1,0 +1,1468 @@
+{
+  "id": "dbf3f29e-e002-4871-bb9b-e4fa07560bd2",
+  "version": "2.0",
+  "name": "BRISE",
+  "url": "http://127.0.0.1:8000",
+  "tests": [{
+    "id": "c51088f8-a9ab-4a04-8801-b3f637c88dea",
+    "name": "BRISE",
+    "commands": [{
+      "id": "c9d05f07-5e0b-4b71-b2a7-34e34bbbfed5",
+      "comment": "",
+      "command": "open",
+      "target": "/wizard/test/",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "df3cdf8c-1078-4fed-be12-206b6c42a25d",
+      "comment": "",
+      "command": "setWindowSize",
+      "target": "1848x1053",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "ad5b34b4-36e7-4a3e-8344-d71d4dc0fc6c",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_model_field",
+      "targets": [
+        ["id=id_model_field", "id"],
+        ["name=model_field", "name"],
+        ["css=#id_model_field", "css:finder"],
+        ["xpath=//textarea[@id='id_model_field']", "xpath:attributes"],
+        ["xpath=//textarea", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "11fc8d3a-0a36-4b74-8052-09ac6f0dae23",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_model_field",
+      "targets": [
+        ["id=id_model_field", "id"],
+        ["name=model_field", "name"],
+        ["css=#id_model_field", "css:finder"],
+        ["xpath=//textarea[@id='id_model_field']", "xpath:attributes"],
+        ["xpath=//textarea", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "d5161b10-61a3-4872-b864-246428208eb3",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_model_field",
+      "targets": [
+        ["id=id_model_field", "id"],
+        ["name=model_field", "name"],
+        ["css=#id_model_field", "css:finder"],
+        ["xpath=//textarea[@id='id_model_field']", "xpath:attributes"],
+        ["xpath=//textarea", "xpath:position"]
+      ],
+      "value": "General {\\n    NumberOfWorkers -> integer\\n    result_storage -> string\\n    [NumberOfWorkers >= 1]\\n}\\n\\nSelectionAlgorithm {\\n    type -> string\\n    [type in {Sobol, MersenneTwister}]\\n}\\n\\nDefaultConfigurationHandler {\\n    type -> string\\n    [type in {AutoModel, Random}]\\n}\\n\\nDomainDescription {\\n    DataFile -> string\\n}\\n\\n\\nabstract OutliersDetector 5 {\\n    MinActiveNumberOfTasks -> integer\\n    MaxActiveNumberOfTasks -> integer\\n    [MinActiveNumberOfTasks >= 3]\\n    [MaxActiveNumberOfTasks >= 3]\\n    [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]\\n}\\n\\nor OutliersDetection{\\n    Dixon : OutliersDetector\\n    Grubbs : OutliersDetector\\n    Chauvenet : OutliersDetector\\n    Quartiles : OutliersDetector\\n    Mad : OutliersDetector\\n}\\n\\nabstract AbstrRepeater {\\n    MinTasksPerConfiguration -> integer\\n    MaxTasksPerConfiguration -> integer\\n    [MinTasksPerConfiguration <= MaxTasksPerConfiguration]\\n}\\n\\nxor Repeater{\\n    DefaultRepeater : AbstrRepeater {\\n        [MinTasksPerConfiguration >= 2]\\n        [MaxTasksPerConfiguration >= 2]\\n    }\\n    AcceptableErrorBasedRepeater: AbstrRepeater 1{\\n        [MinTasksPerConfiguration >= 1]\\n        [MaxTasksPerConfiguration >= 1]\\n        MaxFailedTasksPerConfiguration -> integer\\n        BaseAcceptableErrors -> integer\\n        ConfidenceLevels -> float\\n        DevicesScaleAccuracies -> integer\\n        DevicesAccuracyClasses -> integer\\n        ExperimentAwareness {\\n            isEnabled -> boolean\\n            MaxAcceptableErrors -> integer\\n            RatiosMax -> integer\\n        }\\n    }\\n}\\n\\nabstract Model {\\n    Type -> predefined\\n}\\n\\nabstract TreeParzenEstimator: Model {\\n    Parameters {\\n        TopNPercent -> integer\\n        RandomFraction -> integer\\n        BandwidthFactor -> integer\\n        MinBandwirth -> float\\n        SamplingSize -> integer\\n    }\\n    [Type = 'brise.TreeParzenEstimator']\\n}\\n\\nabstract MultiArmedBandit: Model {\\n    Parameters {\\n        xor cType{\\n            int\\n            float\\n            std\\n        }\\n        c -> float\\n        [if gcard.cType == float then 0 <= c]\\n        [if gcard.cType == float then c <= 1]\\n        [if gcard.cType == std then c = std]\\n    }\\n    [type = 'brise.MultiArmedBandit']\\n}\\n\\nabstract ModelMock\\n\\nabstract SciKitLearn {\\n    Type -> string\\n    Parameters {\\n        SamplingSize -> integer\\n        MinimalScore -> float\\n        CrossValidationSplits -> integer\\n        TestSize -> float\\n        DataPreprocessing {\\n            OrdinalHyperparameter -> string\\n            NominalHyperparameter -> string\\n            IntegerHyperparameter -> string\\n            FloatHyperparameter -> string\\n        }\\n        UnderlyingModelParameters {\\n            n_iter -> integer\\n            tol -> float\\n            normalize -> boolean\\n        }\\n    }\\n}\\n\\nPredictor {\\n    WindowSize -> float\\n    Models {\\n        xor Model {\\n            TPE : TreeParzenEstimator\\n            MAB : MultiArmedBandit\\n            MM : ModelMock\\n            skLearn : SciKitLearn\\n        }\\n    }\\n}\\n\\nStopConditionTriggerLogic {\\n    Expression -> string\\n    InspectionParameters {\\n        RepetitionPeriod -> integer\\n        TimeUnit -> string\\n        [RepetitionPeriod > 0]\\n        [TimeUnit in {seconds, minutes, hours, days}]\\n    }\\n}\\n\\nabstract SC {\\n    Name -> string\\n    Type -> predefined\\n}\\n\\nStopCondition {\\n    QuantityBasedSC : SC 1..5{\\n        Parameters {\\n            MaxConfigs -> integer\\n            [MaxConfigs > 0]\\n        }\\n        [Type = QuantityBased]\\n    }\\n\\n    GuaranteedSC : SC 1 {\\n        [Type = Guaranted]\\n    }\\n\\n    BadConfigurationBasedSC : SC 1..5{\\n        Parameters {\\n            MaxBadConfigurations -> integer\\n            [MaxBadConfigurations > 0]\\n        }\\n        [Type = BadConfigurationBased]\\n    }\\n\\n    ImprovementBasedSC : SC 1..5{\\n        Parameters {\\n            MaxConfigsWithoutImprovement -> integer\\n            [MaxConfigsWithoutImprovement > 0]\\n        }\\n        [Type = ImprovementBased]\\n    }\\n\\n    TimeBasedSC : SC 1..5{\\n        Parameters {\\n            MaxRunTime -> integer\\n            TimeUnit -> string\\n            [MaxRunTime > 0]\\n            [TimeUnit in {seconds, minutes, hours, days}]\\n        }\\n        [Type = TimeBased]\\n    }\\n}\\n\\n\\nTransferLearning{\\n    isEnabled -> boolean\\n    TransferExpediencyDetermination{\\n        ComparatorType -> string\\n        MinNumberOfSamples -> integer\\n        xor NumberOfSimilarExperiments {\\n            Numeric {\\n                Value -> integer\\n            }\\n            Categorical{\\n                Value -> predefined\\n                [Value = 'use_clustering']\\n            }\\n        }\\n        ClusteringAlgorithm -> predefined\\n        [ClusteringAlgorithm = MeanShiftClustering]\\n    }\\n    MultiTaskLearning ?{\\n        Standard{\\n            Filters{\\n                FewShot -> boolean\\n            }\\n            OldNewConfigsRatio -> float\\n            TransferBestConfigsOnly -> boolean\\n            TransferFromMostSimilarExperimentsFirst -> boolean\\n            [OldNewConfigsRatio >= 0.1]\\n        }      \\n    }\\n    ModelsRecommendation ?{\\n        DynamicModelsRecommendation{\\n            xor RecommendationGranularity {\\n                Finite{\\n                    Value -> integer\\n                    [Value >= 1]\\n                }\\n                Infinite{\\n                    Value -> predefined\\n                    [Value = 'inf']\\n                }\\n                TimeToBuildModelThreshold -> float\\n                TimeUnit -> string\\n                ThresholdType -> string\\n                PerformanceMetric -> string\\n                [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]\\n                [ThresholdType in {'hard', 'soft'}]\\n                [PerformanceMetric in {'AverageRelativeImprovement'}]\\n            }\\n        }\\n    }\\n}\\n\\nabstract NominalHyperparameter {\\n    Type -> predefined\\n    [Type = NominalHyperparameter]\\n}\\n\\nabstract MDNominalHyperparameter {\\n    Type -> predefined\\n    Model -> string\\n    [Type = NominalHyperparameter]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nabstract OrdinalHyperparameter {\\n    Type -> predefined\\n    Categories -> predefined\\n    Default -> string\\n    Model -> predefined\\n    [Type = OrdinalHyperparameter]\\n    [Default in Categories]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nabstract IntegerOrdinalHyperparameter {\\n    Type -> predefined\\n    Categories -> predefined\\n    Default -> integer\\n    Model -> predefined\\n    [Type = IntegerOrdinalHyperparameter]\\n    [Default in Categories]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nabstract FloatOrdinalHyperparameter {\\n    Type -> predefined\\n    Categories -> predefined\\n    Default -> float\\n    Model -> predefined\\n    [Type = FloatOrdinalHyperparameter]\\n    [Default in Categories]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nabstract FloatHyperparameter {\\n    Type -> predefined\\n    Lower -> predefined\\n    Upper -> predefined\\n    Default -> float\\n    Model -> predefined\\n    [Default >= Lower]\\n    [Default <= Upper]\\n    [Type = FloatHyperparameter]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nabstract IntegerHyperparameter {\\n    Name -> predefined\\n    Type -> predefined\\n    Lower -> predefined\\n    Upper -> predefined\\n    Default -> integer\\n    Model -> predefined\\n    [Default >= Lower]\\n    [Default <= Upper]\\n    [Type = IntegerHyperparameter]\\n    // [Model in childs.Predictor.Models]\\n}\\n\\nContext {\\n    Experiment {\\n        TaskConfiguration {\\n            TaskName -> string\\n            xor Scenario {\\n                FromFile {\\n                    WsFile -> string\\n                    AdditionalParameter * {\\n                        Name -> string\\n                        Value -> string\\n                    }\\n                }\\n                FromDescription {\\n                    Problem -> string\\n                    InitializationParameters -> string\\n                    Budget {\\n                        Type -> string\\n                        Amount -> integer\\n                    }\\n                    Hyperparameters -> string\\n                }\\n            }\\n            Objectives + {\\n            Name -> string\\n            DataType -> string\\n            Minimization -> boolean\\n            Priority -> integer\\n            ModelPriority -> integer\\n            ExpectedValuesRange -> floatArray\\n            MaxTimeToRunTask -> integer ?\\n            }\\n            [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Context.Experiment.TaskConfiguration.Objectives]\\n        }\\n\\n        Experiment : NominalHyperparameter {\\n            Energy: NominalHyperparameter {\\n                Frequency: FloatOrdinalHyperparameter{\\n                    [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]\\n                }\\n                Threads: IntegerOrdinalHyperparameter{\\n                    [Categories = {1, 2, 4, 8, 16, 32}]\\n                }\\n            }\\n        }\\n\\n    }\\n    Model {\\n        xor Structure {\\n           Flat\\n           Hierarchical\\n        }\\n        ModelStructure -> predefined\\n        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = 2]\\n        [ModelStructure = gcard.Context.Model.Structure]\\n    }\\n}\\n"
+    }, {
+      "id": "6fdce9f3-10ed-4240-94fa-bcf5159e5d67",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(3)",
+      "targets": [
+        ["css=input:nth-child(3)", "css:finder"],
+        ["xpath=//input[@value='Submit']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "58b2a125-f6c5-4a3f-9726-ffda4330756e",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_StopCondition.QuantityBasedSC",
+      "targets": [
+        ["id=id_0-fcard_StopCondition.QuantityBasedSC", "id"],
+        ["name=0-fcard_StopCondition.QuantityBasedSC", "name"],
+        ["css=#id_0-fcard_StopCondition\\.QuantityBasedSC", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_StopCondition.QuantityBasedSC']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "47108aa1-3ee9-43de-a84e-fa87434bd8e3",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_StopCondition.BadConfigurationBasedSC",
+      "targets": [
+        ["id=id_0-fcard_StopCondition.BadConfigurationBasedSC", "id"],
+        ["name=0-fcard_StopCondition.BadConfigurationBasedSC", "name"],
+        ["css=#id_0-fcard_StopCondition\\.BadConfigurationBasedSC", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_StopCondition.BadConfigurationBasedSC']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "2c4e1746-a0c5-421c-8656-b7a1da224ce1",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_StopCondition.ImprovementBasedSC",
+      "targets": [
+        ["id=id_0-fcard_StopCondition.ImprovementBasedSC", "id"],
+        ["name=0-fcard_StopCondition.ImprovementBasedSC", "name"],
+        ["css=#id_0-fcard_StopCondition\\.ImprovementBasedSC", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_StopCondition.ImprovementBasedSC']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "bf282323-8e45-4903-b362-b107ba792372",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_StopCondition.TimeBasedSC",
+      "targets": [
+        ["id=id_0-fcard_StopCondition.TimeBasedSC", "id"],
+        ["name=0-fcard_StopCondition.TimeBasedSC", "name"],
+        ["css=#id_0-fcard_StopCondition\\.TimeBasedSC", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_StopCondition.TimeBasedSC']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "09132fab-07db-49c6-9c2f-3e7fcca41345",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_TransferLearning.MultiTaskLearning",
+      "targets": [
+        ["id=id_0-fcard_TransferLearning.MultiTaskLearning", "id"],
+        ["name=0-fcard_TransferLearning.MultiTaskLearning", "name"],
+        ["css=#id_0-fcard_TransferLearning\\.MultiTaskLearning", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_TransferLearning.MultiTaskLearning']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "0b581aa3-900d-4f7a-8b11-33e28430d75b",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_TransferLearning.ModelsRecommendation",
+      "targets": [
+        ["id=id_0-fcard_TransferLearning.ModelsRecommendation", "id"],
+        ["name=0-fcard_TransferLearning.ModelsRecommendation", "name"],
+        ["css=#id_0-fcard_TransferLearning\\.ModelsRecommendation", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_TransferLearning.ModelsRecommendation']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "908834fe-b361-4e61-9ae3-b1a03cb8f891",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter",
+      "targets": [
+        ["id=id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter", "id"],
+        ["name=0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter", "name"],
+        ["css=#id_0-fcard_Context\\.Experiment\\.TaskConfiguration\\.Scenario\\.FromFile\\.AdditionalParameter", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter']", "xpath:attributes"],
+        ["xpath=//div[7]/input", "xpath:position"]
+      ],
+      "value": "0"
+    }, {
+      "id": "b60ec98e-daa9-4871-a31c-78e1897ff625",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask",
+      "targets": [
+        ["id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask", "id"],
+        ["name=0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask", "name"],
+        ["css=#id_0-fcard_Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.MaxTimeToRunTask", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask']", "xpath:attributes"],
+        ["xpath=//div[8]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "63199826-4953-47c6-9249-e7ac4e158a96",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives",
+      "targets": [
+        ["id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives", "id"],
+        ["name=0-fcard_Context.Experiment.TaskConfiguration.Objectives", "name"],
+        ["css=#id_0-fcard_Context\\.Experiment\\.TaskConfiguration\\.Objectives", "css:finder"],
+        ["xpath=//input[@id='id_0-fcard_Context.Experiment.TaskConfiguration.Objectives']", "xpath:attributes"],
+        ["xpath=//div[9]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "99329078-1e41-4af6-a98e-0dee3afd8fa4",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(12)",
+      "targets": [
+        ["css=input:nth-child(12)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "8a2d59a0-963b-476d-9381-20d97228f6ad",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_OutliersDetection_0",
+      "targets": [
+        ["id=id_1-gcard_OutliersDetection_0", "id"],
+        ["name=1-gcard_OutliersDetection", "name"],
+        ["css=#id_1-gcard_OutliersDetection_0", "css:finder"],
+        ["xpath=//input[@id='id_1-gcard_OutliersDetection_0']", "xpath:attributes"],
+        ["xpath=//ul[@id='id_1-gcard_OutliersDetection']/li/label/input", "xpath:idRelative"],
+        ["xpath=//label/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "44c2d055-2e36-41f8-bb02-bedb2482ebf2",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_OutliersDetection_1",
+      "targets": [
+        ["id=id_1-gcard_OutliersDetection_1", "id"],
+        ["css=#id_1-gcard_OutliersDetection_1", "css:finder"],
+        ["xpath=//input[@id='id_1-gcard_OutliersDetection_1']", "xpath:attributes"],
+        ["xpath=//ul[@id='id_1-gcard_OutliersDetection']/li[2]/label/input", "xpath:idRelative"],
+        ["xpath=//li[2]/label/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "3caf2672-30d7-4c99-ab10-129fc49f2f48",
+      "comment": "",
+      "command": "click",
+      "target": "css=li:nth-child(3) > label",
+      "targets": [
+        ["css=li:nth-child(3) > label", "css:finder"],
+        ["xpath=//ul[@id='id_1-gcard_OutliersDetection']/li[3]/label", "xpath:idRelative"],
+        ["xpath=//li[3]/label", "xpath:position"],
+        ["xpath=//label[contains(.,' Chauvenet')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "a7828612-cb23-448d-b441-f20785c417d0",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_OutliersDetection_3",
+      "targets": [
+        ["id=id_1-gcard_OutliersDetection_3", "id"],
+        ["css=#id_1-gcard_OutliersDetection_3", "css:finder"],
+        ["xpath=//input[@id='id_1-gcard_OutliersDetection_3']", "xpath:attributes"],
+        ["xpath=//ul[@id='id_1-gcard_OutliersDetection']/li[4]/label/input", "xpath:idRelative"],
+        ["xpath=//li[4]/label/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "b5b30466-0e16-4200-b883-ad5933b7024b",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_OutliersDetection_4",
+      "targets": [
+        ["id=id_1-gcard_OutliersDetection_4", "id"],
+        ["css=#id_1-gcard_OutliersDetection_4", "css:finder"],
+        ["xpath=//input[@id='id_1-gcard_OutliersDetection_4']", "xpath:attributes"],
+        ["xpath=//ul[@id='id_1-gcard_OutliersDetection']/li[5]/label/input", "xpath:idRelative"],
+        ["xpath=//li[5]/label/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "b6743b23-1356-4d63-b6b2-f82145c13150",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_Repeater",
+      "targets": [
+        ["id=id_1-gcard_Repeater", "id"],
+        ["name=1-gcard_Repeater", "name"],
+        ["css=#id_1-gcard_Repeater", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_Repeater']", "xpath:attributes"],
+        ["xpath=//select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "61ed5132-8f9a-48ba-b05c-e44026ba7771",
+      "comment": "",
+      "command": "select",
+      "target": "id=id_1-gcard_Repeater",
+      "targets": [],
+      "value": "label=AcceptableErrorBasedRepeater"
+    }, {
+      "id": "f1bb3495-9eb5-4e3c-8758-d398ffe39078",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_Repeater > option:nth-child(2)",
+      "targets": [
+        ["css=#id_1-gcard_Repeater > option:nth-child(2)", "css:finder"],
+        ["xpath=//option[@value='AcceptableErrorBasedRepeater']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_Repeater']/option[2]", "xpath:idRelative"],
+        ["xpath=//option[2]", "xpath:position"],
+        ["xpath=//option[contains(.,'AcceptableErrorBasedRepeater')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "6e6b3e32-7d18-4764-a789-47fd8c5dbc52",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType",
+      "targets": [
+        ["id=id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType", "id"],
+        ["name=1-gcard_Predictor.Models.Model.MAB.Parameters.cType", "name"],
+        ["css=#id_1-gcard_Predictor\\.Models\\.Model\\.MAB\\.Parameters\\.cType", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType']", "xpath:attributes"],
+        ["xpath=//div[3]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "1b72001e-d99a-43c2-9521-dc2f8912f790",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_Predictor\\.Models\\.Model\\.MAB\\.Parameters\\.cType > option:nth-child(1)",
+      "targets": [
+        ["css=#id_1-gcard_Predictor\\.Models\\.Model\\.MAB\\.Parameters\\.cType > option:nth-child(1)", "css:finder"],
+        ["xpath=//option[@value='int']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType']/option", "xpath:idRelative"],
+        ["xpath=//div[3]/select/option", "xpath:position"],
+        ["xpath=//option[contains(.,'int')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "5c24aea1-0f4d-49dd-a22f-2c9c70db0da6",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_Predictor.Models.Model",
+      "targets": [
+        ["id=id_1-gcard_Predictor.Models.Model", "id"],
+        ["name=1-gcard_Predictor.Models.Model", "name"],
+        ["css=#id_1-gcard_Predictor\\.Models\\.Model", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_Predictor.Models.Model']", "xpath:attributes"],
+        ["xpath=//div[4]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "e94bbe2b-8ee1-48f9-a114-d68adcd2b953",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_Predictor\\.Models\\.Model > option:nth-child(1)",
+      "targets": [
+        ["css=#id_1-gcard_Predictor\\.Models\\.Model > option:nth-child(1)", "css:finder"],
+        ["xpath=//option[@value='TPE']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_Predictor.Models.Model']/option", "xpath:idRelative"],
+        ["xpath=//div[4]/select/option", "xpath:position"],
+        ["xpath=//option[contains(.,'TPE')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "c32efab3-afe2-4bbd-a216-1569e338352d",
+      "comment": "",
+      "command": "click",
+      "target": "css=.form-group:nth-child(7)",
+      "targets": [
+        ["css=.form-group:nth-child(7)", "css:finder"],
+        ["xpath=//div[6]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "059fab4f-1403-4f08-9f36-b2e0cab285c8",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments",
+      "targets": [
+        ["id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments", "id"],
+        ["name=1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments", "name"],
+        ["css=#id_1-gcard_TransferLearning\\.TransferExpediencyDetermination\\.NumberOfSimilarExperiments", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments']", "xpath:attributes"],
+        ["xpath=//div[5]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "8885a644-e09e-4ed0-bc85-e75ea2111804",
+      "comment": "",
+      "command": "select",
+      "target": "id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments",
+      "targets": [],
+      "value": "label=Categorical"
+    }, {
+      "id": "2e5dc02c-42ad-4e26-b543-d95082815a25",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_TransferLearning\\.TransferExpediencyDetermination\\.NumberOfSimilarExperiments > option:nth-child(2)",
+      "targets": [
+        ["css=#id_1-gcard_TransferLearning\\.TransferExpediencyDetermination\\.NumberOfSimilarExperiments > option:nth-child(2)", "css:finder"],
+        ["xpath=//option[@value='Categorical']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments']/option[2]", "xpath:idRelative"],
+        ["xpath=//div[5]/select/option[2]", "xpath:position"],
+        ["xpath=//option[contains(.,'Categorical')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "e3f0130f-e12c-4e27-98cc-df6887b28ef8",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity",
+      "targets": [
+        ["id=id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity", "id"],
+        ["name=1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity", "name"],
+        ["css=#id_1-gcard_TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity']", "xpath:attributes"],
+        ["xpath=//div[6]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "debf0eb6-5665-4d88-8c1c-eece7fc1e7f5",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity > option:nth-child(1)",
+      "targets": [
+        ["css=#id_1-gcard_TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity > option:nth-child(1)", "css:finder"],
+        ["xpath=//option[@value='Finite']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity']/option", "xpath:idRelative"],
+        ["xpath=//div[6]/select/option", "xpath:position"],
+        ["xpath=//option[contains(.,'Finite')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "1ad0d3da-0bb9-4a8b-9a8f-b4d9d25d7a4d",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_Context.Experiment.TaskConfiguration.Scenario",
+      "targets": [
+        ["id=id_1-gcard_Context.Experiment.TaskConfiguration.Scenario", "id"],
+        ["name=1-gcard_Context.Experiment.TaskConfiguration.Scenario", "name"],
+        ["css=#id_1-gcard_Context\\.Experiment\\.TaskConfiguration\\.Scenario", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_Context.Experiment.TaskConfiguration.Scenario']", "xpath:attributes"],
+        ["xpath=//div[7]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "4e8a23db-84b2-4a88-902d-04f40b2c0fb0",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_Context\\.Experiment\\.TaskConfiguration\\.Scenario > option:nth-child(1)",
+      "targets": [
+        ["css=#id_1-gcard_Context\\.Experiment\\.TaskConfiguration\\.Scenario > option:nth-child(1)", "css:finder"],
+        ["xpath=//option[@value='FromFile']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_Context.Experiment.TaskConfiguration.Scenario']/option", "xpath:idRelative"],
+        ["xpath=//div[7]/select/option", "xpath:position"],
+        ["xpath=//option[contains(.,'FromFile')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "82a045e0-113c-4b49-aee0-0e00c4ef8940",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_1-gcard_Context.Model.Structure",
+      "targets": [
+        ["id=id_1-gcard_Context.Model.Structure", "id"],
+        ["name=1-gcard_Context.Model.Structure", "name"],
+        ["css=#id_1-gcard_Context\\.Model\\.Structure", "css:finder"],
+        ["xpath=//select[@id='id_1-gcard_Context.Model.Structure']", "xpath:attributes"],
+        ["xpath=//div[8]/select", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "1c58f291-d9a4-44f4-a4af-02eeebafe0c6",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_1-gcard_Context\\.Model\\.Structure > option:nth-child(1)",
+      "targets": [
+        ["css=#id_1-gcard_Context\\.Model\\.Structure > option:nth-child(1)", "css:finder"],
+        ["xpath=//option[@value='Flat']", "xpath:attributes"],
+        ["xpath=//select[@id='id_1-gcard_Context.Model.Structure']/option", "xpath:idRelative"],
+        ["xpath=//div[8]/select/option", "xpath:position"],
+        ["xpath=//option[contains(.,'Flat')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "44490e0d-229a-4b87-9335-6c9acfa85860",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(13)",
+      "targets": [
+        ["css=input:nth-child(13)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "7f8dcd18-eb90-4077-a5e5-5cd7151c5b29",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.Experiment.Energy.Frequency.Default",
+      "targets": [
+        ["id=id_2-Context.Experiment.Experiment.Energy.Frequency.Default", "id"],
+        ["name=2-Context.Experiment.Experiment.Energy.Frequency.Default", "name"],
+        ["css=#id_2-Context\\.Experiment\\.Experiment\\.Energy\\.Frequency\\.Default", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.Experiment.Energy.Frequency.Default']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "2900.0"
+    }, {
+      "id": "66c15547-b9e1-476f-a050-afa1c7ae0514",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.Experiment.Energy.Threads.Default",
+      "targets": [
+        ["id=id_2-Context.Experiment.Experiment.Energy.Threads.Default", "id"],
+        ["name=2-Context.Experiment.Experiment.Energy.Threads.Default", "name"],
+        ["css=#id_2-Context\\.Experiment\\.Experiment\\.Energy\\.Threads\\.Default", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.Experiment.Energy.Threads.Default']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "32"
+    }, {
+      "id": "f4e6dd90-63a8-444a-b33f-e0d4d9c09d06",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.DataType", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.DataType", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.DataType']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "float"
+    }, {
+      "id": "1c558fbb-cfda-4bbd-9e56-8a87fdcd3318",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.ExpectedValuesRange", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "0, 150000"
+    }, {
+      "id": "30b0c32f-f9c9-4456-8018-9edf1d9f7fe4",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.MaxTimeToRunTask", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "2e11be08-5d51-4a25-861a-6c7a4bdce489",
+      "comment": "",
+      "command": "click",
+      "target": "css=li:nth-child(1) > label",
+      "targets": [
+        ["css=li:nth-child(1) > label", "css:finder"],
+        ["xpath=//ul[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.Minimization']/li/label", "xpath:idRelative"],
+        ["xpath=//label", "xpath:position"],
+        ["xpath=//label[contains(.,' True')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "fa4c11ba-61ca-48d5-a065-b2bac2298883",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.ModelPriority", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority']", "xpath:attributes"],
+        ["xpath=//div[7]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "6b3f992f-438a-4d49-84fa-7168836f208b",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.Name",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.Name", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.Name", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.Name']", "xpath:attributes"],
+        ["xpath=//div[8]/input", "xpath:position"]
+      ],
+      "value": "energy"
+    }, {
+      "id": "97f7a6d4-5c74-4ae7-9f59-16dc9cf5e1cf",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Objectives.Priority",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Objectives.Priority", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Objectives.Priority", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Objectives\\.Priority", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Objectives.Priority']", "xpath:attributes"],
+        ["xpath=//div[9]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "83534924-e1a1-4cb2-8bac-5812b3c305b0",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.Scenario\\.FromFile\\.WsFile", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile']", "xpath:attributes"],
+        ["xpath=//div[10]/input", "xpath:position"]
+      ],
+      "value": "search_space_96/Radix-500mio_full.csv"
+    }, {
+      "id": "7adcc776-328f-486d-9cc7-3c0e663d496c",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_2-Context.Experiment.TaskConfiguration.TaskName",
+      "targets": [
+        ["id=id_2-Context.Experiment.TaskConfiguration.TaskName", "id"],
+        ["name=2-Context.Experiment.TaskConfiguration.TaskName", "name"],
+        ["css=#id_2-Context\\.Experiment\\.TaskConfiguration\\.TaskName", "css:finder"],
+        ["xpath=//input[@id='id_2-Context.Experiment.TaskConfiguration.TaskName']", "xpath:attributes"],
+        ["xpath=//div[11]/input", "xpath:position"]
+      ],
+      "value": "energy_consumption"
+    }, {
+      "id": "8787fb7d-240d-4e46-a274-a4222934c863",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(16)",
+      "targets": [
+        ["css=input:nth-child(16)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "79ee4f09-7208-4d03-913d-f5e4269816c7",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.BaseAcceptableErrors", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "5"
+    }, {
+      "id": "130b7a8c-a29b-4d32-afa9-e5d40859bfa9",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.ConfidenceLevels", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "0.95"
+    }, {
+      "id": "cf2f6353-5154-4572-9fea-73e14598e9a9",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.DevicesAccuracyClasses", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "0"
+    }, {
+      "id": "eef4d459-d36c-4830-a9c2-a6c846544644",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.DevicesScaleAccuracies", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "0"
+    }, {
+      "id": "ac9aff48-5fb7-4ee3-a9ac-9d576048ceb0",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.ExperimentAwareness\\.MaxAcceptableErrors", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "50"
+    }, {
+      "id": "c644d913-b742-401a-9b02-4c9a1a2cfeb9",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.ExperimentAwareness\\.RatiosMax", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "1f440376-7ae9-422c-9d72-5f8d51bc2b91",
+      "comment": "",
+      "command": "click",
+      "target": "css=li:nth-child(1) > label",
+      "targets": [
+        ["css=li:nth-child(1) > label", "css:finder"],
+        ["xpath=//ul[@id='id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.isEnabled']/li/label", "xpath:idRelative"],
+        ["xpath=//label", "xpath:position"],
+        ["xpath=//label[contains(.,' True')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "91e454b2-8334-416f-9481-a82dfd3fcd9b",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.MaxFailedTasksPerConfiguration", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration']", "xpath:attributes"],
+        ["xpath=//div[8]/input", "xpath:position"]
+      ],
+      "value": "5"
+    }, {
+      "id": "fa8465e7-2fc6-4636-8502-cefb86133b62",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.MaxTasksPerConfiguration", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration']", "xpath:attributes"],
+        ["xpath=//div[9]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "55e033b9-4906-4319-944a-f693e313c087",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration",
+      "targets": [
+        ["id=id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration", "id"],
+        ["name=3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration", "name"],
+        ["css=#id_3-Repeater\\.AcceptableErrorBasedRepeater\\.MinTasksPerConfiguration", "css:finder"],
+        ["xpath=//input[@id='id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration']", "xpath:attributes"],
+        ["xpath=//div[10]/input", "xpath:position"]
+      ],
+      "value": "2"
+    }, {
+      "id": "d1d1d11a-5b29-4d8a-8562-9dc17be8369b",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(15)",
+      "targets": [
+        ["css=input:nth-child(15)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "d1a13919-e711-474f-a31c-4c5a0d7641d7",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor",
+      "targets": [
+        ["id=id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor", "id"],
+        ["name=4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor", "name"],
+        ["css=#id_4-Predictor\\.Models\\.Model\\.TPE\\.Parameters\\.BandwidthFactor", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "6496ef20-d380-4a46-8031-831f77e986e2",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth",
+      "targets": [
+        ["id=id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth", "id"],
+        ["name=4-Predictor.Models.Model.TPE.Parameters.MinBandwirth", "name"],
+        ["css=#id_4-Predictor\\.Models\\.Model\\.TPE\\.Parameters\\.MinBandwirth", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "0.001"
+    }, {
+      "id": "29bfa4e4-0e8f-4c4f-a58b-41c7aeaa6a95",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction",
+      "targets": [
+        ["id=id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction", "id"],
+        ["name=4-Predictor.Models.Model.TPE.Parameters.RandomFraction", "name"],
+        ["css=#id_4-Predictor\\.Models\\.Model\\.TPE\\.Parameters\\.RandomFraction", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "e2101ff6-e5a5-4e4e-acd6-e45e71c03c81",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize",
+      "targets": [
+        ["id=id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize", "id"],
+        ["name=4-Predictor.Models.Model.TPE.Parameters.SamplingSize", "name"],
+        ["css=#id_4-Predictor\\.Models\\.Model\\.TPE\\.Parameters\\.SamplingSize", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "96"
+    }, {
+      "id": "fe20068d-3f3b-4bcc-8f2b-b5ed9262efd8",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent",
+      "targets": [
+        ["id=id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent", "id"],
+        ["name=4-Predictor.Models.Model.TPE.Parameters.TopNPercent", "name"],
+        ["css=#id_4-Predictor\\.Models\\.Model\\.TPE\\.Parameters\\.TopNPercent", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "30"
+    }, {
+      "id": "ddfccfc3-7bc2-4a86-afdb-18cd301d1fc6",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_4-Predictor.WindowSize",
+      "targets": [
+        ["id=id_4-Predictor.WindowSize", "id"],
+        ["name=4-Predictor.WindowSize", "name"],
+        ["css=#id_4-Predictor\\.WindowSize", "css:finder"],
+        ["xpath=//input[@id='id_4-Predictor.WindowSize']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "1.0"
+    }, {
+      "id": "cf369f2c-3672-4fa6-9bda-d8cbf82b674d",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(11)",
+      "targets": [
+        ["css=input:nth-child(11)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "7c5fcfdb-bc98-4787-922a-dfacf3be5366",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value",
+      "targets": [
+        ["id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value", "id"],
+        ["name=5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value", "name"],
+        ["css=#id_5-TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity\\.Finite\\.Value", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "36dc7e0d-eeb2-475c-ae7a-37469077305f",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value",
+      "targets": [
+        ["id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value", "id"],
+        ["name=5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value", "name"],
+        ["css=#id_5-TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity\\.Finite\\.Value", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "15"
+    }, {
+      "id": "68e15279-02b1-422a-91a1-2b9914ca3fa6",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.Filters\\.FewShot > li:nth-child(1) > label",
+      "targets": [
+        ["css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.Filters\\.FewShot > li:nth-child(1) > label", "css:finder"],
+        ["xpath=//ul[@id='id_5-TransferLearning.MultiTaskLearning.Standard.Filters.FewShot']/li/label", "xpath:idRelative"],
+        ["xpath=//label", "xpath:position"],
+        ["xpath=//label[contains(.,' True')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "cbf4cc85-abde-4511-bf09-2f371c245ee3",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio",
+      "targets": [
+        ["id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio", "id"],
+        ["name=5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio", "name"],
+        ["css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.OldNewConfigsRatio", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "5d992c04-e9dc-4e97-870b-ebb7a453a30a",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio",
+      "targets": [
+        ["id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio", "id"],
+        ["name=5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio", "name"],
+        ["css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.OldNewConfigsRatio", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "2.416424349152367"
+    }, {
+      "id": "9abcb0b3-8fde-4e54-8606-9249ebdcee9d",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferBestConfigsOnly > li:nth-child(1) > label",
+      "targets": [
+        ["css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferBestConfigsOnly > li:nth-child(1) > label", "css:finder"],
+        ["xpath=//ul[@id='id_5-TransferLearning.MultiTaskLearning.Standard.TransferBestConfigsOnly']/li/label", "xpath:idRelative"],
+        ["xpath=//div[4]/ul/li/label", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "c3a36ff0-64a6-431f-829a-e9d7632ffd6d",
+      "comment": "",
+      "command": "click",
+      "target": "css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label",
+      "targets": [
+        ["css=#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label", "css:finder"],
+        ["xpath=//ul[@id='id_5-TransferLearning.MultiTaskLearning.Standard.TransferFromMostSimilarExperimentsFirst']/li[2]/label", "xpath:idRelative"],
+        ["xpath=//div[5]/ul/li[2]/label", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "d2228df7-9b1a-40c5-827b-60cacfc7229d",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType",
+      "targets": [
+        ["id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType", "id"],
+        ["name=5-TransferLearning.TransferExpediencyDetermination.ComparatorType", "name"],
+        ["css=#id_5-TransferLearning\\.TransferExpediencyDetermination\\.ComparatorType", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "8db88956-7d31-48a4-ab35-b488516f54b3",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType",
+      "targets": [
+        ["id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType", "id"],
+        ["name=5-TransferLearning.TransferExpediencyDetermination.ComparatorType", "name"],
+        ["css=#id_5-TransferLearning\\.TransferExpediencyDetermination\\.ComparatorType", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "NormDifferenceComparator"
+    }, {
+      "id": "17f707ef-3d6b-4e4c-8ace-74e6ddaa808a",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples",
+      "targets": [
+        ["id=id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples", "id"],
+        ["name=5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples", "name"],
+        ["css=#id_5-TransferLearning\\.TransferExpediencyDetermination\\.MinNumberOfSamples", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples']", "xpath:attributes"],
+        ["xpath=//div[7]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "18ea740c-0699-44ec-bdbf-e0fcfa2570bb",
+      "comment": "",
+      "command": "click",
+      "target": "id=id_5-TransferLearning.isEnabled_0",
+      "targets": [
+        ["id=id_5-TransferLearning.isEnabled_0", "id"],
+        ["name=5-TransferLearning.isEnabled", "name"],
+        ["css=#id_5-TransferLearning\\.isEnabled_0", "css:finder"],
+        ["xpath=//input[@id='id_5-TransferLearning.isEnabled_0']", "xpath:attributes"],
+        ["xpath=//ul[@id='id_5-TransferLearning.isEnabled']/li/label/input", "xpath:idRelative"],
+        ["xpath=//div[8]/ul/li/label/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "2311d97b-0b5c-4e0d-aa98-5e45ec598996",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(13)",
+      "targets": [
+        ["css=input:nth-child(13)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "3b11ab7e-66c2-41d4-85f5-19b0d91a1041",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.BadConfigurationBasedSC.Name",
+      "targets": [
+        ["id=id_6-StopCondition.BadConfigurationBasedSC.Name", "id"],
+        ["name=6-StopCondition.BadConfigurationBasedSC.Name", "name"],
+        ["css=#id_6-StopCondition\\.BadConfigurationBasedSC\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.BadConfigurationBasedSC.Name']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "BadConfigurationBased"
+    }, {
+      "id": "93803159-88d1-4742-9aa2-9910668b076b",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations",
+      "targets": [
+        ["id=id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations", "id"],
+        ["name=6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations", "name"],
+        ["css=#id_6-StopCondition\\.BadConfigurationBasedSC\\.Parameters\\.MaxBadConfigurations", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "2be4c26a-74ce-4e20-8a17-1d7e0cace055",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.GuaranteedSC.Name",
+      "targets": [
+        ["id=id_6-StopCondition.GuaranteedSC.Name", "id"],
+        ["name=6-StopCondition.GuaranteedSC.Name", "name"],
+        ["css=#id_6-StopCondition\\.GuaranteedSC\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.GuaranteedSC.Name']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "Guaranteed"
+    }, {
+      "id": "7a5ce634-4b88-4121-a02e-5a6265e128ab",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.ImprovementBasedSC.Name",
+      "targets": [
+        ["id=id_6-StopCondition.ImprovementBasedSC.Name", "id"],
+        ["name=6-StopCondition.ImprovementBasedSC.Name", "name"],
+        ["css=#id_6-StopCondition\\.ImprovementBasedSC\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.ImprovementBasedSC.Name']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "ImprovementBased"
+    }, {
+      "id": "807637a7-4547-4d6e-a7a4-698b40ad11e3",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement",
+      "targets": [
+        ["id=id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement", "id"],
+        ["name=6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement", "name"],
+        ["css=#id_6-StopCondition\\.ImprovementBasedSC\\.Parameters\\.MaxConfigsWithoutImprovement", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "5"
+    }, {
+      "id": "e733b841-2c2e-4ac8-b640-d3ff0b1b0fd1",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.QuantityBasedSC.Name",
+      "targets": [
+        ["id=id_6-StopCondition.QuantityBasedSC.Name", "id"],
+        ["name=6-StopCondition.QuantityBasedSC.Name", "name"],
+        ["css=#id_6-StopCondition\\.QuantityBasedSC\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.QuantityBasedSC.Name']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "QuantityBased"
+    }, {
+      "id": "2e929223-2f31-4763-b245-17acf4fb4479",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs",
+      "targets": [
+        ["id=id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs", "id"],
+        ["name=6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs", "name"],
+        ["css=#id_6-StopCondition\\.QuantityBasedSC\\.Parameters\\.MaxConfigs", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs']", "xpath:attributes"],
+        ["xpath=//div[7]/input", "xpath:position"]
+      ],
+      "value": "15"
+    }, {
+      "id": "6a4b62bc-c810-4786-870b-bc99dbabc205",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.TimeBasedSC.Name",
+      "targets": [
+        ["id=id_6-StopCondition.TimeBasedSC.Name", "id"],
+        ["name=6-StopCondition.TimeBasedSC.Name", "name"],
+        ["css=#id_6-StopCondition\\.TimeBasedSC\\.Name", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.TimeBasedSC.Name']", "xpath:attributes"],
+        ["xpath=//div[8]/input", "xpath:position"]
+      ],
+      "value": "TimeBased"
+    }, {
+      "id": "b6be1158-9d6f-46ca-bd12-62afe50f452a",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime",
+      "targets": [
+        ["id=id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime", "id"],
+        ["name=6-StopCondition.TimeBasedSC.Parameters.MaxRunTime", "name"],
+        ["css=#id_6-StopCondition\\.TimeBasedSC\\.Parameters\\.MaxRunTime", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime']", "xpath:attributes"],
+        ["xpath=//div[9]/input", "xpath:position"]
+      ],
+      "value": "10"
+    }, {
+      "id": "c54adf44-2772-4185-9e16-d0da97b5c31f",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit",
+      "targets": [
+        ["id=id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit", "id"],
+        ["name=6-StopCondition.TimeBasedSC.Parameters.TimeUnit", "name"],
+        ["css=#id_6-StopCondition\\.TimeBasedSC\\.Parameters\\.TimeUnit", "css:finder"],
+        ["xpath=//input[@id='id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit']", "xpath:attributes"],
+        ["xpath=//div[10]/input", "xpath:position"]
+      ],
+      "value": "minutes"
+    }, {
+      "id": "4947fb51-de3f-42ec-b49d-c8a7f0ae5761",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(15)",
+      "targets": [
+        ["css=input:nth-child(15)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "b51941ce-80f8-4f88-9171-a02880a23363",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_7-StopConditionTriggerLogic.Expression",
+      "targets": [
+        ["id=id_7-StopConditionTriggerLogic.Expression", "id"],
+        ["name=7-StopConditionTriggerLogic.Expression", "name"],
+        ["css=#id_7-StopConditionTriggerLogic\\.Expression", "css:finder"],
+        ["xpath=//input[@id='id_7-StopConditionTriggerLogic.Expression']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "\"(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased\""
+    }, {
+      "id": "91a0e173-229f-4f45-b8f9-a0ad3da8accf",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod",
+      "targets": [
+        ["id=id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod", "id"],
+        ["name=7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod", "name"],
+        ["css=#id_7-StopConditionTriggerLogic\\.InspectionParameters\\.RepetitionPeriod", "css:finder"],
+        ["xpath=//input[@id='id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "1"
+    }, {
+      "id": "218ba4aa-e981-4822-8e64-84f55fdd254a",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit",
+      "targets": [
+        ["id=id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit", "id"],
+        ["name=7-StopConditionTriggerLogic.InspectionParameters.TimeUnit", "name"],
+        ["css=#id_7-StopConditionTriggerLogic\\.InspectionParameters\\.TimeUnit", "css:finder"],
+        ["xpath=//input[@id='id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "seconds"
+    }, {
+      "id": "e7661acc-6504-4f46-a447-c9903a547eec",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(8)",
+      "targets": [
+        ["css=input:nth-child(8)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "63828f4b-a6b5-442a-bf75-6be1b2897b45",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Chauvenet\\.MaxActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "10000"
+    }, {
+      "id": "5056f2a2-1b75-4a45-bd88-40187fda28d5",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Chauvenet\\.MinActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "282640d0-53c1-48cd-a2be-3aca84dc7142",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Dixon.MaxActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Dixon\\.MaxActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[3]/input", "xpath:position"]
+      ],
+      "value": "30"
+    }, {
+      "id": "59d041cc-3fbf-4d82-8d75-4ff8906cebc5",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Dixon.MinActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Dixon\\.MinActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[4]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "0aa2c998-d46f-4b2e-b32e-23ab84730c35",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Grubbs\\.MaxActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[5]/input", "xpath:position"]
+      ],
+      "value": "10000"
+    }, {
+      "id": "84e2f168-134a-48d6-b508-7904425676fb",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Grubbs.MinActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Grubbs\\.MinActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[6]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "6ec3362f-7b32-4847-978e-e0afb11f364b",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Mad.MaxActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Mad\\.MaxActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[7]/input", "xpath:position"]
+      ],
+      "value": "10000"
+    }, {
+      "id": "2693ebb3-3ca0-4486-b0d8-355c5b3ec089",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Mad.MinActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Mad.MinActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Mad.MinActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Mad\\.MinActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Mad.MinActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[8]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "fc915557-74fc-4484-92a3-dca719b08a6c",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Quartiles\\.MaxActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[9]/input", "xpath:position"]
+      ],
+      "value": "10000"
+    }, {
+      "id": "66e7d4db-aec7-48a9-b740-84a55418c359",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks",
+      "targets": [
+        ["id=id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks", "id"],
+        ["name=8-OutliersDetection.Quartiles.MinActiveNumberOfTasks", "name"],
+        ["css=#id_8-OutliersDetection\\.Quartiles\\.MinActiveNumberOfTasks", "css:finder"],
+        ["xpath=//input[@id='id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks']", "xpath:attributes"],
+        ["xpath=//div[10]/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "2cdc56bc-a6c1-4a59-830d-7a982513aef4",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(15)",
+      "targets": [
+        ["css=input:nth-child(15)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "cb7fb368-32bf-4f68-ab7e-80fd0c72dae3",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_9-DomainDescription.DataFile",
+      "targets": [
+        ["id=id_9-DomainDescription.DataFile", "id"],
+        ["name=9-DomainDescription.DataFile", "name"],
+        ["css=#id_9-DomainDescription\\.DataFile", "css:finder"],
+        ["xpath=//input[@id='id_9-DomainDescription.DataFile']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "./Resources/EnergyExperiment/EnergyExperimentData.json"
+    }, {
+      "id": "2210252f-4114-4675-bac4-97ec89c6a4ae",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(6)",
+      "targets": [
+        ["css=input:nth-child(6)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "fe84e60f-9ff0-486d-97ab-0aecd11c4eb5",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_10-DefaultConfigurationHandler.type",
+      "targets": [
+        ["id=id_10-DefaultConfigurationHandler.type", "id"],
+        ["name=10-DefaultConfigurationHandler.type", "name"],
+        ["css=#id_10-DefaultConfigurationHandler\\.type", "css:finder"],
+        ["xpath=//input[@id='id_10-DefaultConfigurationHandler.type']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "Random"
+    }, {
+      "id": "e40b8f33-30a3-4cfe-88e0-99b17f364315",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(6)",
+      "targets": [
+        ["css=input:nth-child(6)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "1f18f585-561e-47e5-9de0-6d8676222d8a",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_11-SelectionAlgorithm.type",
+      "targets": [
+        ["id=id_11-SelectionAlgorithm.type", "id"],
+        ["name=11-SelectionAlgorithm.type", "name"],
+        ["css=#id_11-SelectionAlgorithm\\.type", "css:finder"],
+        ["xpath=//input[@id='id_11-SelectionAlgorithm.type']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "Sobol"
+    }, {
+      "id": "0b0dba3e-2217-4d2a-ba30-69ac664cf842",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(6)",
+      "targets": [
+        ["css=input:nth-child(6)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "b3701457-e532-44ef-8f66-e23623b06918",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_12-General.NumberOfWorkers",
+      "targets": [
+        ["id=id_12-General.NumberOfWorkers", "id"],
+        ["name=12-General.NumberOfWorkers", "name"],
+        ["css=#id_12-General\\.NumberOfWorkers", "css:finder"],
+        ["xpath=//input[@id='id_12-General.NumberOfWorkers']", "xpath:attributes"],
+        ["xpath=//div/input", "xpath:position"]
+      ],
+      "value": "3"
+    }, {
+      "id": "5d5876f5-2e1a-4746-802c-5c001505cfec",
+      "comment": "",
+      "command": "type",
+      "target": "id=id_12-General.result_storage",
+      "targets": [
+        ["id=id_12-General.result_storage", "id"],
+        ["name=12-General.result_storage", "name"],
+        ["css=#id_12-General\\.result_storage", "css:finder"],
+        ["xpath=//input[@id='id_12-General.result_storage']", "xpath:attributes"],
+        ["xpath=//div[2]/input", "xpath:position"]
+      ],
+      "value": "./Results/"
+    }, {
+      "id": "e72b26ee-40e0-4d4c-80c9-4ba7e59f5e8d",
+      "comment": "",
+      "command": "click",
+      "target": "css=input:nth-child(7)",
+      "targets": [
+        ["css=input:nth-child(7)", "css:finder"],
+        ["xpath=//input[@value='Next step']", "xpath:attributes"],
+        ["xpath=//input[2]", "xpath:position"]
+      ],
+      "value": ""
+    }]
+  }],
+  "suites": [{
+    "id": "0131e1fb-a4b5-46f1-b0ad-d809c83e5388",
+    "name": "Default Suite",
+    "persistSession": false,
+    "parallel": false,
+    "timeout": 300,
+    "tests": ["c51088f8-a9ab-4a04-8801-b3f637c88dea"]
+  }],
+  "urls": ["http://127.0.0.1:8000/"],
+  "plugins": []
+}

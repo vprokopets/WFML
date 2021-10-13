@@ -132,7 +132,7 @@ StopConditionTriggerLogic {
     InspectionParameters {
         RepetitionPeriod -> integer
         TimeUnit -> string
-        [RepetitionPerion > 0]
+        [RepetitionPeriod > 0]
         [TimeUnit in {seconds, minutes, hours, days}]
     }
 }
@@ -197,34 +197,39 @@ TransferLearning{
                 [Value = 'use_clustering']
             }
         }
-        ClusteringAlgorithm -> string
+        ClusteringAlgorithm -> predefined
         [ClusteringAlgorithm = MeanShiftClustering]
     }
-    MultiTaskLearning{
-        isEnabled -> boolean
-        isFewShotEnabled -> boolean
-        OldNewConfigsRatio -> float
-        TransferBestConfigsOnly -> boolean
-        TransferFromMostSimilarExperimentsFirst -> boolean
-        [OldNewConfigsRatio >= 0.1]
+    MultiTaskLearning ?{
+        Standard{
+            Filters{
+                FewShot -> boolean
+            }
+            OldNewConfigsRatio -> float
+            TransferBestConfigsOnly -> boolean
+            TransferFromMostSimilarExperimentsFirst -> boolean
+            [OldNewConfigsRatio >= 0.1]
+        }      
     }
-    DynamicModelsRecommendation{
-        isEnabled -> boolean
-        isFewShotEnabled -> boolean
-        xor RecommendationGranularity {
-            Finite{
-                Value -> integer
-                [Value >= 1]
+    ModelsRecommendation ?{
+        DynamicModelsRecommendation{
+            xor RecommendationGranularity {
+                Finite{
+                    Value -> integer
+                    [Value >= 1]
+                }
+                Infinite{
+                    Value -> predefined
+                    [Value = 'inf']
+                }
+                TimeToBuildModelThreshold -> float
+                TimeUnit -> string
+                ThresholdType -> string
+                PerformanceMetric -> string
+                [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]
+                [ThresholdType in {'hard', 'soft'}]
+                [PerformanceMetric in {'AverageRelativeImprovement'}]
             }
-            Infinite{
-                Value -> string
-                [Value = 'inf']
-            }
-            TimeToBuildModelThreshold -> float
-            TimeUnit -> string
-            ThresholdType -> string
-            [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]
-            [ThresholdType in {'hard', 'soft'}]
         }
     }
 }
@@ -301,22 +306,22 @@ Context {
         TaskConfiguration {
             TaskName -> string
             xor Scenario {
-            FromFile {
-                WsFile -> string
-                AdditionalParameter * {
-                    Name -> string
-                    Value -> string
+                FromFile {
+                    WsFile -> string
+                    AdditionalParameter * {
+                        Name -> string
+                        Value -> string
+                    }
                 }
-            }
-            FromDescription {
-                Problem -> string
-                InitializationParameters -> string
-                Budget {
-                    Type -> string
-                    Amount -> integer
+                FromDescription {
+                    Problem -> string
+                    InitializationParameters -> string
+                    Budget {
+                        Type -> string
+                        Amount -> integer
+                    }
+                    Hyperparameters -> string
                 }
-                Hyperparameters -> string
-            }
             }
             Objectives + {
             Name -> string

@@ -2,14 +2,18 @@
 from os.path import dirname, abspath
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class TestBRISE():
-  def setup_method(self):
+  def setup_method(self, method):
     self.driver = webdriver.Firefox(executable_path=f'{dirname(dirname(abspath(__file__)))}/geckodriver')
     self.vars = {}
   
-  def teardown_method(self):
+  def teardown_method(self, method):
     self.driver.quit()
   
   def test_bRISE(self):
@@ -21,10 +25,12 @@ class TestBRISE():
     self.driver.set_window_size(1848, 1053)
     # 3 | click | id=id_model_field | 
     self.driver.find_element(By.ID, "id_model_field").click()
-    # 4 | type | id=id_model_field | General {\n    NumberOfWorkers -> integer\n    result_storage -> string\n    [NumberOfWorkers >= 1]\n}\n\nSelectionAlgorithm {\n    type -> string\n    [type in {Sobol, MersenneTwister}]\n}\n\nDefaultConfigurationHandler {\n    type -> string\n    [type in {AutoModel, Random}]\n}\n\nDomainDescription {\n    DataFile -> string\n}\n\n\nabstract OutliersDetector 5 {\n    MinActiveNumberOfTasks -> integer\n    MaxActiveNumberOfTasks -> integer\n    [MinActiveNumberOfTasks >= 3]\n    [MaxActiveNumberOfTasks >= 3]\n    [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]\n}\n\nor OutliersDetection{\n    Dixon : OutliersDetector\n    Grubbs : OutliersDetector\n    Chauvenet : OutliersDetector\n    Quartiles : OutliersDetector\n    Mad : OutliersDetector\n}\n\nabstract AbstrRepeater {\n    MinTasksPerConfiguration -> integer\n    MaxTasksPerConfiguration -> integer\n    [MinTasksPerConfiguration <= MaxTasksPerConfiguration]\n}\n\nxor Repeater{\n    DefaultRepeater : AbstrRepeater {\n        [MinTasksPerConfiguration >= 2]\n        [MaxTasksPerConfiguration >= 2]\n    }\n    AcceptableErrorBasedRepeater: AbstrRepeater 1{\n        [MinTasksPerConfiguration >= 1]\n        [MaxTasksPerConfiguration >= 1]\n        MaxFailedTasksPerConfiguration -> integer\n        BaseAcceptableErrors -> integer\n        ConfidenceLevels -> float\n        DevicesScaleAccuracies -> integer\n        DevicesAccuracyClasses -> integer\n        ExperimentAwareness {\n            isEnabled -> boolean\n            MaxAcceptableErrors -> integer\n            RatiosMax -> integer\n        }\n    }\n}\n\nabstract Model {\n    Type -> predefined\n}\n\nabstract TreeParzenEstimator: Model {\n    Parameters {\n        TopNPercent -> integer\n        RandomFraction -> integer\n        BandwidthFactor -> integer\n        MinBandwirth -> float\n        SamplingSize -> integer\n    }\n    [Type = 'brise.TreeParzenEstimator']\n}\n\nabstract MultiArmedBandit: Model {\n    Parameters {\n        xor cType{\n            int\n            float\n            std\n        }\n        c -> float\n        [if gcard.cType == float then 0 <= c]\n        [if gcard.cType == float then c <= 1]\n        [if gcard.cType == std then c = std]\n    }\n    [type = 'brise.MultiArmedBandit']\n}\n\nabstract ModelMock\n\nabstract SciKitLearn {\n    Type -> string\n    Parameters {\n        SamplingSize -> integer\n        MinimalScore -> float\n        CrossValidationSplits -> integer\n        TestSize -> float\n        DataPreprocessing {\n            OrdinalHyperparameter -> string\n            NominalHyperparameter -> string\n            IntegerHyperparameter -> string\n            FloatHyperparameter -> string\n        }\n        UnderlyingModelParameters {\n            n_iter -> integer\n            tol -> float\n            normalize -> boolean\n        }\n    }\n}\n\nPredictor {\n    WindowSize -> float\n    Models {\n        xor Model {\n            TPE : TreeParzenEstimator\n            MAB : MultiArmedBandit\n            MM : ModelMock\n            skLearn : SciKitLearn\n        }\n    }\n}\n\nStopConditionTriggerLogic {\n    Expression -> string\n    InspectionParameters {\n        RepetitionPeriod -> integer\n        TimeUnit -> string\n        [RepetitionPerion > 0]\n        [TimeUnit in {seconds, minutes, hours, days}]\n    }\n}\n\nabstract SC {\n    Name -> string\n    Type -> predefined\n}\n\nStopCondition {\n    QuantityBasedSC : SC 1..5{\n        Parameters {\n            MaxConfigs -> integer\n            [MaxConfigs > 0]\n        }\n        [Type = QuantityBased]\n    }\n\n    GuaranteedSC : SC 1 {\n        [Type = Guaranted]\n    }\n\n    BadConfigurationBasedSC : SC 1..5{\n        Parameters {\n            MaxBadConfigurations -> integer\n            [MaxBadConfigurations > 0]\n        }\n        [Type = BadConfigurationBased]\n    }\n\n    ImprovementBasedSC : SC 1..5{\n        Parameters {\n            MaxConfigsWithoutImprovement -> integer\n            [MaxConfigsWithoutImprovement > 0]\n        }\n        [Type = ImprovementBased]\n    }\n\n    TimeBasedSC : SC 1..5{\n        Parameters {\n            MaxRunTime -> integer\n            TimeUnit -> string\n            [MaxRunTime > 0]\n            [TimeUnit in {seconds, minutes, hours, days}]\n        }\n        [Type = TimeBased]\n    }\n}\n\n\nTransferLearning{\n    isEnabled -> boolean\n    TransferExpediencyDetermination{\n        ComparatorType -> string\n        MinNumberOfSamples -> integer\n        xor NumberOfSimilarExperiments {\n            Numeric {\n                Value -> integer\n            }\n            Categorical{\n                Value -> predefined\n                [Value = 'use_clustering']\n            }\n        }\n        ClusteringAlgorithm -> string\n        [ClusteringAlgorithm = MeanShiftClustering]\n    }\n    MultiTaskLearning{\n        isEnabled -> boolean\n        isFewShotEnabled -> boolean\n        OldNewConfigsRatio -> float\n        TransferBestConfigsOnly -> boolean\n        TransferFromMostSimilarExperimentsFirst -> boolean\n        [OldNewConfigsRatio >= 0.1]\n    }\n    DynamicModelsRecommendation{\n        isEnabled -> boolean\n        isFewShotEnabled -> boolean\n        xor RecommendationGranularity {\n            Finite{\n                Value -> integer\n                [Value >= 1]\n            }\n            Infinite{\n                Value -> string\n                [Value = 'inf']\n            }\n            TimeToBuildModelThreshold -> float\n            TimeUnit -> string\n            ThresholdType -> string\n            [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]\n            [ThresholdType in {'hard', 'soft'}]\n        }\n    }\n}\n\nabstract NominalHyperparameter {\n    Type -> predefined\n    [Type = NominalHyperparameter]\n}\n\nabstract MDNominalHyperparameter {\n    Type -> predefined\n    Model -> string\n    [Type = NominalHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract OrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> string\n    Model -> predefined\n    [Type = OrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract IntegerOrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> integer\n    Model -> predefined\n    [Type = IntegerOrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract FloatOrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> float\n    Model -> predefined\n    [Type = FloatOrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract FloatHyperparameter {\n    Type -> predefined\n    Lower -> predefined\n    Upper -> predefined\n    Default -> float\n    Model -> predefined\n    [Default >= Lower]\n    [Default <= Upper]\n    [Type = FloatHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract IntegerHyperparameter {\n    Name -> predefined\n    Type -> predefined\n    Lower -> predefined\n    Upper -> predefined\n    Default -> integer\n    Model -> predefined\n    [Default >= Lower]\n    [Default <= Upper]\n    [Type = IntegerHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nContext {\n    Experiment {\n        TaskConfiguration {\n            TaskName -> string\n            xor Scenario {\n            FromFile {\n                WsFile -> string\n                AdditionalParameter * {\n                    Name -> string\n                    Value -> string\n                }\n            }\n            FromDescription {\n                Problem -> string\n                InitializationParameters -> string\n                Budget {\n                    Type -> string\n                    Amount -> integer\n                }\n                Hyperparameters -> string\n            }\n            }\n            Objectives + {\n            Name -> string\n            DataType -> string\n            Minimization -> boolean\n            Priority -> integer\n            ModelPriority -> integer\n            ExpectedValuesRange -> floatArray\n            MaxTimeToRunTask -> integer ?\n            }\n            [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Context.Experiment.TaskConfiguration.Objectives]\n        }\n\n        Experiment : NominalHyperparameter {\n            Energy: NominalHyperparameter {\n                Frequency: FloatOrdinalHyperparameter{\n                    [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]\n                }\n                Threads: IntegerOrdinalHyperparameter{\n                    [Categories = {1, 2, 4, 8, 16, 32}]\n                }\n            }\n        }\n\n    }\n    Model {\n        xor Structure {\n           Flat\n           Hierarchical\n        }\n        ModelStructure -> predefined\n        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = 2]\n        [ModelStructure = gcard.Context.Model.Structure]\n    }\n}\n
+    # 4 | click | id=id_model_field | 
+    self.driver.find_element(By.ID, "id_model_field").click()
+    # 5 | type | id=id_model_field | General {\n    NumberOfWorkers -> integer\n    result_storage -> string\n    [NumberOfWorkers >= 1]\n}\n\nSelectionAlgorithm {\n    type -> string\n    [type in {Sobol, MersenneTwister}]\n}\n\nDefaultConfigurationHandler {\n    type -> string\n    [type in {AutoModel, Random}]\n}\n\nDomainDescription {\n    DataFile -> string\n}\n\n\nabstract OutliersDetector 5 {\n    MinActiveNumberOfTasks -> integer\n    MaxActiveNumberOfTasks -> integer\n    [MinActiveNumberOfTasks >= 3]\n    [MaxActiveNumberOfTasks >= 3]\n    [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]\n}\n\nor OutliersDetection{\n    Dixon : OutliersDetector\n    Grubbs : OutliersDetector\n    Chauvenet : OutliersDetector\n    Quartiles : OutliersDetector\n    Mad : OutliersDetector\n}\n\nabstract AbstrRepeater {\n    MinTasksPerConfiguration -> integer\n    MaxTasksPerConfiguration -> integer\n    [MinTasksPerConfiguration <= MaxTasksPerConfiguration]\n}\n\nxor Repeater{\n    DefaultRepeater : AbstrRepeater {\n        [MinTasksPerConfiguration >= 2]\n        [MaxTasksPerConfiguration >= 2]\n    }\n    AcceptableErrorBasedRepeater: AbstrRepeater 1{\n        [MinTasksPerConfiguration >= 1]\n        [MaxTasksPerConfiguration >= 1]\n        MaxFailedTasksPerConfiguration -> integer\n        BaseAcceptableErrors -> integer\n        ConfidenceLevels -> float\n        DevicesScaleAccuracies -> integer\n        DevicesAccuracyClasses -> integer\n        ExperimentAwareness {\n            isEnabled -> boolean\n            MaxAcceptableErrors -> integer\n            RatiosMax -> integer\n        }\n    }\n}\n\nabstract Model {\n    Type -> predefined\n}\n\nabstract TreeParzenEstimator: Model {\n    Parameters {\n        TopNPercent -> integer\n        RandomFraction -> integer\n        BandwidthFactor -> integer\n        MinBandwirth -> float\n        SamplingSize -> integer\n    }\n    [Type = 'brise.TreeParzenEstimator']\n}\n\nabstract MultiArmedBandit: Model {\n    Parameters {\n        xor cType{\n            int\n            float\n            std\n        }\n        c -> float\n        [if gcard.cType == float then 0 <= c]\n        [if gcard.cType == float then c <= 1]\n        [if gcard.cType == std then c = std]\n    }\n    [type = 'brise.MultiArmedBandit']\n}\n\nabstract ModelMock\n\nabstract SciKitLearn {\n    Type -> string\n    Parameters {\n        SamplingSize -> integer\n        MinimalScore -> float\n        CrossValidationSplits -> integer\n        TestSize -> float\n        DataPreprocessing {\n            OrdinalHyperparameter -> string\n            NominalHyperparameter -> string\n            IntegerHyperparameter -> string\n            FloatHyperparameter -> string\n        }\n        UnderlyingModelParameters {\n            n_iter -> integer\n            tol -> float\n            normalize -> boolean\n        }\n    }\n}\n\nPredictor {\n    WindowSize -> float\n    Models {\n        xor Model {\n            TPE : TreeParzenEstimator\n            MAB : MultiArmedBandit\n            MM : ModelMock\n            skLearn : SciKitLearn\n        }\n    }\n}\n\nStopConditionTriggerLogic {\n    Expression -> string\n    InspectionParameters {\n        RepetitionPeriod -> integer\n        TimeUnit -> string\n        [RepetitionPeriod > 0]\n        [TimeUnit in {seconds, minutes, hours, days}]\n    }\n}\n\nabstract SC {\n    Name -> string\n    Type -> predefined\n}\n\nStopCondition {\n    QuantityBasedSC : SC 1..5{\n        Parameters {\n            MaxConfigs -> integer\n            [MaxConfigs > 0]\n        }\n        [Type = QuantityBased]\n    }\n\n    GuaranteedSC : SC 1 {\n        [Type = Guaranted]\n    }\n\n    BadConfigurationBasedSC : SC 1..5{\n        Parameters {\n            MaxBadConfigurations -> integer\n            [MaxBadConfigurations > 0]\n        }\n        [Type = BadConfigurationBased]\n    }\n\n    ImprovementBasedSC : SC 1..5{\n        Parameters {\n            MaxConfigsWithoutImprovement -> integer\n            [MaxConfigsWithoutImprovement > 0]\n        }\n        [Type = ImprovementBased]\n    }\n\n    TimeBasedSC : SC 1..5{\n        Parameters {\n            MaxRunTime -> integer\n            TimeUnit -> string\n            [MaxRunTime > 0]\n            [TimeUnit in {seconds, minutes, hours, days}]\n        }\n        [Type = TimeBased]\n    }\n}\n\n\nTransferLearning{\n    isEnabled -> boolean\n    TransferExpediencyDetermination{\n        ComparatorType -> string\n        MinNumberOfSamples -> integer\n        xor NumberOfSimilarExperiments {\n            Numeric {\n                Value -> integer\n            }\n            Categorical{\n                Value -> predefined\n                [Value = 'use_clustering']\n            }\n        }\n        ClusteringAlgorithm -> predefined\n        [ClusteringAlgorithm = MeanShiftClustering]\n    }\n    MultiTaskLearning ?{\n        Standard{\n            Filters{\n                FewShot -> boolean\n            }\n            OldNewConfigsRatio -> float\n            TransferBestConfigsOnly -> boolean\n            TransferFromMostSimilarExperimentsFirst -> boolean\n            [OldNewConfigsRatio >= 0.1]\n        }      \n    }\n    ModelsRecommendation ?{\n        DynamicModelsRecommendation{\n            xor RecommendationGranularity {\n                Finite{\n                    Value -> integer\n                    [Value >= 1]\n                }\n                Infinite{\n                    Value -> predefined\n                    [Value = 'inf']\n                }\n                TimeToBuildModelThreshold -> float\n                TimeUnit -> string\n                ThresholdType -> string\n                PerformanceMetric -> string\n                [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]\n                [ThresholdType in {'hard', 'soft'}]\n                [PerformanceMetric in {'AverageRelativeImprovement'}]\n            }\n        }\n    }\n}\n\nabstract NominalHyperparameter {\n    Type -> predefined\n    [Type = NominalHyperparameter]\n}\n\nabstract MDNominalHyperparameter {\n    Type -> predefined\n    Model -> string\n    [Type = NominalHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract OrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> string\n    Model -> predefined\n    [Type = OrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract IntegerOrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> integer\n    Model -> predefined\n    [Type = IntegerOrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract FloatOrdinalHyperparameter {\n    Type -> predefined\n    Categories -> predefined\n    Default -> float\n    Model -> predefined\n    [Type = FloatOrdinalHyperparameter]\n    [Default in Categories]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract FloatHyperparameter {\n    Type -> predefined\n    Lower -> predefined\n    Upper -> predefined\n    Default -> float\n    Model -> predefined\n    [Default >= Lower]\n    [Default <= Upper]\n    [Type = FloatHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nabstract IntegerHyperparameter {\n    Name -> predefined\n    Type -> predefined\n    Lower -> predefined\n    Upper -> predefined\n    Default -> integer\n    Model -> predefined\n    [Default >= Lower]\n    [Default <= Upper]\n    [Type = IntegerHyperparameter]\n    // [Model in childs.Predictor.Models]\n}\n\nContext {\n    Experiment {\n        TaskConfiguration {\n            TaskName -> string\n            xor Scenario {\n                FromFile {\n                    WsFile -> string\n                    AdditionalParameter * {\n                        Name -> string\n                        Value -> string\n                    }\n                }\n                FromDescription {\n                    Problem -> string\n                    InitializationParameters -> string\n                    Budget {\n                        Type -> string\n                        Amount -> integer\n                    }\n                    Hyperparameters -> string\n                }\n            }\n            Objectives + {\n            Name -> string\n            DataType -> string\n            Minimization -> boolean\n            Priority -> integer\n            ModelPriority -> integer\n            ExpectedValuesRange -> floatArray\n            MaxTimeToRunTask -> integer ?\n            }\n            [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Context.Experiment.TaskConfiguration.Objectives]\n        }\n\n        Experiment : NominalHyperparameter {\n            Energy: NominalHyperparameter {\n                Frequency: FloatOrdinalHyperparameter{\n                    [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]\n                }\n                Threads: IntegerOrdinalHyperparameter{\n                    [Categories = {1, 2, 4, 8, 16, 32}]\n                }\n            }\n        }\n\n    }\n    Model {\n        xor Structure {\n           Flat\n           Hierarchical\n        }\n        ModelStructure -> predefined\n        [if gcard.Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = 2]\n        [ModelStructure = gcard.Context.Model.Structure]\n    }\n}\n
     self.driver.find_element(By.ID, "id_model_field").send_keys("""
 
-General {
+    General {
     NumberOfWorkers -> integer
     result_storage -> string
     [NumberOfWorkers >= 1]
@@ -158,7 +164,7 @@ StopConditionTriggerLogic {
     InspectionParameters {
         RepetitionPeriod -> integer
         TimeUnit -> string
-        [RepetitionPerion > 0]
+        [RepetitionPeriod > 0]
         [TimeUnit in {seconds, minutes, hours, days}]
     }
 }
@@ -223,34 +229,39 @@ TransferLearning{
                 [Value = 'use_clustering']
             }
         }
-        ClusteringAlgorithm -> string
+        ClusteringAlgorithm -> predefined
         [ClusteringAlgorithm = MeanShiftClustering]
     }
-    MultiTaskLearning{
-        isEnabled -> boolean
-        isFewShotEnabled -> boolean
-        OldNewConfigsRatio -> float
-        TransferBestConfigsOnly -> boolean
-        TransferFromMostSimilarExperimentsFirst -> boolean
-        [OldNewConfigsRatio >= 0.1]
+    MultiTaskLearning ?{
+        Standard{
+            Filters{
+                FewShot -> boolean
+            }
+            OldNewConfigsRatio -> float
+            TransferBestConfigsOnly -> boolean
+            TransferFromMostSimilarExperimentsFirst -> boolean
+            [OldNewConfigsRatio >= 0.1]
+        }      
     }
-    DynamicModelsRecommendation{
-        isEnabled -> boolean
-        isFewShotEnabled -> boolean
-        xor RecommendationGranularity {
-            Finite{
-                Value -> integer
-                [Value >= 1]
+    ModelsRecommendation ?{
+        DynamicModelsRecommendation{
+            xor RecommendationGranularity {
+                Finite{
+                    Value -> integer
+                    [Value >= 1]
+                }
+                Infinite{
+                    Value -> predefined
+                    [Value = 'inf']
+                }
+                TimeToBuildModelThreshold -> float
+                TimeUnit -> string
+                ThresholdType -> string
+                PerformanceMetric -> string
+                [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]
+                [ThresholdType in {'hard', 'soft'}]
+                [PerformanceMetric in {'AverageRelativeImprovement'}]
             }
-            Infinite{
-                Value -> string
-                [Value = 'inf']
-            }
-            TimeToBuildModelThreshold -> float
-            TimeUnit -> string
-            ThresholdType -> string
-            [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]
-            [ThresholdType in {'hard', 'soft'}]
         }
     }
 }
@@ -327,22 +338,22 @@ Context {
         TaskConfiguration {
             TaskName -> string
             xor Scenario {
-            FromFile {
-                WsFile -> string
-                AdditionalParameter * {
-                    Name -> string
-                    Value -> string
+                FromFile {
+                    WsFile -> string
+                    AdditionalParameter * {
+                        Name -> string
+                        Value -> string
+                    }
                 }
-            }
-            FromDescription {
-                Problem -> string
-                InitializationParameters -> string
-                Budget {
-                    Type -> string
-                    Amount -> integer
+                FromDescription {
+                    Problem -> string
+                    InitializationParameters -> string
+                    Budget {
+                        Type -> string
+                        Amount -> integer
+                    }
+                    Hyperparameters -> string
                 }
-                Hyperparameters -> string
-            }
             }
             Objectives + {
             Name -> string
@@ -380,91 +391,91 @@ Context {
 }
 
 
-""")
-     # 5 | click | css=input:nth-child(3) | 
+
+
+    """)
+    # 6 | click | css=input:nth-child(3) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(3)").click()
-    # 6 | type | id=id_0-fcard_StopCondition.QuantityBasedSC | 1
+    # 7 | type | id=id_0-fcard_StopCondition.QuantityBasedSC | 1
     self.driver.find_element(By.ID, "id_0-fcard_StopCondition.QuantityBasedSC").send_keys("1")
-    # 7 | type | id=id_0-fcard_StopCondition.BadConfigurationBasedSC | 1
+    # 8 | type | id=id_0-fcard_StopCondition.BadConfigurationBasedSC | 1
     self.driver.find_element(By.ID, "id_0-fcard_StopCondition.BadConfigurationBasedSC").send_keys("1")
-    # 8 | type | id=id_0-fcard_StopCondition.ImprovementBasedSC | 1
+    # 9 | type | id=id_0-fcard_StopCondition.ImprovementBasedSC | 1
     self.driver.find_element(By.ID, "id_0-fcard_StopCondition.ImprovementBasedSC").send_keys("1")
-    # 9 | type | id=id_0-fcard_StopCondition.TimeBasedSC | 1
+    # 10 | type | id=id_0-fcard_StopCondition.TimeBasedSC | 1
     self.driver.find_element(By.ID, "id_0-fcard_StopCondition.TimeBasedSC").send_keys("1")
-    # 10 | click | id=id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter | 
-    self.driver.find_element(By.ID, "id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter").click()
-    # 11 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter | 0
+    # 11 | type | id=id_0-fcard_TransferLearning.MultiTaskLearning | 1
+    self.driver.find_element(By.ID, "id_0-fcard_TransferLearning.MultiTaskLearning").send_keys("1")
+    # 12 | type | id=id_0-fcard_TransferLearning.ModelsRecommendation | 1
+    self.driver.find_element(By.ID, "id_0-fcard_TransferLearning.ModelsRecommendation").send_keys("1")
+    # 13 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter | 0
     self.driver.find_element(By.ID, "id_0-fcard_Context.Experiment.TaskConfiguration.Scenario.FromFile.AdditionalParameter").send_keys("0")
-    # 12 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask | 1
+    # 14 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask | 1
     self.driver.find_element(By.ID, "id_0-fcard_Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask").send_keys("1")
-    # 13 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives | 1
+    # 15 | type | id=id_0-fcard_Context.Experiment.TaskConfiguration.Objectives | 1
     self.driver.find_element(By.ID, "id_0-fcard_Context.Experiment.TaskConfiguration.Objectives").send_keys("1")
-    # 14 | click | css=input:nth-child(10) | 
-    self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(10)").click()
-    # 15 | click | css=li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(1) > label").click()
-    # 16 | click | css=li:nth-child(2) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(2) > label").click()
-    # 17 | click | css=li:nth-child(3) > label | 
+    # 16 | click | css=input:nth-child(12) | 
+    self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(12)").click()
+    # 17 | click | id=id_1-gcard_OutliersDetection_0 | 
+    self.driver.find_element(By.ID, "id_1-gcard_OutliersDetection_0").click()
+    # 18 | click | id=id_1-gcard_OutliersDetection_1 | 
+    self.driver.find_element(By.ID, "id_1-gcard_OutliersDetection_1").click()
+    # 19 | click | css=li:nth-child(3) > label | 
     self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(3) > label").click()
-    # 18 | click | css=li:nth-child(4) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(4) > label").click()
-    # 19 | click | css=li:nth-child(5) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(5) > label").click()
-    # 20 | click | id=id_1-gcard_Repeater | 
+    # 20 | click | id=id_1-gcard_OutliersDetection_3 | 
+    self.driver.find_element(By.ID, "id_1-gcard_OutliersDetection_3").click()
+    # 21 | click | id=id_1-gcard_OutliersDetection_4 | 
+    self.driver.find_element(By.ID, "id_1-gcard_OutliersDetection_4").click()
+    # 22 | click | id=id_1-gcard_Repeater | 
     self.driver.find_element(By.ID, "id_1-gcard_Repeater").click()
-    # 21 | select | id=id_1-gcard_Repeater | label=AcceptableErrorBasedRepeater
+    # 23 | select | id=id_1-gcard_Repeater | label=AcceptableErrorBasedRepeater
     dropdown = self.driver.find_element(By.ID, "id_1-gcard_Repeater")
     dropdown.find_element(By.XPATH, "//option[. = 'AcceptableErrorBasedRepeater']").click()
-    # 22 | click | css=#id_1-gcard_Repeater > option:nth-child(2) | 
+    # 24 | click | css=#id_1-gcard_Repeater > option:nth-child(2) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_Repeater > option:nth-child(2)").click()
-    # 23 | click | id=id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType | 
+    # 25 | click | id=id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType | 
     self.driver.find_element(By.ID, "id_1-gcard_Predictor.Models.Model.MAB.Parameters.cType").click()
-    # 24 | click | css=#id_1-gcard_Predictor\.Models\.Model\.MAB\.Parameters\.cType > option:nth-child(1) | 
+    # 26 | click | css=#id_1-gcard_Predictor\.Models\.Model\.MAB\.Parameters\.cType > option:nth-child(1) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_Predictor\\.Models\\.Model\\.MAB\\.Parameters\\.cType > option:nth-child(1)").click()
-    # 25 | click | id=id_1-gcard_Predictor.Models.Model | 
+    # 27 | click | id=id_1-gcard_Predictor.Models.Model | 
     self.driver.find_element(By.ID, "id_1-gcard_Predictor.Models.Model").click()
-    # 26 | click | css=#id_1-gcard_Predictor\.Models\.Model > option:nth-child(1) | 
+    # 28 | click | css=#id_1-gcard_Predictor\.Models\.Model > option:nth-child(1) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_Predictor\\.Models\\.Model > option:nth-child(1)").click()
-    # 27 | click | id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments | 
+    # 29 | click | css=.form-group:nth-child(7) | 
+    self.driver.find_element(By.CSS_SELECTOR, ".form-group:nth-child(7)").click()
+    # 30 | click | id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments | 
     self.driver.find_element(By.ID, "id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments").click()
-    # 28 | select | id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments | label=Categorical
+    # 31 | select | id=id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments | label=Categorical
     dropdown = self.driver.find_element(By.ID, "id_1-gcard_TransferLearning.TransferExpediencyDetermination.NumberOfSimilarExperiments")
     dropdown.find_element(By.XPATH, "//option[. = 'Categorical']").click()
-    # 29 | click | css=#id_1-gcard_TransferLearning\.TransferExpediencyDetermination\.NumberOfSimilarExperiments > option:nth-child(2) | 
+    # 32 | click | css=#id_1-gcard_TransferLearning\.TransferExpediencyDetermination\.NumberOfSimilarExperiments > option:nth-child(2) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_TransferLearning\\.TransferExpediencyDetermination\\.NumberOfSimilarExperiments > option:nth-child(2)").click()
-    # 30 | click | id=id_1-gcard_TransferLearning.DynamicModelsRecommendation.RecommendationGranularity | 
-    self.driver.find_element(By.ID, "id_1-gcard_TransferLearning.DynamicModelsRecommendation.RecommendationGranularity").click()
-    # 31 | click | css=#id_1-gcard_TransferLearning\.DynamicModelsRecommendation\.RecommendationGranularity > option:nth-child(1) | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_TransferLearning\\.DynamicModelsRecommendation\\.RecommendationGranularity > option:nth-child(1)").click()
-    # 32 | click | id=id_1-gcard_Context.Experiment.TaskConfiguration.Scenario | 
+    # 33 | click | id=id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity | 
+    self.driver.find_element(By.ID, "id_1-gcard_TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity").click()
+    # 34 | click | css=#id_1-gcard_TransferLearning\.ModelsRecommendation\.DynamicModelsRecommendation\.RecommendationGranularity > option:nth-child(1) | 
+    self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_TransferLearning\\.ModelsRecommendation\\.DynamicModelsRecommendation\\.RecommendationGranularity > option:nth-child(1)").click()
+    # 35 | click | id=id_1-gcard_Context.Experiment.TaskConfiguration.Scenario | 
     self.driver.find_element(By.ID, "id_1-gcard_Context.Experiment.TaskConfiguration.Scenario").click()
-    # 33 | click | css=#id_1-gcard_Context\.Experiment\.TaskConfiguration\.Scenario > option:nth-child(1) | 
+    # 36 | click | css=#id_1-gcard_Context\.Experiment\.TaskConfiguration\.Scenario > option:nth-child(1) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_Context\\.Experiment\\.TaskConfiguration\\.Scenario > option:nth-child(1)").click()
-    # 34 | click | id=id_1-gcard_Context.Model.Structure | 
+    # 37 | click | id=id_1-gcard_Context.Model.Structure | 
     self.driver.find_element(By.ID, "id_1-gcard_Context.Model.Structure").click()
-    # 35 | click | css=#id_1-gcard_Context\.Model\.Structure > option:nth-child(1) | 
+    # 38 | click | css=#id_1-gcard_Context\.Model\.Structure > option:nth-child(1) | 
     self.driver.find_element(By.CSS_SELECTOR, "#id_1-gcard_Context\\.Model\\.Structure > option:nth-child(1)").click()
-    # 36 | click | css=input:nth-child(13) | 
+    # 39 | click | css=input:nth-child(13) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(13)").click()
-    # 37 | type | id=id_2-Context.Experiment.Experiment.Energy.Frequency.Default | 2900.0
+    # 40 | type | id=id_2-Context.Experiment.Experiment.Energy.Frequency.Default | 2900.0
     self.driver.find_element(By.ID, "id_2-Context.Experiment.Experiment.Energy.Frequency.Default").send_keys("2900.0")
-    # 38 | type | id=id_2-Context.Experiment.Experiment.Energy.Threads.Default | 32
+    # 41 | type | id=id_2-Context.Experiment.Experiment.Energy.Threads.Default | 32
     self.driver.find_element(By.ID, "id_2-Context.Experiment.Experiment.Energy.Threads.Default").send_keys("32")
-    # 39 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType | f
-    self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.DataType").send_keys("f")
-    # 40 | click | id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType | 
-    self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.DataType").click()
-    # 41 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType | float
+    # 42 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.DataType | float
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.DataType").send_keys("float")
-    # 42 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange | 0, 150000
+    # 43 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange | 0, 150000
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.ExpectedValuesRange").send_keys("0, 150000")
-    # 43 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask | 10
+    # 44 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask | 10
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.MaxTimeToRunTask").send_keys("10")
-    # 44 | click | css=li:nth-child(1) > label | 
+    # 45 | click | css=li:nth-child(1) > label | 
     self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(1) > label").click()
-    # 45 | click | id=id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority | 
-    self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority").click()
     # 46 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority | 1
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.ModelPriority").send_keys("1")
     # 47 | type | id=id_2-Context.Experiment.TaskConfiguration.Objectives.Name | energy
@@ -473,152 +484,138 @@ Context {
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Objectives.Priority").send_keys("1")
     # 49 | type | id=id_2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile | search_space_96/Radix-500mio_full.csv
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.Scenario.FromFile.WsFile").send_keys("search_space_96/Radix-500mio_full.csv")
-    # 50 | type | id=id_2-Context.Experiment.TaskConfiguration.TaskName | ./re
-    # self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.TaskName").send_keys("./re")
-    # 51 | type | id=id_2-Context.Experiment.TaskConfiguration.TaskName | ./Resources/EnergyExperiment/EnergyExperimentData.json
+    # 50 | type | id=id_2-Context.Experiment.TaskConfiguration.TaskName | energy_consumption
     self.driver.find_element(By.ID, "id_2-Context.Experiment.TaskConfiguration.TaskName").send_keys("energy_consumption")
-    # 52 | click | css=input:nth-child(16) | 
+    # 51 | click | css=input:nth-child(16) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(16)").click()
-    # 53 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors | 5
+    # 52 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors | 5
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.BaseAcceptableErrors").send_keys("5")
-    # 54 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels | 0.95
+    # 53 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels | 0.95
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.ConfidenceLevels").send_keys("0.95")
-    # 55 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses | 0
+    # 54 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses | 0
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.DevicesAccuracyClasses").send_keys("0")
-    # 56 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies | 0
+    # 55 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies | 0
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.DevicesScaleAccuracies").send_keys("0")
-    # 57 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors | 50
+    # 56 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors | 50
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.MaxAcceptableErrors").send_keys("50")
-    # 58 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax | 10
+    # 57 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax | 10
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.RatiosMax").send_keys("10")
-    # 59 | click | id=id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.isEnabled_0 | 
-    self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.ExperimentAwareness.isEnabled_0").click()
-    # 60 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration | 5
+    # 58 | click | css=li:nth-child(1) > label | 
+    self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(1) > label").click()
+    # 59 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration | 5
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.MaxFailedTasksPerConfiguration").send_keys("5")
-    # 61 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration | 10
+    # 60 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration | 10
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.MaxTasksPerConfiguration").send_keys("10")
-    # 62 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration | 2
+    # 61 | type | id=id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration | 2
     self.driver.find_element(By.ID, "id_3-Repeater.AcceptableErrorBasedRepeater.MinTasksPerConfiguration").send_keys("2")
-    # 63 | click | css=input:nth-child(15) | 
+    # 62 | click | css=input:nth-child(15) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(15)").click()
-    # 64 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor | 3
+    # 63 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor | 3
     self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.BandwidthFactor").send_keys("3")
-    # 65 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth | 0.001
+    # 64 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth | 0.001
     self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.MinBandwirth").send_keys("0.001")
-    # 66 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction | 0
-    self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction").send_keys("0")
-    # 67 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize | 96
+    # 65 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction | 3
+    self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.RandomFraction").send_keys("3")
+    # 66 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize | 96
     self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.SamplingSize").send_keys("96")
-    # 68 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent | 30
+    # 67 | type | id=id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent | 30
     self.driver.find_element(By.ID, "id_4-Predictor.Models.Model.TPE.Parameters.TopNPercent").send_keys("30")
-    # 69 | type | id=id_4-Predictor.WindowSize | 1.0
+    # 68 | type | id=id_4-Predictor.WindowSize | 1.0
     self.driver.find_element(By.ID, "id_4-Predictor.WindowSize").send_keys("1.0")
-    # 70 | click | css=input:nth-child(11) | 
+    # 69 | click | css=input:nth-child(11) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(11)").click()
-    # 71 | type | id=id_5-TransferLearning.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value | 15
-    self.driver.find_element(By.ID, "id_5-TransferLearning.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value").send_keys("15")
-    # 72 | click | css=#id_5-TransferLearning\.DynamicModelsRecommendation\.isEnabled > li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.DynamicModelsRecommendation\\.isEnabled > li:nth-child(1) > label").click()
-    # 73 | click | id=id_5-TransferLearning.DynamicModelsRecommendation.isFewShotEnabled_0 | 
-    self.driver.find_element(By.ID, "id_5-TransferLearning.DynamicModelsRecommendation.isFewShotEnabled_0").click()
-    # 74 | click | id=id_5-TransferLearning.MultiTaskLearning.OldNewConfigsRatio | 
-    self.driver.find_element(By.ID, "id_5-TransferLearning.MultiTaskLearning.OldNewConfigsRatio").click()
-    # 75 | type | id=id_5-TransferLearning.MultiTaskLearning.OldNewConfigsRatio | 2.416424349152367
-    self.driver.find_element(By.ID, "id_5-TransferLearning.MultiTaskLearning.OldNewConfigsRatio").send_keys("2.416424349152367")
-    # 76 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.TransferBestConfigsOnly > li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.TransferBestConfigsOnly > li:nth-child(1) > label").click()
-    # 77 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label").click()
-    # 78 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.isEnabled > li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.isEnabled > li:nth-child(1) > label").click()
-    # 79 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.isFewShotEnabled > li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.isFewShotEnabled > li:nth-child(1) > label").click()
-    # 80 | click | id=id_5-TransferLearning.TransferExpediencyDetermination.ClusteringAlgorithm | 
-    self.driver.find_element(By.ID, "id_5-TransferLearning.TransferExpediencyDetermination.ClusteringAlgorithm").click()
-    # 81 | type | id=id_5-TransferLearning.TransferExpediencyDetermination.ClusteringAlgorithm | MeanShiftClustering
-    self.driver.find_element(By.ID, "id_5-TransferLearning.TransferExpediencyDetermination.ClusteringAlgorithm").send_keys("MeanShiftClustering")
-    # 82 | type | id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType | NormDifferenceComparator
+    # 70 | click | id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value | 
+    self.driver.find_element(By.ID, "id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value").click()
+    # 71 | type | id=id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value | 15
+    self.driver.find_element(By.ID, "id_5-TransferLearning.ModelsRecommendation.DynamicModelsRecommendation.RecommendationGranularity.Finite.Value").send_keys("15")
+    # 72 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.Standard\.Filters\.FewShot > li:nth-child(1) > label | 
+    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.Filters\\.FewShot > li:nth-child(1) > label").click()
+    # 73 | click | id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio | 
+    self.driver.find_element(By.ID, "id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio").click()
+    # 74 | type | id=id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio | 2.416424349152367
+    self.driver.find_element(By.ID, "id_5-TransferLearning.MultiTaskLearning.Standard.OldNewConfigsRatio").send_keys("2.416424349152367")
+    # 75 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.Standard\.TransferBestConfigsOnly > li:nth-child(1) > label | 
+    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferBestConfigsOnly > li:nth-child(1) > label").click()
+    # 76 | click | css=#id_5-TransferLearning\.MultiTaskLearning\.Standard\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label | 
+    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.MultiTaskLearning\\.Standard\\.TransferFromMostSimilarExperimentsFirst > li:nth-child(2) > label").click()
+    # 77 | click | id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType | 
+    self.driver.find_element(By.ID, "id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType").click()
+    # 78 | type | id=id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType | NormDifferenceComparator
     self.driver.find_element(By.ID, "id_5-TransferLearning.TransferExpediencyDetermination.ComparatorType").send_keys("NormDifferenceComparator")
-    # 83 | type | id=id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples | 10
+    # 79 | type | id=id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples | 10
     self.driver.find_element(By.ID, "id_5-TransferLearning.TransferExpediencyDetermination.MinNumberOfSamples").send_keys("10")
-    # 84 | click | css=#id_5-TransferLearning\.isEnabled > li:nth-child(1) > label | 
-    self.driver.find_element(By.CSS_SELECTOR, "#id_5-TransferLearning\\.isEnabled > li:nth-child(1) > label").click()
-    # 85 | click | css=input:nth-child(17) | 
-    self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(17)").click()
-    # 86 | type | id=id_6-StopCondition.BadConfigurationBasedSC.Name | BadConfigurationBased
+    # 80 | click | id=id_5-TransferLearning.isEnabled_0 | 
+    self.driver.find_element(By.ID, "id_5-TransferLearning.isEnabled_0").click()
+    # 81 | click | css=input:nth-child(13) | 
+    self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(13)").click()
+    # 82 | type | id=id_6-StopCondition.BadConfigurationBasedSC.Name | BadConfigurationBased
     self.driver.find_element(By.ID, "id_6-StopCondition.BadConfigurationBasedSC.Name").send_keys("BadConfigurationBased")
-    # 87 | type | id=id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations | 10
+    # 83 | type | id=id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations | 10
     self.driver.find_element(By.ID, "id_6-StopCondition.BadConfigurationBasedSC.Parameters.MaxBadConfigurations").send_keys("10")
-    # 88 | type | id=id_6-StopCondition.GuaranteedSC.Name | Guaranteed
+    # 84 | type | id=id_6-StopCondition.GuaranteedSC.Name | Guaranteed
     self.driver.find_element(By.ID, "id_6-StopCondition.GuaranteedSC.Name").send_keys("Guaranteed")
-    # 89 | type | id=id_6-StopCondition.ImprovementBasedSC.Name | ImprovementBased
+    # 85 | type | id=id_6-StopCondition.ImprovementBasedSC.Name | ImprovementBased
     self.driver.find_element(By.ID, "id_6-StopCondition.ImprovementBasedSC.Name").send_keys("ImprovementBased")
-    # 90 | type | id=id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement | 5
+    # 86 | type | id=id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement | 5
     self.driver.find_element(By.ID, "id_6-StopCondition.ImprovementBasedSC.Parameters.MaxConfigsWithoutImprovement").send_keys("5")
-    # 91 | type | id=id_6-StopCondition.QuantityBasedSC.Name | QuantityBased
+    # 87 | type | id=id_6-StopCondition.QuantityBasedSC.Name | QuantityBased
     self.driver.find_element(By.ID, "id_6-StopCondition.QuantityBasedSC.Name").send_keys("QuantityBased")
-    # 92 | type | id=id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs | 15
+    # 88 | type | id=id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs | 15
     self.driver.find_element(By.ID, "id_6-StopCondition.QuantityBasedSC.Parameters.MaxConfigs").send_keys("15")
-    # 93 | type | id=id_6-StopCondition.TimeBasedSC.Name | TimeBased
+    # 89 | type | id=id_6-StopCondition.TimeBasedSC.Name | TimeBased
     self.driver.find_element(By.ID, "id_6-StopCondition.TimeBasedSC.Name").send_keys("TimeBased")
-    # 94 | type | id=id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime | 10
+    # 90 | type | id=id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime | 10
     self.driver.find_element(By.ID, "id_6-StopCondition.TimeBasedSC.Parameters.MaxRunTime").send_keys("10")
-    # 95 | type | id=id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit | minutes
+    # 91 | type | id=id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit | minutes
     self.driver.find_element(By.ID, "id_6-StopCondition.TimeBasedSC.Parameters.TimeUnit").send_keys("minutes")
-    # 96 | click | css=input:nth-child(15) | 
+    # 92 | click | css=input:nth-child(15) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(15)").click()
-    # 97 | type | id=id_7-StopConditionTriggerLogic.Expression | "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased"
+    # 93 | type | id=id_7-StopConditionTriggerLogic.Expression | "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased"
     self.driver.find_element(By.ID, "id_7-StopConditionTriggerLogic.Expression").send_keys("\"(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased\"")
-    # 98 | type | id=id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod | 1
+    # 94 | type | id=id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod | 1
     self.driver.find_element(By.ID, "id_7-StopConditionTriggerLogic.InspectionParameters.RepetitionPeriod").send_keys("1")
-    # 99 | type | id=id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit | seconds
+    # 95 | type | id=id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit | seconds
     self.driver.find_element(By.ID, "id_7-StopConditionTriggerLogic.InspectionParameters.TimeUnit").send_keys("seconds")
-    # 100 | click | css=input:nth-child(8) | 
+    # 96 | click | css=input:nth-child(8) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(8)").click()
-    # 101 | type | id=id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks | 10000
+    # 97 | type | id=id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks | 10000
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Chauvenet.MaxActiveNumberOfTasks").send_keys("10000")
-    # 102 | type | id=id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks | 3
+    # 98 | type | id=id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks | 3
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Chauvenet.MinActiveNumberOfTasks").send_keys("3")
-    # 103 | type | id=id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks | 30
+    # 99 | type | id=id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks | 30
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Dixon.MaxActiveNumberOfTasks").send_keys("30")
-    # 104 | type | id=id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks | 3
+    # 100 | type | id=id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks | 3
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Dixon.MinActiveNumberOfTasks").send_keys("3")
-    # 105 | type | id=id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks | 10000
+    # 101 | type | id=id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks | 10000
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Grubbs.MaxActiveNumberOfTasks").send_keys("10000")
-    # 106 | type | id=id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks | 3
+    # 102 | type | id=id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks | 3
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Grubbs.MinActiveNumberOfTasks").send_keys("3")
-    # 107 | type | id=id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks | 10000
+    # 103 | type | id=id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks | 10000
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Mad.MaxActiveNumberOfTasks").send_keys("10000")
-    # 108 | type | id=id_8-OutliersDetection.Mad.MinActiveNumberOfTasks | 3
+    # 104 | type | id=id_8-OutliersDetection.Mad.MinActiveNumberOfTasks | 3
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Mad.MinActiveNumberOfTasks").send_keys("3")
-    # 109 | type | id=id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks | 10000
+    # 105 | type | id=id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks | 10000
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Quartiles.MaxActiveNumberOfTasks").send_keys("10000")
-    # 110 | type | id=id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks | 3
+    # 106 | type | id=id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks | 3
     self.driver.find_element(By.ID, "id_8-OutliersDetection.Quartiles.MinActiveNumberOfTasks").send_keys("3")
-    # 111 | click | css=input:nth-child(15) | 
+    # 107 | click | css=input:nth-child(15) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(15)").click()
-    # 112 | click | id=id_9-DomainDescription.DataFile | 
-    self.driver.find_element(By.ID, "id_9-DomainDescription.DataFile").click()
-    # 113 | type | id=id_9-DomainDescription.DataFile | ./Resources/EnergyExperiment/EnergyExperimentData.json
+    # 108 | type | id=id_9-DomainDescription.DataFile | ./Resources/EnergyExperiment/EnergyExperimentData.json
     self.driver.find_element(By.ID, "id_9-DomainDescription.DataFile").send_keys("./Resources/EnergyExperiment/EnergyExperimentData.json")
-    # 114 | click | css=input:nth-child(6) | 
+    # 109 | click | css=input:nth-child(6) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(6)").click()
-    # 115 | click | id=id_10-DefaultConfigurationHandler.type | 
-    self.driver.find_element(By.ID, "id_10-DefaultConfigurationHandler.type").click()
-    # 116 | type | id=id_10-DefaultConfigurationHandler.type | Random
+    # 110 | type | id=id_10-DefaultConfigurationHandler.type | Random
     self.driver.find_element(By.ID, "id_10-DefaultConfigurationHandler.type").send_keys("Random")
-    # 117 | click | css=input:nth-child(6) | 
+    # 111 | click | css=input:nth-child(6) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(6)").click()
-    # 118 | click | id=id_11-SelectionAlgorithm.type | 
-    self.driver.find_element(By.ID, "id_11-SelectionAlgorithm.type").click()
-    # 119 | type | id=id_11-SelectionAlgorithm.type | Sobol
+    # 112 | type | id=id_11-SelectionAlgorithm.type | Sobol
     self.driver.find_element(By.ID, "id_11-SelectionAlgorithm.type").send_keys("Sobol")
-    # 120 | click | css=input:nth-child(6) | 
+    # 113 | click | css=input:nth-child(6) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(6)").click()
-    # 121 | type | id=id_12-General.NumberOfWorkers | 3
+    # 114 | type | id=id_12-General.NumberOfWorkers | 3
     self.driver.find_element(By.ID, "id_12-General.NumberOfWorkers").send_keys("3")
-    # 122 | type | id=id_12-General.result_storage | ./Results/
+    # 115 | type | id=id_12-General.result_storage | ./Results/
     self.driver.find_element(By.ID, "id_12-General.result_storage").send_keys("./Results/")
-    # 123 | click | css=input:nth-child(7) | 
+    # 116 | click | css=input:nth-child(7) | 
     self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(7)").click()
   
