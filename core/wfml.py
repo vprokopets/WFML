@@ -115,6 +115,32 @@ class ExpressionElement(object):
     def initial_type_reference_check(self):
         return self.op[0].initial_type_reference_check()
 
+    def check_gcard(self, feature: str):
+        """
+        Check, whether feature is allowed according to group cardinality.
+        INPUTS
+        feature: feature to check.
+        RETURN
+        (type = bool): check result.
+        """
+        for key, value in self.get_wfml_data('Cardinalities.Feature').items():
+            if key == feature and value == 0:
+                return False
+        logging.debug(f'GcardTable: {self.get_wfml_data("Cardinalities.Group")}')
+        for key, value in self.get_wfml_data('Cardinalities.Group').items():
+            if key == feature:
+                return True
+            if type(value) is not list:
+                value = [value]
+            # This method checks all parts of feature full path to be sure, that all cardinalities are valid.
+            for item in value:
+                check = key + '.' + item
+                if check in feature:
+                    return True
+            if key in feature:
+                return False
+        return True
+
     @property
     def fcard_validation(self):
         ret = self.op[0].fcard_validation
@@ -592,7 +618,7 @@ class prec12(ExpressionElement):
                     self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
                 ret = self.op[0].value
-                logging.debug(f'{ret} {operation} {operand.value}')
+                logging.info(f'{ret} {operation} {operand.value}')
 
             if operation == '<':
                 ret = ret < operand.value
@@ -697,10 +723,10 @@ class prec10(ExpressionElement):
             for operation, operand in zip(self.op[1::2], self.op[2::2]):
                 self.update_wfml_data('Flags.Update', True)
                 ret = self.op[0].value
+                cardinality_flag = self.get_wfml_data('Flags.Cardinality')
                 self.update_wfml_data('Flags.Update', False)
                 right_value = operand.value
                 if operation == '=':
-                    cardinality_flag = self.get_wfml_data('Flags.Cardinality')
                     logging.debug(f"Level 10 assignment operation: {ret} {operation} {right_value} {cardinality_flag}")
 
                     # Assign to complex path variable.
@@ -1084,16 +1110,15 @@ class term(ExpressionElement):
     def map_variable(self, feature=None):
         if feature is None:
             feature = self.op
-        threshold = self.get_wfml_data('Iterable.Mapping.Total')
-        repeat = self.get_wfml_data('Iterable.Mapping.Current')
+        threshold = self.get_wfml_data('Iterable.Mapping.Current')
         mappings = self.get_wfml_data('Iterable.Mapping.Structure')
-        for key, value in mappings.items():
-            threshold = threshold / len(mappings[feature])
-            suffix = repeat / threshold
-            repeat = repeat % threshold
+        for key, _ in mappings.items():
             if key == feature:
+                suffix = int(threshold % len(mappings[key]))
                 break
-        return f'{feature}_{str(int(suffix))}'
+            else:
+                threshold = int(threshold / len(mappings[key]))
+        return mappings[feature][suffix]
 
     def mapping_check(self):
         if isinstance(self.op, str) and not re.match(r'(\w+\.)+\w+', self.op):
@@ -1105,11 +1130,20 @@ class term(ExpressionElement):
         else:
             op = self.op
         if op in self.get_wfml_data('Dependencies.Mappings').keys():
+            mappings = self.get_wfml_data('Dependencies.Mappings')[op]
+            rm_list = []
+            for i in mappings:
+                res = self.check_gcard(i)
+                if res is False:
+                    rm_list.append(i)
+            for i in rm_list:
+                mappings.remove(i)
+
             self.update_wfml_data('Iterable.Mapping.Total',
                                   self.get_wfml_data('Iterable.Mapping.Total') * len(
-                                      self.get_wfml_data('Dependencies.Mappings')[op]))
+                                      mappings))
             self.update_wfml_data('Iterable.Mapping.Structure',
-                                  {op: self.get_wfml_data('Dependencies.Mappings')[op]})
+                                  {op: mappings})
 
     def initial_super_reference_check(self):
         if self.op in self.get_wfml_data('Namespace').keys():
@@ -1199,7 +1233,6 @@ class textX_API():
         self.reset_wfml_data('Iterable.Mapping.Structure')
         self.reset_wfml_data('Flags.Cardinality')
         constraint.name.mapping_check()
-        logging.debug(f'Constraint name: {constraint.name}')
 
         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
@@ -1898,11 +1931,30 @@ class textX_API():
         key (type = dict): read value.
         """
         key = {}
+        mappings = self.get_wfml_data('Dependencies.Mappings')
+        path_s = path.split('.')
+        path_arr = []
+        f_p = ''
 
-        if path in self.get_wfml_data('Dependencies.Mappings').keys():
-            path = self.get_wfml_data('Dependencies.Mappings')[path]
+        if path in mappings.keys():
+            path_arr = mappings[path]
         else:
+            for part in path_s:
+                if f_p == '':
+                    f_p = part
+                else:
+                    f_p = f'{f_p}.{part}'
+
+                if f_p in mappings.keys():
+                    for elem in mappings[f_p]:
+                        path_arr.append(elem)
+                if path_arr != []:
+                    for elem in path_arr:
+                        elem = f'{elem}.{part}'
+        if path_arr == []:
             path = [path]
+        else:
+            path = path_arr
         for subpath in path:
             namespace = self.get_wfml_data('Namespace')
             for part in subpath.split('.'):
@@ -1929,7 +1981,11 @@ class textX_API():
         Update global namespace with data from web interface.
         """
         for k, v in input_data.items():
+            logging.info(f'Updating namespace. Key: {k}, value: {v}')
             self.update_namespace(new={k: v})
+        if len(input_data.keys()) >= 1:
+            top_level_key = f'Namespace.{list(input_data.keys())[0].split(".")[0]}'
+            logging.info(f'Updated namespace: {self.get_wfml_data(top_level_key)}')
 
     def group_feature(self, feature, namespace: dict):
         """
@@ -2011,7 +2067,6 @@ class textX_API():
         if check_gcard is True:
             for child in feature.nested:
                 for child1 in child.child:
-                    print(self.cname(child1))
                     constraints_validated = 0
                     # Perform constraint validation using feature mappings if such are exist.
                     if self.cname(child1) == "Constraint":
@@ -2020,15 +2075,27 @@ class textX_API():
                         self.reset_wfml_data('Iterable.Mapping.Structure')
                         self.reset_wfml_data('Flags.Cardinality')
                         child1.name.mapping_check()
-                        logging.debug(f'Constraint name: {child1.name}')
+                        logging.debug(f'Iterable Mapping Current: {self.get_wfml_data("Iterable.Mapping.Current")}')
+                        logging.debug(f'Iterable Mapping Total: {self.get_wfml_data("Iterable.Mapping.Total")}')
+                        logging.debug(f'Iterable Mapping Structure: {self.get_wfml_data("Iterable.Mapping.Structure")}')
+                        logging.debug(f'Path: {self.get_wfml_data("Path")}')
 
                         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
                             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
-                            if self.get_wfml_data('Flags.CrossTreeCheck') is True:
-                                child1.name.cross_tree_check()
-                            else:
-                                child1.name.value
-                                constraints_validated += 1
+                            repeat = self.get_wfml_data('Iterable.Mapping.Current')
+                            mappings = self.get_wfml_data('Iterable.Mapping.Structure')
+                            try:
+                                check_gcard = self.check_gcard(mappings[list(mappings.keys())[0]][repeat])
+                            except KeyError:
+                                pass
+                            except IndexError:
+                                pass
+                            if check_gcard is True:
+                                if self.get_wfml_data('Flags.CrossTreeCheck') is True:
+                                    child1.name.cross_tree_check()
+                                else:
+                                    child1.name.value
+                                    constraints_validated += 1
                             self.update_wfml_data('Iterable.Mapping.Current', self.get_wfml_data('Iterable.Mapping.Current') + 1)
 
                         if self.get_wfml_data('Flags.Cardinality') == 'fcard':
@@ -2036,7 +2103,7 @@ class textX_API():
 
                     # Perform constraint validation for nested features.
                     elif self.cname(child1) == 'Feature' and isinstance(child1.reference, type(None)):
-                        logging.info(f'CLAFR {feature.namespace}')
+                        logging.info(f'Feature namespace {feature.namespace}')
                         self.feature_constraints_validation(child1, False)
                 logging.info(f'For feature {feature.name} there is/are {constraints_validated} constraint expression(s) validated.')
 
@@ -2046,16 +2113,6 @@ class textX_API():
         else:
             self.update_wfml_data('Path', local_path)
         return feature.namespace
-
-    def cardinalities_update(self, data):
-        for record in data:
-            if record[0] == 'fcard':
-                self.update_wfml_data('Cardinalities.Feature', record[1])
-                self.mapping(record[1])
-            elif record[0] == 'gcard':
-                self.update_wfml_data('Cardinalities.Group', record[1])
-            else:
-                raise ValueError('Incorrect cardinality type.')
 
     def add_super_relations(self, feature):
         """
@@ -2141,6 +2198,8 @@ class textX_API():
         copy: copy of original feature name with added suffix _x, where x is sequentional mapping number.
         """
         for original in self.sort_fcards():
+            if original == 'Context.Experiment.TaskConfiguration.Objectives.Objective':
+                full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
             if original not in self.get_wfml_data('Dependencies.Mappings').keys():
                 copies = []
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
@@ -2156,7 +2215,7 @@ class textX_API():
             else:
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
                 if isinstance(full_feature_cardinality, int) and full_feature_cardinality != 1:
-                    if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings').keys()):
+                    if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings')[original]):
                         copies = []
                         for iteration in range(0, full_feature_cardinality):
                             copies.append(self.name_generation(original, structure, iteration))
@@ -2201,17 +2260,28 @@ class textX_API():
         e (type = Exception): if not.
         """
         self.update_wfml_data('Path', '')
-        try:
+        debug_mode = False
+        if debug_mode is True:
             for element in self.get_wfml_data('Model').elements:
                 if self.cname(element) == 'Feature' and element.name == feature:
                     self.update_wfml_data('Flags.Exception', False)
                     self.feature_constraints_validation(element, True)
             self.update_wfml_data('Path', '')
+            logging.debug(pprint.pprint(self.get_wfml_data('Namespace')))
             return True
-        except Exception as e:
-            logging.info(f'! Exception: {e}.')
-            self.update_wfml_data('Path', '')
-            return e
+        else:
+            try:
+                for element in self.get_wfml_data('Model').elements:
+                    if self.cname(element) == 'Feature' and element.name == feature:
+                        self.update_wfml_data('Flags.Exception', False)
+                        self.feature_constraints_validation(element, True)
+                self.update_wfml_data('Path', '')
+                logging.debug(pprint.pprint(self.get_wfml_data('Namespace')))
+                return True
+            except Exception as e:
+                logging.info(f'! Exception: {e}.')
+                self.update_wfml_data('Path', '')
+                return e
 
     def reset_global_variables(self):
         """
@@ -2437,11 +2507,11 @@ class textX_API():
         fcards = self.get_wfml_data('Cardinalities.Feature')
         x = {}
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value != 1):
+            if isinstance(value, str) or (isinstance(value, int)):
                 x.update({key: len(key.split('.'))})
         sort = dict(sorted(x.items(), key=lambda item: item[1]))
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value != 1):
+            if isinstance(value, str) or (isinstance(value, int)):
                 sort.update({key: value})
         return sort
 
@@ -2501,7 +2571,46 @@ class textX_API():
         self.clear_abstract_features()
 
         self.initial_snap()
+        # self.test_textX()
         return stages
+
+    def copy_textX_model_test(self):
+        model = self.get_wfml_data('Model')
+        for feature in model.elements:
+            if self.cname(feature) == 'Feature':
+                print(f'Feature: {feature.name}')
+                print(f'Type: {type(feature)}')
+                for child in feature.nested:
+                    del_arr = []
+                    add_arr = []
+                    for subfeature in child.child:
+                        print(f'Subfeature: {subfeature.name}')
+                        print(f'Type: {type(subfeature)}')
+                        if subfeature.name == 'b':
+                            for index in range(0, 2):
+                                # child_copy = type('child_copy', subfeature.__bases__, dict(subfeature.__dict__))
+                                child_copy = copy.copy(subfeature)
+                                child_copy.name = f'{child_copy.name}_{index}'
+                                if child_copy not in add_arr:
+                                    add_arr.append(child_copy)
+                                if subfeature not in del_arr:
+                                    del_arr.append(subfeature)
+                    print(f'What is child: {child.child}')
+                    print(f'Type: {type(child.child)}')
+                    for i, o in enumerate(child.child):
+                        if o in del_arr:
+                            del child.child[i]
+
+                    for subfeature in add_arr:
+                        child.child.append(subfeature)
+                    print(f'What is child now: {child.child}')
+                    print(f'Type: {type(child.child)}')
+
+                for child in feature.nested:
+                    for subfeature in child.child:
+                        print(f'New subfeature: {subfeature.name}')
+                        print(f'Type: {type(subfeature)}')
+
 
     def solve_constraints(self):
         """
@@ -2510,11 +2619,11 @@ class textX_API():
         Performs solving for all types of constraints.
         """
         logging.debug('Solving constraints...')
-        print(self.get_wfml_data('Stages.List'))
+        logging.debug(self.get_wfml_data('Stages.List'))
         for stage in self.get_wfml_data('Stages.List')[0]:
             logging.debug(f'For stage {stage}')
             if stage != "FeatureCardinalities" and stage != "GroupCardinalities":
-                cycles = api.get_cycle_keys()
+                cycles = self.get_cycle_keys()
                 if stage in cycles.keys():
                     for element in cycles[stage]:
                         self.validate_feature(element)
@@ -2551,9 +2660,9 @@ class textX_API():
     def feature_cardinality_check(self, key):
         logging.debug(f'Checking feature cardinality for {key}.')
         base_feature = key.split('_')
-        print(f'Base Feature: {base_feature}')
+        logging.debug(f'Base Feature: {base_feature}')
         base_subfeature = base_feature[0].split('.')
-        print(f'Base SubFeature: {base_subfeature}')
+        logging.debug(f'Base SubFeature: {base_subfeature}')
         res = ''
         if len(base_subfeature) > 1:
             for subfeature in base_subfeature[:-1]:
@@ -2564,7 +2673,7 @@ class textX_API():
             region = self.get_wfml_data(f'Namespace.{res}')
         else:
             region = self.get_wfml_data('Namespace')
-        print(f'Region: {region.keys()}')
+        logging.debug(f'Region: {region.keys()}')
         counter = 0
         for feature in region.keys():
             if base_subfeature[-1] == feature.split('_')[0]:
@@ -2623,9 +2732,9 @@ class textX_API():
 
 if __name__ == '__main__':
     this_folder = dirname(__file__)
-    print(this_folder)
+    logging.info(this_folder)
     description = open(join(this_folder, 'configuration.tx')).read()
-    print(description)
+    logging.info(description)
     with open(join(this_folder, 'configuration.json')) as json_file:
         configuration = json.load(json_file)
     api = textX_API()

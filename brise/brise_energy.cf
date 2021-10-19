@@ -27,7 +27,7 @@ abstract OutliersDetector 5 {
     [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]
 }
 
-or OutliersDetection{
+or OutliersDetection {
     Dixon : OutliersDetector
     Grubbs : OutliersDetector
     Chauvenet : OutliersDetector
@@ -41,23 +41,32 @@ abstract AbstrRepeater {
     [MinTasksPerConfiguration <= MaxTasksPerConfiguration]
 }
 
-xor Repeater{
-    DefaultRepeater : AbstrRepeater {
-        [MinTasksPerConfiguration >= 2]
-        [MaxTasksPerConfiguration >= 2]
+RepetitionManagement {
+    DefaultConfiguration {
+        TasksPerConfiguration -> integer
+        [TasksPerConfiguration >= 10]
     }
-    AcceptableErrorBasedRepeater: AbstrRepeater 1{
-        [MinTasksPerConfiguration >= 1]
-        [MaxTasksPerConfiguration >= 1]
-        MaxFailedTasksPerConfiguration -> integer
-        BaseAcceptableErrors -> integer
-        ConfidenceLevels -> float
-        DevicesScaleAccuracies -> integer
-        DevicesAccuracyClasses -> integer
-        ExperimentAwareness {
-            isEnabled -> boolean
-            MaxAcceptableErrors -> integer
-            RatiosMax -> integer
+    Repeaters{
+        xor Repeater {
+            QuantityBased : AbstrRepeater {
+                [MinTasksPerConfiguration >= 1]
+            }
+            AcceptableErrorBased: AbstrRepeater {
+                MinTasksPerBadConfiguration -> integer
+                
+                MaxFailedTasksPerConfiguration -> integer
+                BaseAcceptableErrors -> integer
+                ConfidenceLevels -> float
+                DevicesScaleAccuracies -> integer
+                DevicesAccuracyClasses -> integer
+                [MinTasksPerConfiguration >= 2]
+                [MinTasksPerBadConfiguration >= 1]
+                ExperimentAwareness {
+                    isEnabled -> boolean
+                    MaxAcceptableErrors -> integer
+                    RatiosMax -> integer
+                }
+            }
         }
     }
 }
@@ -79,17 +88,14 @@ abstract TreeParzenEstimator: Model {
 
 abstract MultiArmedBandit: Model {
     Parameters {
-        xor cType{
-            int
-            float
-            std
-        }
+        cType -> string
         c -> float
-        [if gcard.cType == float then 0 <= c]
-        [if gcard.cType == float then c <= 1]
-        [if gcard.cType == std then c = std]
+        [cType in {int, float, std}]
+        [if cType == float then 0 <= c]
+        [if cType == float then c <= 1]
+        [if cType == std then c = std]
     }
-    [type = 'brise.MultiArmedBandit']
+    [Type = 'brise.MultiArmedBandit']
 }
 
 abstract ModelMock
@@ -143,7 +149,7 @@ abstract SC {
 }
 
 StopCondition {
-    QuantityBasedSC : SC 1..5{
+    QuantityBasedSC : SC + {
         Parameters {
             MaxConfigs -> integer
             [MaxConfigs > 0]
@@ -155,7 +161,7 @@ StopCondition {
         [Type = Guaranted]
     }
 
-    BadConfigurationBasedSC : SC 1..5{
+    BadConfigurationBasedSC : SC + {
         Parameters {
             MaxBadConfigurations -> integer
             [MaxBadConfigurations > 0]
@@ -163,7 +169,7 @@ StopCondition {
         [Type = BadConfigurationBased]
     }
 
-    ImprovementBasedSC : SC 1..5{
+    ImprovementBasedSC : SC + {
         Parameters {
             MaxConfigsWithoutImprovement -> integer
             [MaxConfigsWithoutImprovement > 0]
@@ -171,7 +177,7 @@ StopCondition {
         [Type = ImprovementBased]
     }
 
-    TimeBasedSC : SC 1..5{
+    TimeBasedSC : SC + {
         Parameters {
             MaxRunTime -> integer
             TimeUnit -> string
@@ -183,16 +189,16 @@ StopCondition {
 }
 
 
-TransferLearning{
+TransferLearning {
     isEnabled -> boolean
-    TransferExpediencyDetermination{
+    TransferExpediencyDetermination {
         ComparatorType -> string
         MinNumberOfSamples -> integer
         xor NumberOfSimilarExperiments {
             Numeric {
                 Value -> integer
             }
-            Categorical{
+            Categorical {
                 Value -> predefined
                 [Value = 'use_clustering']
             }
@@ -200,7 +206,7 @@ TransferLearning{
         ClusteringAlgorithm -> predefined
         [ClusteringAlgorithm = MeanShiftClustering]
     }
-    MultiTaskLearning ?{
+    MultiTaskLearning ? {
         Standard{
             Filters{
                 FewShot -> boolean
@@ -211,25 +217,28 @@ TransferLearning{
             [OldNewConfigsRatio >= 0.1]
         }      
     }
-    ModelsRecommendation ?{
-        DynamicModelsRecommendation{
+    ModelsRecommendation ? {
+        DynamicModelsRecommendation {
             xor RecommendationGranularity {
-                Finite{
+                Finite {
                     Value -> integer
                     [Value >= 1]
                 }
-                Infinite{
+                Infinite {
                     Value -> predefined
                     [Value = 'inf']
                 }
-                TimeToBuildModelThreshold -> float
-                TimeUnit -> string
-                ThresholdType -> string
-                PerformanceMetric -> string
-                [TimeUnit in {'seconds', 'minutes', 'hours', 'days'}]
-                [ThresholdType in {'hard', 'soft'}]
-                [PerformanceMetric in {'AverageRelativeImprovement'}]
             }
+            Filters {
+                FewShot -> boolean
+            }
+            TimeToBuildModelThreshold -> float
+            TimeUnit -> string
+            ThresholdType -> string
+            PerformanceMetric -> string
+            [TimeUnit in {seconds, minutes, hours, days}]
+            [ThresholdType in {hard, soft}]
+            [PerformanceMetric in {AverageRelativeImprovement}] 
         }
     }
 }
@@ -323,16 +332,18 @@ Context {
                     Hyperparameters -> string
                 }
             }
-            Objectives + {
-            Name -> string
-            DataType -> string
-            Minimization -> boolean
-            Priority -> integer
-            ModelPriority -> integer
-            ExpectedValuesRange -> floatArray
-            MaxTimeToRunTask -> integer ?
+            Objectives{
+                Objective + {
+                    Name -> string
+                    DataType -> string
+                    Minimization -> boolean
+                    Priority -> integer
+                    ModelPriority -> integer
+                    ExpectedValuesRange -> floatArray
+                    MaxTimeToRunTask -> integer ?
+                }
             }
-            [fcard.Repeater.AcceptableErrorBasedRepeater = fcard.Context.Experiment.TaskConfiguration.Objectives]
+            [fcard.RepetitionManagement.Repeaters.Repeater = fcard.Context.Experiment.TaskConfiguration.Objectives.Objective]
         }
 
         Experiment : NominalHyperparameter {

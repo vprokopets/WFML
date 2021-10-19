@@ -382,7 +382,7 @@ class WizardClass(SessionWizardView):
                 ignore_fields.append(gcard)
             if value == 'xor':
                 self.form.fields[f'gcard_{gcard}'] = forms.ChoiceField(choices=choises_list)
-            else:
+            elif type(value) is int or value == 'or':
                 self.form.fields[f'gcard_{gcard}'] = forms.MultipleChoiceField(choices=choises_list,
                                                                                 widget=forms.CheckboxSelectMultiple)
 
@@ -558,7 +558,6 @@ def factory_wizard(request, *args, **kwargs):
     wizard
     """
     if request.method == 'POST' and 'mybtn2' in request.POST.keys():
-        print(f'DSADAD {request.POST.keys()}')
         res = api.save_json()
         logging.info(f'! Product configuration was not finished. You could always continue from this place: {res}')
 
