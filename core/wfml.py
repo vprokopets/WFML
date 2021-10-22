@@ -836,6 +836,10 @@ class prec7(ExpressionElement):
             elif operation == 'max':
                 logging.debug(f"Level 8 max operation: {operation}")
                 ret = max(operand.value)
+
+            elif operation == 'size':
+                logging.debug(f"Level 8 size operation: {operation}")
+                ret = len(operand.value)
         if len(self.op) == 1:
             ret = self.op[0].value
 
@@ -1055,10 +1059,15 @@ class term(ExpressionElement):
 
             # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
             elif re.match(r'(\w+\.)+\w+', op):
+                path = op.split('.')
+                if (path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent') and path[1] == 'self':
+                    op = self.get_wfml_data('Path')
                 # Check for mappings
                 if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
                     op = self.map_variable()
                 self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
+                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent':
+                    op = f'{path[0]}.{op}'
                 path = op.split('.')
 
                 # Perform feature of group cardinality search if first part of string is a appropriate keyword.
@@ -1085,13 +1094,34 @@ class term(ExpressionElement):
                     except KeyError:
                         raise Exception(f'No such cardinality exist {full_path} for type {cardinality_flag}')
 
-                elif path[0] == 'childs':
-                    path = path[1:]
-                    res = self.get_wfml_data('Namespace')
-                    for section in path:
-                        res = res[section]
-                    res = res['value']
-                    res = list(res.keys())
+                # Perform keyword checks
+                elif path[0] == 'parent' or path[0] == 'path' or path[0] == 'childs':
+
+                    # Construct path depending on keyword 'self' if such exist
+                    if path[1] == 'self' and len(path) == 2:
+                        npath = self.get_wfml_data('Path').split('.')
+                    else:
+                        npath = path[1:]
+
+                    # In case of 'parent' keyword remove the last part from the path
+                    if path[0] == 'parent':
+                        npath = npath[:-1]
+
+                    # In case of 'childs' keyword return list of child's path
+                    if path[0] == 'childs':
+                        res = self.get_wfml_data('Namespace')
+                        for section in npath:
+                            res = res[section]
+                        res = list(res.keys())
+
+                    # In case of 'parent' or 'path' keyword return path
+                    else:
+                        res = ''
+                        for section in npath:
+                            if res == '':
+                                res = section
+                            else:
+                                res = f'{res}.{section}'
 
                 # If no cardinalities keyword presented in path, then try to find variable using this path.
                 else:
@@ -2260,7 +2290,7 @@ class textX_API():
         e (type = Exception): if not.
         """
         self.update_wfml_data('Path', '')
-        debug_mode = False
+        debug_mode = True
         if debug_mode is True:
             for element in self.get_wfml_data('Model').elements:
                 if self.cname(element) == 'Feature' and element.name == feature:

@@ -1,0 +1,18 @@
+abstract Feature {
+    Region -> predefined
+    test -> predefined
+}
+
+
+Feature1: Feature {
+    [Region = 1]
+    [test = childs.self]
+    Feature11: Feature {
+        [Region = 1]
+        [test = parent.self]
+        Feature111: Feature{
+            [Region = 2]
+            [test = path.self]
+        }
+    }
+}

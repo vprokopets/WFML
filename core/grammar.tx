@@ -80,7 +80,7 @@ op11: 'requires' | 'excludes'                                   ;
 op10: '='                                                       ;
 op9:  '+' | '-'                                                 ;
 op8:  '*' | '/' | '%'                                           ;
-op7:  'min' | 'max'                                             ;
+op7:  'min' | 'max' | 'size'                                    ;
 op6:  'sum' | 'product' | '#'                                   ;
 op5:  '<:'                                                      ;
 op4:  ':>'                                                      ;
