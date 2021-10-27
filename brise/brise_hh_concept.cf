@@ -1,25 +1,89 @@
 
+
+abstract Model {
+    Type -> predefined
+}
+
+abstract TreeParzenEstimator: Model {
+    Parameters {
+        TopNPercent -> integer
+        RandomFraction -> integer
+        BandwidthFactor -> integer
+        MinBandwirth -> float
+        SamplingSize -> integer
+    }
+    [Type = 'brise.TreeParzenEstimator']
+}
+
+abstract MultiArmedBandit: Model {
+    Parameters {
+        cType -> string
+        c -> float
+        [cType in {int, float, std}]
+        [if cType == float then 0 <= c]
+        [if cType == float then c <= 1]
+        [if cType == std then c = std]
+    }
+    [Type = 'brise.MultiArmedBandit']
+}
+
+abstract ModelMock
+
+abstract SciKitLearn {
+    Type -> string
+    Parameters {
+        SamplingSize -> integer
+        MinimalScore -> float
+        CrossValidationSplits -> integer
+        TestSize -> float
+        DataPreprocessing {
+            OrdinalHyperparameter -> string
+            NominalHyperparameter -> string
+            IntegerHyperparameter -> string
+            FloatHyperparameter -> string
+        }
+        UnderlyingModelParameters {
+            n_iter -> integer
+            tol -> float
+            normalize -> boolean
+        }
+    }
+}
+
+Predictor {
+    WindowSize -> float
+    Models {
+        xor Model {
+            TPE : TreeParzenEstimator
+            MAB : MultiArmedBandit
+            MM : ModelMock
+            skLearn : SciKitLearn
+        }
+    }
+}
+
+
 abstract Hyperparameter {
     Type -> predefined
-    Region -> string
-    [if isparent self == False then Region = TopLevel]
-    [if parent.Type == Category then Region = path parent else Region = parent.Region]
+    Region -> predefined
+    [Region = TopLevel]
+    [if parent.self.Type == Category then Region = parent.self else Region = parent.self.Region]
+    [if Context.Model.Structure == Flat then Region = TopLevel]
 }
 
 abstract NominalHyperparameter: Hyperparameter {
     Categories -> predefined
     Default -> string
     [Type = NominalHyperparameter]
+    [Categories = childs.self]
     [Default in Categories]
-    [Categories = self.childs where Type == Category]
 }
 
 abstract Category {
     Type -> predefined
-    Region -> string
+    Region -> predefined
     [Type = Category]
-    [Region = parent.Region]
-    [parent.type == NominalHyperparameter]
+    [Region = parent.self.Region]
 }
 
 abstract OrdinalHyperparameter: Hyperparameter {
@@ -31,8 +95,8 @@ abstract OrdinalHyperparameter: Hyperparameter {
 
 
 abstract FloatHyperparameter: Hyperparameter {
-    Lower -> predefined
-    Upper -> predefined
+    Lower -> float
+    Upper -> float
     Default -> float
     [Default >= Lower]
     [Default <= Upper]
@@ -47,8 +111,8 @@ abstract FloatOrdinalHyperparameter: Hyperparameter {
 }
 
 abstract IntegerHyperparameter: Hyperparameter {
-    Lower -> predefined
-    Upper -> predefined
+    Lower -> integer
+    Upper -> integer
     Default -> integer
     [Default >= Lower]
     [Default <= Upper]
@@ -64,14 +128,11 @@ abstract IntegerOrdinalHyperparameter: Hyperparameter {
 
 Context {
     Experiment {
-        TaskConfiguration {
-            // TaskConfiguration Data here
-        }
-
         Title -> string
-        Regions -> predefined
-        [Regions = unique Region in Context.Experiment.SearchSpace]
-        SearchSpace: {
+        SearchSpace {
+            Type -> predefined
+            Region -> predefined
+            [Region = TopLevel]
             LowLevelHeuristic: NominalHyperparameter {
                 SimulatedAnnealing: Category {
                     MutationType: NominalHyperparameter {
@@ -83,40 +144,16 @@ Context {
                         }
                     }
                 }
-                JMetalpyEvolutionStrategy: Category {
-                    Mu: FloatHyperparameter
-                    Lambda: FloatHyperparameter
-                    elitist: OrdinalHyperparameter{
-                        Categories: {true, false}
-                    }
-
-                    MutationType: NominalHyperparameter {
-                        PermutationSwapMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                        ScrambleMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                    }
-                }
-                JMetalEvolutionStrategy: Category {
-                    Mu: FloatHyperparameter
-                    Lambda: FloatHyperparameter
-                    elitist: OrdinalHyperparameter{
-                        Categories: {true, false}
-                    }
-                    MutationProbability: FloatHyperparameter
-                    }
-                }
             }
         }
     }
+    ExperimentRegions{
+        Regions -> predefined
+        [Regions = unique Region at Context]
+    }
     Model {
-        Structure -> selection {Flat, Hierarchical}
-
-        // or 
-        // Structure -> string
-        // [Structure in {Flat, Hierarchical}]
-        [if Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = size Context.Experiment.Regions]
+        Structure -> string
+        [Structure in {Flat, Hierarchical}]
+        [if Context.Model.Structure == Flat then fcard.Predictor.Models.Model = 1 else fcard.Predictor.Models.Model = size Context.ExperimentRegions.Regions]
     }
 }

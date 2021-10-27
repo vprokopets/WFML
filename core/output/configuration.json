@@ -1,18 +1,72 @@
 {
-    "Feature1": {
-        "Feature11": {
-            "Feature111": {
-                "Region": 2,
-                "test": "Feature1.Feature11.Feature111"
-            },
-            "Region": 1,
-            "test": "Feature1"
+    "Predictor": {
+        "WindowSize": 1.0,
+        "Models": {
+            "Model": {
+                "TPE": {
+                    "Parameters": {
+                        "TopNPercent": 1,
+                        "RandomFraction": 1,
+                        "BandwidthFactor": 1,
+                        "MinBandwirth": 1.0,
+                        "SamplingSize": 1
+                    },
+                    "Type": "brise.TreeParzenEstimator"
+                }
+            }
+        }
+    },
+    "Context": {
+        "Experiment": {
+            "Title": "1",
+            "SearchSpace": {
+                "Type": null,
+                "Region": "TopLevel",
+                "Frequency": {
+                    "Categories": [
+                        1200.0,
+                        1300.0,
+                        1400.0,
+                        1600.0,
+                        1700.0,
+                        1800.0,
+                        1900.0,
+                        2000.0,
+                        2200.0,
+                        2300.0,
+                        2400.0,
+                        2500.0,
+                        2700.0,
+                        2800.0,
+                        2900.0,
+                        2901.0
+                    ],
+                    "Default": 1200.0,
+                    "Type": "FloatOrdinalHyperparameter",
+                    "Region": "TopLevel"
+                },
+                "Threads": {
+                    "Categories": [
+                        1,
+                        2,
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "Default": 1,
+                    "Type": "IntegerOrdinalHyperparameter",
+                    "Region": "TopLevel"
+                }
+            }
         },
-        "Region": 1,
-        "test": [
-            "Feature11",
-            "Region",
-            "test"
-        ]
+        "ExperimentRegions": {
+            "Regions": [
+                "TopLevel"
+            ]
+        },
+        "Model": {
+            "Structure": "Hierarchical"
+        }
     }
 }

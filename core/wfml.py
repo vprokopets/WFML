@@ -874,6 +874,33 @@ class prec6(ExpressionElement):
         return ret
 
 
+class prec50(ExpressionElement):
+    @property
+    def value(self):
+        for operation, key, search_list in zip(self.op[0::3], self.op[1::3], self.op[2::3]):
+            if operation == 'unique':
+                logging.debug(f'Level 5.0 Operation unique x in y.')
+                ret = self.find_unique(search_list.value, key.value)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+    def find_unique(self, input, key, res=None):
+        logging.debug(f'find_unique method with arguments input: {input}, key: {key}')
+        if res is None:
+            res = []
+        for k, v in input.items():
+            if k == key:
+                if type(v) is dict and 'value' in v.keys() and v['value'] not in res:
+                    res.append(v['value'])
+                elif type(v) is not dict and v not in res:
+                    res.append(v)
+            if type(v) is dict:
+                self.find_unique(v, key, res)
+        logging.debug(f'find_unique Result: {res}')
+        return res
+
+
 class prec5(ExpressionElement):
     @property
     def value(self):
@@ -1014,7 +1041,7 @@ class term(ExpressionElement):
         op (variable type): variable, number, string, etc.
         """
         op = self.op
-
+        logging.debug(f'Lowest level operation with value {op}.')
         # In case of int or float value, just return it
         if type(op) in {int, float}:
             logging.debug(f"Operation object: {op} with type {type(op)}")
@@ -1028,7 +1055,7 @@ class term(ExpressionElement):
         # In case of top-level variable in global namespace return its value.
         elif op in self.get_wfml_data('Namespace').keys():
             logging.debug("Variable in global namespace.")
-            return self.get_wfml_data('Namespace')[op]['value']
+            return self.get_wfml_data('Namespace')[op]
 
         # In case of bool value, just return it.
         elif type(op) is bool:
@@ -1040,7 +1067,7 @@ class term(ExpressionElement):
             if op not in self.get_wfml_data('Namespace').keys() and not re.match(r'(\w+\.)+\w+', op):
                 check = f'{self.get_wfml_data("Path")}.{op}'
                 if check in self.get_wfml_data('Iterable.Mapping.Structure').keys():
-                    check = self.map_variable(check)
+                    check = self.map_variable(False, check)
                 namespace = self.get_wfml_data('Namespace')
                 try:
                     for part in check.split('.'):
@@ -1059,17 +1086,38 @@ class term(ExpressionElement):
 
             # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
             elif re.match(r'(\w+\.)+\w+', op):
-                path = op.split('.')
-                if (path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent') and path[1] == 'self':
-                    op = self.get_wfml_data('Path')
-                # Check for mappings
-                if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
-                    op = self.map_variable()
-                self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
-                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent':
-                    op = f'{path[0]}.{op}'
+                direct_mapping = False
+                tail = []
                 path = op.split('.')
 
+                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent' or path[0] == 'path':
+                    if path[1] == 'self':
+                        direct_mapping = True
+                        op = self.get_wfml_data('Path')
+                        if len(path) > 2:
+                            for index in range(2, len(path)):
+                                tail.append(path[index])
+                            tail = '.'.join(tail)
+                    else:
+                        op = ''
+                        for section in path[1:]:
+                            if op == '':
+                                op = section
+                            else:
+                                op = f'{op}.{section}'
+
+                # Check for mappings
+                if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
+                    op = self.map_variable(direct_mapping, op)
+                self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
+                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent' or path[0] == 'path':
+                    op = f'{path[0]}.{op}'
+                path = op.split('.')
+                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+                print(tail)
+                print(path)
+                print(op)
+                print(self.get_wfml_data('Iterable.Mapping.Structure').keys())
                 # Perform feature of group cardinality search if first part of string is a appropriate keyword.
                 if path[0] == 'fcard' or path[0] == 'gcard':
                     self.update_wfml_data('Flags.Cardinality', path[0])
@@ -1106,6 +1154,9 @@ class term(ExpressionElement):
                     # In case of 'parent' keyword remove the last part from the path
                     if path[0] == 'parent':
                         npath = npath[:-1]
+                        if tail != []:
+                            for section in tail.split('.'):
+                                npath.append(section)
 
                     # In case of 'childs' keyword return list of child's path
                     if path[0] == 'childs':
@@ -1116,12 +1167,18 @@ class term(ExpressionElement):
 
                     # In case of 'parent' or 'path' keyword return path
                     else:
-                        res = ''
-                        for section in npath:
-                            if res == '':
-                                res = section
-                            else:
-                                res = f'{res}.{section}'
+                        if tail != []:
+                            res = self.get_wfml_data('Namespace')
+                            for section in npath:
+                                res = res[section]
+                            res = res['value']
+                        else:
+                            res = ''
+                            for section in npath:
+                                if res == '':
+                                    res = section
+                                else:
+                                    res = f'{res}.{section}'
 
                 # If no cardinalities keyword presented in path, then try to find variable using this path.
                 else:
@@ -1135,30 +1192,47 @@ class term(ExpressionElement):
         else:
             raise Exception('Unknown variable "{}" at position {}'
                             .format(op, self._tx_position))
-        return self.op
 
-    def map_variable(self, feature=None):
+    def map_variable(self, direct_mapping, feature=None):
         if feature is None:
             feature = self.op
         threshold = self.get_wfml_data('Iterable.Mapping.Current')
         mappings = self.get_wfml_data('Iterable.Mapping.Structure')
-        for key, _ in mappings.items():
-            if key == feature:
-                suffix = int(threshold % len(mappings[key]))
-                break
-            else:
-                threshold = int(threshold / len(mappings[key]))
+        logging.debug(f'OP: {self.op}, mappings: {mappings}')
+        if direct_mapping is True:
+            suffix = int(threshold % len(mappings[feature]))
+        else:
+            for key, _ in mappings.items():
+                if key == feature:
+                    suffix = int(threshold % len(mappings[key]))
+                    break
+                else:
+                    threshold = int(threshold / len(mappings[key]))
         return mappings[feature][suffix]
 
     def mapping_check(self):
+        self_flag = False
         if isinstance(self.op, str) and not re.match(r'(\w+\.)+\w+', self.op):
             check = f'{self.get_wfml_data("Path")}.{self.op}'
             if check in self.get_wfml_data('Features.Mapped').keys():
                 op = check
             else:
                 op = self.op
+        elif isinstance(self.op, str) and re.match(r'(\w+\.)+\w+', self.op):
+            op_arr = self.op.split('.')
+            if op_arr[0] == 'path' or op_arr[0] == 'parent' or op_arr[0] == 'childs':
+                if op_arr[1] == 'self':
+                    self_flag = True
+                    op = self.get_wfml_data('Path')
+                else:
+                    op_arr = op_arr[1:]
+                    op = '.'.join(op_arr)
+            else:
+                op = self.op
         else:
             op = self.op
+        print("ASJDOIASHDIOASDAIOSDASIOD")
+        print(op)
         if op in self.get_wfml_data('Dependencies.Mappings').keys():
             mappings = self.get_wfml_data('Dependencies.Mappings')[op]
             rm_list = []
@@ -1168,10 +1242,9 @@ class term(ExpressionElement):
                     rm_list.append(i)
             for i in rm_list:
                 mappings.remove(i)
-
-            self.update_wfml_data('Iterable.Mapping.Total',
-                                  self.get_wfml_data('Iterable.Mapping.Total') * len(
-                                      mappings))
+            if self_flag is False:
+                self.update_wfml_data('Iterable.Mapping.Total',
+                                      self.get_wfml_data('Iterable.Mapping.Total') * len(mappings))
             self.update_wfml_data('Iterable.Mapping.Structure',
                                   {op: mappings})
 
@@ -1374,7 +1447,6 @@ class textX_API():
 
         wfml_data_section[path] = copy.deepcopy(wfml_data_init[path])
         logging.debug(f'WFML data for {full_path} was reset to {wfml_data_section[path]}.')
-        logging.debug(f'{self.get_wfml_data(full_path)}')
 
     def pickle_wfml_data(self):
         global wfml_data
@@ -2100,6 +2172,11 @@ class textX_API():
                     constraints_validated = 0
                     # Perform constraint validation using feature mappings if such are exist.
                     if self.cname(child1) == "Constraint":
+                        print('___________________________________________________________________________________________')
+                        msg = (f'Validating constraint: '
+                               f'{self.get_wfml_data("ModelDescription").splitlines()[get_location(child1)["line"] - 1].lstrip()}; '
+                               f'Line: {get_location(child1)["line"]}')
+                        logging.info(msg)
                         self.reset_wfml_data('Iterable.Mapping.Current')
                         self.reset_wfml_data('Iterable.Mapping.Total')
                         self.reset_wfml_data('Iterable.Mapping.Structure')
@@ -2111,6 +2188,8 @@ class textX_API():
                         logging.debug(f'Path: {self.get_wfml_data("Path")}')
 
                         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
+                            print('---------------------------------------------------------------------------------------')
+                            logging.info(f'Iteration {self.get_wfml_data("Iterable.Mapping.Current") + 1} of {self.get_wfml_data("Iterable.Mapping.Total")}')
                             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
                             repeat = self.get_wfml_data('Iterable.Mapping.Current')
                             mappings = self.get_wfml_data('Iterable.Mapping.Structure')
@@ -2130,9 +2209,10 @@ class textX_API():
 
                         if self.get_wfml_data('Flags.Cardinality') == 'fcard':
                             self.mapping()
-
+            for child in feature.nested:
+                for child1 in child.child:
                     # Perform constraint validation for nested features.
-                    elif self.cname(child1) == 'Feature' and isinstance(child1.reference, type(None)):
+                    if self.cname(child1) == 'Feature' and isinstance(child1.reference, type(None)):
                         logging.info(f'Feature namespace {feature.namespace}')
                         self.feature_constraints_validation(child1, False)
                 logging.info(f'For feature {feature.name} there is/are {constraints_validated} constraint expression(s) validated.')
@@ -2227,6 +2307,8 @@ class textX_API():
         original: original feature name.
         copy: copy of original feature name with added suffix _x, where x is sequentional mapping number.
         """
+        print("AAAADDDD")
+        print(self.sort_fcards())
         for original in self.sort_fcards():
             if original == 'Context.Experiment.TaskConfiguration.Objectives.Objective':
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
@@ -2290,7 +2372,7 @@ class textX_API():
         e (type = Exception): if not.
         """
         self.update_wfml_data('Path', '')
-        debug_mode = True
+        debug_mode = False
         if debug_mode is True:
             for element in self.get_wfml_data('Model').elements:
                 if self.cname(element) == 'Feature' and element.name == feature:
@@ -2560,7 +2642,7 @@ class textX_API():
         this_folder = dirname(__file__)
         mm = metamodel_from_file(join(this_folder, 'grammar.tx'),
                                  classes=[prec0, prec1, prec2, prec3,
-                                          prec4, prec5, prec6, prec7, prec8,
+                                          prec4, prec5, prec50, prec6, prec7, prec8,
                                           prec9, prec10, prec11, prec12, prec13,
                                           prec14, prec15, prec16, prec17,
                                           prec18, prec19, prec20, prec21, prec22, prec23, term],

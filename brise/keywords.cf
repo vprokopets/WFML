@@ -1,3 +1,8 @@
+Test {
+    Regions -> predefined
+    [Regions = unique Region in Feature1]
+}
+
 abstract Feature {
     Region -> predefined
     test -> predefined
@@ -5,14 +10,15 @@ abstract Feature {
 
 
 Feature1: Feature {
-    [Region = 1]
+    [Region = 4]
     [test = childs.self]
     Feature11: Feature {
         [Region = 1]
-        [test = parent.self]
-        Feature111: Feature{
+        [test = parent.self.Region]
+        Feature111: Feature + {
             [Region = 2]
             [test = path.self]
         }
     }
 }
+
