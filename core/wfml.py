@@ -3,6 +3,7 @@ import copy
 import json
 import itertools
 import logging
+from networkx.algorithms.distance_measures import eccentricity
 import pandas as pd
 import pickle
 import pprint
@@ -46,12 +47,17 @@ class ExpressionElement(object):
         wfml_data_section = wfml_data
         if re.match(r'(\w+\.)+\w+', path):
             for section in path.split('.')[:-1]:
+                print(f'Section: {section}')
                 wfml_data_section = wfml_data_section[section]
+                print(wfml_data_section)
             path = path.split('.')[-1]
         else:
             wfml_data_section = wfml_data
 
         if type(wfml_data_section[path]) is dict:
+            print(data)
+            print(wfml_data_section[path])
+            print(path)
             wfml_data_section[path].update(data)
 
         elif type(wfml_data_section[path]) is list and duplicates is True:
@@ -104,10 +110,12 @@ class ExpressionElement(object):
             if isinstance(part, ExpressionElement):
                 part.mapping_check()
 
-    def cross_tree_check(self):
+    def cross_tree_check(self, flag=None):
         for part in self.op:
-            if isinstance(part, ExpressionElement):
-                part.cross_tree_check()
+            if isinstance(part, ExpressionElement) and len(self.op) > 1:
+                part.cross_tree_check(True)
+            else:
+                part.cross_tree_check(flag)
 
     def initial_super_reference_check(self):
         return self.op[0].initial_super_reference_check()
@@ -145,6 +153,39 @@ class ExpressionElement(object):
     def fcard_validation(self):
         ret = self.op[0].fcard_validation
         return ret
+
+
+class prec24(ExpressionElement):
+    @property
+    def value(self):
+        self.exception_flag = False
+        for operation, key, condition in zip(self.op[0::3], self.op[1::3], self.op[2::3]):
+            if operation == 'filter':
+                if self.get_wfml_data('Flags.Exception') is False:
+                    logging.debug("Level 23 Exception flag.")
+                    self.update_wfml_data('Flags.Exception', True)
+                    self.exception_flag = True
+                logging.debug(f'Level 24 Operation filter x where y.')
+                ret = self.filter(condition, key.value)
+        # Double check to release global exception flag.
+        if self.exception_flag is True:
+            self.update_wfml_data('Flags.Exception', False)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+    def filter(self, condition, key):
+        logging.debug(f'filter method with arguments condition: {condition}, key: {key}')
+        res = []
+        old_path = self.get_wfml_data('Path')
+        for item in key:
+            self.update_wfml_data('Path', f'{old_path}.{item}')
+            if condition.value is True:
+                res.append(item)
+        self.update_wfml_data('Path', old_path)
+        logging.debug(f'filter Result: {res}')
+        return res
+
 
 class prec23(ExpressionElement):
     @property
@@ -208,6 +249,7 @@ class prec23(ExpressionElement):
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
+
 
 class prec22(ExpressionElement):
     @property
@@ -721,6 +763,10 @@ class prec10(ExpressionElement):
             ret = self.op[0].value
         else:
             for operation, operand in zip(self.op[1::2], self.op[2::2]):
+                try:
+                    self.flag
+                except AttributeError:
+                    self.flag = False
                 self.update_wfml_data('Flags.Update', True)
                 ret = self.op[0].value
                 cardinality_flag = self.get_wfml_data('Flags.Cardinality')
@@ -750,23 +796,33 @@ class prec10(ExpressionElement):
                         self.update_wfml_data('Namespace.' + path, assign, False, False)
 
                     # If cardinality flag was set, then update cardinality value instead of variable in namespace.
-                    elif re.match(r'(\w+\.)+\w+', ret) and cardinality_flag == 'fcard':
+                    elif re.match(r'(\w+\.)+\w+', ret) and cardinality_flag == 'fcard' and self.flag is False:
                         self.update_wfml_data('Cardinalities.Feature', {ret.split('.', 1)[1]: right_value})
 
                 else:
                     raise Exception(f'Parameter {ret} is not defined.')
         return ret
 
-    def cross_tree_check(self):
+    def cross_tree_check(self, flag=None):
+        self.flag = False
+        print('asdsaodisadiusahdsaoi')
+        print(flag)
         if len(self.op) > 1 and self.op[1] == '=':
+            self.flag = True
             self.update_wfml_data('Flags.Update', True)
-
+        try:
+            if len(self.op) > 1 and self.op[1] == '=' and flag is None:
+                print('bbbb')
+                self.value
+        except Exception:
+            pass
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.cross_tree_check()
             else:
                 self.update_wfml_data('Flags.Update', False)
         self.update_wfml_data('Flags.Update', False)
+
 
 class prec9(ExpressionElement):
     @property
@@ -886,7 +942,6 @@ class prec50(ExpressionElement):
         return ret
 
     def find_unique(self, input, key, res=None):
-        logging.debug(f'find_unique method with arguments input: {input}, key: {key}')
         if res is None:
             res = []
         for k, v in input.items():
@@ -2201,7 +2256,10 @@ class textX_API():
                                 pass
                             if check_gcard is True:
                                 if self.get_wfml_data('Flags.CrossTreeCheck') is True:
-                                    child1.name.cross_tree_check()
+                                    try:
+                                        child1.name.cross_tree_check()
+                                    except Exception:
+                                        pass
                                 else:
                                     child1.name.value
                                     constraints_validated += 1
@@ -2645,7 +2703,7 @@ class textX_API():
                                           prec4, prec5, prec50, prec6, prec7, prec8,
                                           prec9, prec10, prec11, prec12, prec13,
                                           prec14, prec15, prec16, prec17,
-                                          prec18, prec19, prec20, prec21, prec22, prec23, term],
+                                          prec18, prec19, prec20, prec21, prec22, prec23, prec24, term],
                                  autokwd=True)
 
         # Reset shared info variables and create textX model object from description.
@@ -2669,6 +2727,10 @@ class textX_API():
         self.update_wfml_data('NamespaceInitial', copy.deepcopy(self.get_wfml_data('Namespace')))
         self.get_model_cardinalities()
 
+        # Perform mapping and clear abstract features
+        self.mapping()
+        self.clear_abstract_features()
+
         # Perform cross-tree dependencies check.
         self.cross_tree_check()
 
@@ -2678,9 +2740,6 @@ class textX_API():
         res_cross_tree = list(k for k, _ in itertools.groupby(cross_tree_features))
         logging.debug(pprint.pprint(self.show_wfml_data()))
         stages = self.staging(res_cross_tree)
-
-        self.mapping()
-        self.clear_abstract_features()
 
         self.initial_snap()
         # self.test_textX()

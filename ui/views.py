@@ -387,35 +387,37 @@ class WizardClass(SessionWizardView):
                                                                                 widget=forms.CheckboxSelectMultiple)
 
     def construct_step_form(self, step):
-        keys_step = api.read_certain_key(step, False)
-        logging.debug(f'KEYS STEP: {keys_step}')
-        for key, values in keys_step.items():
-            for subkey, value in values.items():
-                field_name = f'{key}.{subkey}'
-                # Generated list is used to prevent field multiplication during form revalidation.
-                # During form initialization if fcard of field > 1, then copies of this field are generated.
-                # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
-                # multiplication of generated fields.
+        fcard_check, _ = api.get_full_feature_cardinality(step)
+        if fcard_check > 0:
+            keys_step = api.read_certain_key(step, False)
+            logging.debug(f'KEYS STEP: {keys_step}')
+            for key, values in keys_step.items():
+                for subkey, value in values.items():
+                    field_name = f'{key}.{subkey}'
+                    # Generated list is used to prevent field multiplication during form revalidation.
+                    # During form initialization if fcard of field > 1, then copies of this field are generated.
+                    # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
+                    # multiplication of generated fields.
 
-                logging.debug(f'Key: {key}, Value: {value}')
-                # Check if this field is allowed by chosen group cardinality.
+                    logging.debug(f'Key: {key}, Value: {value}')
+                    # Check if this field is allowed by chosen group cardinality.
 
-                if value['type'] == 'integer':
-                    self.form.fields[field_name] = forms.IntegerField(label=field_name)
-                elif value['type'] == 'float':
-                    self.form.fields[field_name] = forms.FloatField(label=field_name)
-                elif value['type'] == 'string' or \
-                        value['type'] == 'array' or \
-                        value['type'] == 'integerArray' or \
-                        value['type'] == 'floatArray':
-                    self.form.fields[field_name] = forms.CharField(label=field_name)
-                elif value['type'] == 'boolean':
-                    choises_list = []
-                    for v in [True, False]:
-                        choises_list.append((v, v))
-                    self.form.fields[field_name] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
-        # Sort fields by names. This will group generated fields.
-        self.form.fields = OrderedDict(sorted(self.form.fields.items()))
+                    if value['type'] == 'integer':
+                        self.form.fields[field_name] = forms.IntegerField(label=field_name)
+                    elif value['type'] == 'float':
+                        self.form.fields[field_name] = forms.FloatField(label=field_name)
+                    elif value['type'] == 'string' or \
+                            value['type'] == 'array' or \
+                            value['type'] == 'integerArray' or \
+                            value['type'] == 'floatArray':
+                        self.form.fields[field_name] = forms.CharField(label=field_name)
+                    elif value['type'] == 'boolean':
+                        choises_list = []
+                        for v in [True, False]:
+                            choises_list.append((v, v))
+                        self.form.fields[field_name] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
+            # Sort fields by names. This will group generated fields.
+            self.form.fields = OrderedDict(sorted(self.form.fields.items()))
 
     def process_step(self, form):
         """

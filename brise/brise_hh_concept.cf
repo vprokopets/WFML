@@ -1,7 +1,80 @@
+General {
+    NumberOfWorkers -> integer
+    result_storage -> string
+    [NumberOfWorkers >= 1]
+}
 
+SelectionAlgorithm {
+    type -> string
+    [type in {Sobol, MersenneTwister}]
+}
+
+DefaultConfigurationHandler ? {
+    type -> string
+    [type in {AutoModel, Random}]
+    [if type == AutoModel then Context.Experiment.TaskConfiguration.TaskName in {naiveBayes, randomForest, neuralNet, SVM}]
+}
+
+DomainDescription {
+    DataFile -> string
+}
+
+abstract OutliersDetector 5 {
+    MinActiveNumberOfTasks -> integer
+    MaxActiveNumberOfTasks -> integer
+    [MinActiveNumberOfTasks >= 3]
+    [MaxActiveNumberOfTasks >= 3]
+    [MinActiveNumberOfTasks <= MaxActiveNumberOfTasks]
+}
+
+or OutliersDetection{
+    Dixon : OutliersDetector
+    Grubbs : OutliersDetector
+    Chauvenet : OutliersDetector
+    Quartiles : OutliersDetector
+    Mad : OutliersDetector
+}
+
+abstract AbstrRepeater {
+    MinTasksPerConfiguration -> integer
+    MaxTasksPerConfiguration -> integer
+    [MinTasksPerConfiguration <= MaxTasksPerConfiguration]
+}
+
+RepetitionManagement {
+    DefaultConfiguration {
+        TasksPerConfiguration -> integer
+        [TasksPerConfiguration >= 10]
+    }
+    Repeaters{
+        xor Repeater {
+            QuantityBased : AbstrRepeater {
+                [MinTasksPerConfiguration >= 1]
+            }
+            AcceptableErrorBased: AbstrRepeater {
+                MinTasksPerBadConfiguration -> integer
+                
+                MaxFailedTasksPerConfiguration -> integer
+                BaseAcceptableErrors -> integer
+                ConfidenceLevels -> float
+                DevicesScaleAccuracies -> integer
+                DevicesAccuracyClasses -> integer
+                [MinTasksPerConfiguration >= 2]
+                [MinTasksPerBadConfiguration >= 1]
+                ExperimentAwareness {
+                    isEnabled -> boolean
+                    MaxAcceptableErrors -> integer
+                    RatiosMax -> integer
+                }
+            }
+        }
+    }
+}
 
 abstract Model {
     Type -> predefined
+    Region -> string
+    [Region in Context.ExperimentRegions.Regions]
 }
 
 abstract TreeParzenEstimator: Model {
@@ -27,21 +100,15 @@ abstract MultiArmedBandit: Model {
     [Type = 'brise.MultiArmedBandit']
 }
 
-abstract ModelMock
+abstract ModelMock: Model
 
-abstract SciKitLearn {
+abstract SciKitLearn: Model {
     Type -> string
     Parameters {
         SamplingSize -> integer
         MinimalScore -> float
         CrossValidationSplits -> integer
         TestSize -> float
-        DataPreprocessing {
-            OrdinalHyperparameter -> string
-            NominalHyperparameter -> string
-            IntegerHyperparameter -> string
-            FloatHyperparameter -> string
-        }
         UnderlyingModelParameters {
             n_iter -> integer
             tol -> float
@@ -62,6 +129,121 @@ Predictor {
     }
 }
 
+Preprocessing {
+    OrdinalHyperparameter -> string
+    NominalHyperparameter -> string
+    IntegerHyperparameter -> string
+    FloatHyperparameter -> string
+}
+
+StopConditionTriggerLogic {
+    Expression -> string
+    InspectionParameters {
+        RepetitionPerion -> integer
+        TimeUnit -> string
+        [RepetitionPerion > 0]
+        [TimeUnit in {seconds, minutes, hours, days}]
+    }
+}
+
+abstract SC {
+    Name -> string
+    Type -> predefined
+}
+
+StopCondition {
+    QuantityBasedSC : SC 1..5{
+        Parameters {
+            MaxConfigs -> integer
+            [MaxConfigs > 0]
+        }
+        [Type = QuantityBased]
+    }
+
+    GuaranteedSC : SC 1 {
+        [Type = Guaranted]
+    }
+
+    BadConfigurationBasedSC : SC 1..5{
+        Parameters {
+            MaxBadConfigurations -> integer
+            [MaxBadConfigurations > 0]
+        }
+        [Type = BadConfigurationBased]
+    }
+
+    ImprovementBasedSC : SC 1..5{
+        Parameters {
+            MaxConfigsWithoutImprovement -> integer
+            [MaxConfigsWithoutImprovement > 0]
+        }
+        [Type = ImprovementBased]
+    }
+
+    TimeBasedSC : SC 1..5{
+        Parameters {
+            MaxRunTime -> integer
+            TimeUnit -> string
+            [MaxRunTime > 0]
+            [TimeUnit in {seconds, minutes, hours, days}]
+        }
+        [Type = TimeBased]
+    }
+}
+
+TransferLearning ? {
+    isEnabled -> boolean
+    TransferExpediencyDetermination {
+        ComparatorType -> string
+        MinNumberOfSamples -> integer
+        xor NumberOfSimilarExperiments {
+            Numeric {
+                Value -> integer
+            }
+            Categorical {
+                Value -> predefined
+                [Value = 'use_clustering']
+            }
+        }
+        ClusteringAlgorithm -> predefined
+        [ClusteringAlgorithm = MeanShiftClustering]
+    }
+    MultiTaskLearning ? {
+        Standard{
+            Filters{
+                FewShot -> boolean
+            }
+            OldNewConfigsRatio -> float
+            TransferBestConfigsOnly -> boolean
+            TransferFromMostSimilarExperimentsFirst -> boolean
+            [OldNewConfigsRatio >= 0.1]
+        }      
+    }
+    ModelsRecommendation ? {
+        DynamicModelsRecommendation {
+            xor RecommendationGranularity {
+                Finite {
+                    Value -> integer
+                    [Value >= 1]
+                }
+                Infinite {
+                    Value -> predefined
+                    [Value = 'inf']
+                }
+            }
+            Filters {
+                FewShot -> boolean
+            }
+            TimeToBuildModelThreshold -> float
+            TimeUnit -> string
+            ThresholdType -> string
+            PerformanceMetric -> string
+            [TimeUnit in {seconds, minutes, hours, days}]
+            [ThresholdType in {hard, soft}]
+            [PerformanceMetric in {AverageRelativeImprovement}] 
+        }
+    }
+}
 
 abstract Hyperparameter {
     Type -> predefined
@@ -75,7 +257,7 @@ abstract NominalHyperparameter: Hyperparameter {
     Categories -> predefined
     Default -> string
     [Type = NominalHyperparameter]
-    [Categories = childs.self]
+    [Categories = (filter childs.self where Type == Category)]
     [Default in Categories]
 }
 
@@ -129,6 +311,40 @@ abstract IntegerOrdinalHyperparameter: Hyperparameter {
 Context {
     Experiment {
         Title -> string
+        TaskConfiguration {
+            TaskName -> string
+            xor Scenario {
+                FromFile {
+                    WsFile -> string
+                    AdditionalParameter * {
+                        Name -> string
+                        Value -> string
+                    }
+                }
+                FromDescription {
+                    Problem -> string
+                    InitializationParameters -> string
+                    Budget {
+                        Type -> string
+                        Amount -> integer
+                    }
+                    Hyperparameters -> string
+                }
+            }
+            Objectives{
+                Objective + {
+                    Name -> string
+                    DataType -> string
+                    Minimization -> boolean
+                    Priority -> integer
+                    ModelPriority -> integer
+                    ExpectedValuesRange -> floatArray
+                    MaxTimeToRunTask -> integer ?
+                }
+            }
+            [fcard.RepetitionManagement.Repeaters.Repeater = fcard.Context.Experiment.TaskConfiguration.Objectives.Objective]
+        }
+
         SearchSpace {
             Type -> predefined
             Region -> predefined
@@ -143,6 +359,29 @@ Context {
                             MutationProbability: FloatHyperparameter
                         }
                     }
+                }
+                jMetalPyEvolutionStrategy: NominalHyperparameter {
+                    mu: IntegerHyperparameter
+                    lambda: IntegerHyperparameter
+                    elitist: OrdinalHyperparameter {
+                        [Categories = {True, False}]
+                    }
+                    MutationType: NominalHyperparameter {
+                        PermutationSwapMutation: Category {
+                            MutationProbability: FloatHyperparameter
+                        }
+                        ScrambleMutation: Category {
+                            MutationProbability: FloatHyperparameter
+                        }
+                    }
+                }
+                jMetalPyEvolutionStrategy: NominalHyperparameter {
+                    mu: IntegerHyperparameter
+                    lambda: IntegerHyperparameter
+                    elitist: OrdinalHyperparameter {
+                        [Categories = {True, False}]
+                    }
+                    MutationProbability: FloatHyperparameter
                 }
             }
         }

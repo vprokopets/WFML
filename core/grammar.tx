@@ -2,12 +2,12 @@ Model: elements*=Element;
 
 Element: Feature | Goal | Constraint | Assertion;
 
-Constraint: "[" name=prec23 "]";
-Assertion: "assert" "[" name=prec23 "]";
+Constraint: "[" name=prec24 "]";
+Assertion: "assert" "[" name=prec24 "]";
 Goal: 
     "<<"
     gtype=Goaltype
-    name=prec23 
+    name=prec24 
     ">>"
 ;
 
@@ -29,7 +29,7 @@ Gcard: INT+[/\..|,/] | "xor" | "or" | "mux" | "opt" | Cardinterval;
 Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
 Super: ":" prec0;
 Reference: "->" prec3 | "->>" prec3;
-Init: "=" prec23 | ":=" prec23;
+Init: "=" prec24 | ":=" prec24;
 Nested: 
     "{"
     /\s*/
@@ -38,6 +38,7 @@ Nested:
 ;
 Cardinterval: INT ".." (INT | "*");
 
+prec24:   (op='filter')* op=prec23 ('where' op=prec23)*;
 prec23:   (op='if')* op=prec22 ('then' op=prec22 ('else' op=prec22)?)*; 
 prec22:   op=prec21  (op=op22   op=prec21)*;
 prec21:   op=prec20  (op=op21   op=prec20)*;
@@ -63,7 +64,7 @@ prec3:   op=prec2  (op=op3   op=prec2)*;
 prec2:   op=prec1  (op=op2   op=prec1)*;
 prec1:   op=prec0  (op=op1   op=prec0)*;
 prec0:   op=term   (op=op0   op=term)*;
-term:    op=NUMBER | op = BOOL | op=ComplexName | op = ID | op = Quote | op = List | ('(' op=prec23 ')');
+term:    op=NUMBER | op = BOOL | op=ComplexName | op = ID | op = Quote | op = List | ('(' op=prec24 ')');
 
 
 op22: '<=>'                                                     ;

@@ -52,19 +52,19 @@ RepetitionManagement {
                 [MinTasksPerConfiguration >= 1]
             }
             AcceptableErrorBased: AbstrRepeater {
-                MinTasksPerBadConfiguration -> integer
-                
                 MaxFailedTasksPerConfiguration -> integer
                 BaseAcceptableErrors -> integer
                 ConfidenceLevels -> float
                 DevicesScaleAccuracies -> integer
                 DevicesAccuracyClasses -> integer
                 [MinTasksPerConfiguration >= 2]
-                [MinTasksPerBadConfiguration >= 1]
+                
                 ExperimentAwareness {
                     isEnabled -> boolean
                     MaxAcceptableErrors -> integer
                     RatiosMax -> integer
+                    MinTasksPerUnderperformingConfiguration -> integer
+                    [MinTasksPerUnderperformingConfiguration >= 1]
                 }
             }
         }
@@ -189,8 +189,7 @@ StopCondition {
 }
 
 
-TransferLearning {
-    isEnabled -> boolean
+TransferLearning ? {
     TransferExpediencyDetermination {
         ComparatorType -> string
         MinNumberOfSamples -> integer
