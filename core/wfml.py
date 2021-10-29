@@ -47,17 +47,12 @@ class ExpressionElement(object):
         wfml_data_section = wfml_data
         if re.match(r'(\w+\.)+\w+', path):
             for section in path.split('.')[:-1]:
-                print(f'Section: {section}')
                 wfml_data_section = wfml_data_section[section]
-                print(wfml_data_section)
             path = path.split('.')[-1]
         else:
             wfml_data_section = wfml_data
 
         if type(wfml_data_section[path]) is dict:
-            print(data)
-            print(wfml_data_section[path])
-            print(path)
             wfml_data_section[path].update(data)
 
         elif type(wfml_data_section[path]) is list and duplicates is True:
@@ -648,10 +643,14 @@ class prec12(ExpressionElement):
         ret (variable type): previous level object if no prec12 operations are not presented in constraint
                             operation result in opposite case.
         """
-        ret = self.op[0].value
+        
         self.exception_flag = False
-
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+        if len(self.op) == 4:
+            shift = 1
+        else:
+            ret = self.op[0].value
+            shift = 0
+        for operation, operand in zip(self.op[1+shift::2+shift], self.op[2+shift::2+shift]):
 
             # Take exception flag if it was still not taken.
             if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in']:
@@ -659,48 +658,65 @@ class prec12(ExpressionElement):
                     logging.debug("Level 12 Exception flag.")
                     self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
-                ret = self.op[0].value
+                ret = self.op[0+shift].value
                 logging.info(f'{ret} {operation} {operand.value}')
+            if self.op[0] == 'all':
+                ret = list(ret.split(','))
+            else:
+                ret = [ret]
+            for iteration in range(0, len(ret)):
+                if operation == '<':
+                    res = ret[iteration] < operand.value
+                    logging.debug("Level 12 comparison < operation")
 
-            if operation == '<':
-                ret = ret < operand.value
-                logging.debug("Level 12 comparison < operation")
+                elif operation == '>':
+                    res = ret[iteration] > operand.value
+                    logging.debug("Level 12 comparison > operation")
 
-            elif operation == '>':
-                ret = ret > operand.value
-                logging.debug("Level 12 comparison > operation")
+                elif operation == '==':
+                    res = ret[iteration] == operand.value
+                    logging.debug("Level 12 comparison == operation")
 
-            elif operation == '==':
-                ret = ret == operand.value
-                logging.debug("Level 12 comparison == operation")
+                elif operation == '>=':
+                    res = ret[iteration] >= operand.value
+                    logging.debug("Level 12 comparison >= operation")
 
-            elif operation == '>=':
-                ret = ret >= operand.value
-                logging.debug("Level 12 comparison >= operation")
+                elif operation == '<=':
+                    res = ret[iteration] <= operand.value
+                    logging.debug("Level 12 comparison <= operation")
 
-            elif operation == '<=':
-                ret = ret <= operand.value
-                logging.debug("Level 12 comparison <= operation")
+                elif operation == '!=':
+                    res = ret[iteration] != operand.value
+                    logging.debug("Level 12 comparison != operation")
 
-            elif operation == '!=':
-                ret = ret != operand.value
-                logging.debug("Level 12 comparison != operation")
+                elif operation == 'in':
+                    res = ret[iteration] in operand.value
+                    logging.debug("Level 12 comparison in operation")
 
-            elif operation == 'in':
-                ret = ret in operand.value
-                logging.debug("Level 12 comparison in operation")
-
-            elif operation == 'not in':
-                ret = ret not in operand.value
+                elif operation == 'not in':
+                    res = ret[iteration] not in operand.value
+                if res is False:
+                    err_index = iteration
+                    err_ret = ret
+                    break
+            ret = res
 
         # Raise exception if result is False and exception flag was taken by this operation.
         if ret is False and self.exception_flag is True:
             ol = self._tx_position_end - self._tx_position
-            msg = ''.join((f'Expression operation ({self.op[0].value} {operation} {operand.value})',
-                           ' was not satisfied.\n',
-                           f'Error position: Line {get_location(self)["line"]},',
-                           f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
-                           f' Filename {get_location(self)["filename"]}\n'))
+            if len(self.op) == 3:
+                msg = ''.join((f'Expression operation ({self.op[0+shift].value} {operation} {operand.value})',
+                            ' was not satisfied.\n',
+                            f'Error position: Line {get_location(self)["line"]},',
+                            f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                            f' Filename {get_location(self)["filename"]}\n'))
+            else:
+                msg = ''.join((f'Expression operation ({self.op[0]} {self.op[0+shift].value} {operation} {operand.value})',
+                            ' was not satisfied.\n',
+                            f' Wrong element: {err_ret[err_index]}'
+                            f' Error position: Line {get_location(self)["line"]},',
+                            f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                            f' Filename {get_location(self)["filename"]}\n'))
             raise Exception(msg)
 
         # Release exception flag.
@@ -805,14 +821,11 @@ class prec10(ExpressionElement):
 
     def cross_tree_check(self, flag=None):
         self.flag = False
-        print('asdsaodisadiusahdsaoi')
-        print(flag)
         if len(self.op) > 1 and self.op[1] == '=':
             self.flag = True
             self.update_wfml_data('Flags.Update', True)
         try:
             if len(self.op) > 1 and self.op[1] == '=' and flag is None:
-                print('bbbb')
                 self.value
         except Exception:
             pass
@@ -1168,11 +1181,6 @@ class term(ExpressionElement):
                 if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent' or path[0] == 'path':
                     op = f'{path[0]}.{op}'
                 path = op.split('.')
-                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-                print(tail)
-                print(path)
-                print(op)
-                print(self.get_wfml_data('Iterable.Mapping.Structure').keys())
                 # Perform feature of group cardinality search if first part of string is a appropriate keyword.
                 if path[0] == 'fcard' or path[0] == 'gcard':
                     self.update_wfml_data('Flags.Cardinality', path[0])
@@ -1286,8 +1294,6 @@ class term(ExpressionElement):
                 op = self.op
         else:
             op = self.op
-        print("ASJDOIASHDIOASDAIOSDASIOD")
-        print(op)
         if op in self.get_wfml_data('Dependencies.Mappings').keys():
             mappings = self.get_wfml_data('Dependencies.Mappings')[op]
             rm_list = []
@@ -2227,7 +2233,6 @@ class textX_API():
                     constraints_validated = 0
                     # Perform constraint validation using feature mappings if such are exist.
                     if self.cname(child1) == "Constraint":
-                        print('___________________________________________________________________________________________')
                         msg = (f'Validating constraint: '
                                f'{self.get_wfml_data("ModelDescription").splitlines()[get_location(child1)["line"] - 1].lstrip()}; '
                                f'Line: {get_location(child1)["line"]}')
@@ -2243,7 +2248,6 @@ class textX_API():
                         logging.debug(f'Path: {self.get_wfml_data("Path")}')
 
                         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
-                            print('---------------------------------------------------------------------------------------')
                             logging.info(f'Iteration {self.get_wfml_data("Iterable.Mapping.Current") + 1} of {self.get_wfml_data("Iterable.Mapping.Total")}')
                             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
                             repeat = self.get_wfml_data('Iterable.Mapping.Current')
@@ -2365,8 +2369,6 @@ class textX_API():
         original: original feature name.
         copy: copy of original feature name with added suffix _x, where x is sequentional mapping number.
         """
-        print("AAAADDDD")
-        print(self.sort_fcards())
         for original in self.sort_fcards():
             if original == 'Context.Experiment.TaskConfiguration.Objectives.Objective':
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)

@@ -74,6 +74,11 @@ RepetitionManagement {
 abstract Model {
     Type -> predefined
     Region -> string
+    Preprocessing {
+        isEnabled -> boolean
+        Algorithms -> array
+        [if isEnabled == True then (all Algorithms in childs.Preprocessing) else (Algorithms == None)]
+    }
     [Region in Context.ExperimentRegions.Regions]
 }
 
