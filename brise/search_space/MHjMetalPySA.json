@@ -1,0 +1,49 @@
+{
+    "MHjMetalPySA": {
+        "Type": "SearchSpace",
+        "Region": "TopLevel",
+        "LowLevelHeuristic": {
+            "jMetalPy_SimulatedAnnealing": {
+                "mutation_type": {
+                    "PermutationSwapMutation": {
+                        "mutation_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPySA.LowLevelHeuristic.jMetalPy_SimulatedAnnealing.mutation_type.PermutationSwapMutation"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPySA.LowLevelHeuristic.jMetalPy_SimulatedAnnealing"
+                    },
+                    "ScrambleMutation": {
+                        "mutation_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPySA.LowLevelHeuristic.jMetalPy_SimulatedAnnealing.mutation_type.ScrambleMutation"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPySA.LowLevelHeuristic.jMetalPy_SimulatedAnnealing"
+                    },
+                    "Categories": [
+                        "PermutationSwapMutation",
+                        "ScrambleMutation"
+                    ],
+                    "Default": "PermutationSwapMutation",
+                    "Type": "NominalHyperparameter",
+                    "Region": "MHjMetalPySA.LowLevelHeuristic.jMetalPy_SimulatedAnnealing"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "Categories": [
+                "jMetalPy_SimulatedAnnealing"
+            ],
+            "Default": "jMetalPy_SimulatedAnnealing",
+            "Type": "NominalHyperparameter",
+            "Region": "TopLevel"
+        }
+    }
+}

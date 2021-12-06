@@ -1,0 +1,270 @@
+{
+    "SVM": {
+        "Type": "SearchSpace",
+        "Region": "TopLevel",
+        "kernel_type": {
+            "dot": {
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "annova": {
+                "kernel_gamma": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.annova"
+                },
+                "kernel_degree": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 2.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.annova"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "epachnenikov": {
+                "kernel_sigma1": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.epachnenikov"
+                },
+                "kernel_degree": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 2.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.epachnenikov"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "gaussian_combination": {
+                "kernel_sigma1": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.gaussian_combination"
+                },
+                "kernel_sigma2": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 0.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.gaussian_combination"
+                },
+                "kernel_sigma3": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 2.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.gaussian_combination"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "multiquadric": {
+                "kernel_sigma1": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.multiquadric"
+                },
+                "kernel_shift": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.multiquadric"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "neural": {
+                "kernel_a": {
+                    "Lower": -1000.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.neural"
+                },
+                "kernel_b": {
+                    "Lower": -1000.0,
+                    "Upper": 1000.0,
+                    "Default": 0.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.neural"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "polynomial": {
+                "kernel_degree": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 2.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.polynomial"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "radial": {
+                "kernel_gamma": {
+                    "Lower": 0.0,
+                    "Upper": 1000.0,
+                    "Default": 1.0,
+                    "Type": "FloatHyperparameter",
+                    "Region": "SVM.kernel_type.radial"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "Categories": [
+                "dot",
+                "annova",
+                "epachnenikov",
+                "gaussian_combination",
+                "multiquadric",
+                "neural",
+                "polynomial",
+                "radial"
+            ],
+            "Default": "dot",
+            "Type": "NominalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "kernel_cache": {
+            "Lower": 0,
+            "Upper": 1000,
+            "Default": 200,
+            "Type": "IntegerHyperparameter",
+            "Region": "TopLevel"
+        },
+        "C": {
+            "Lower": -1.0,
+            "Upper": 1000.0,
+            "Default": 0.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "convergence_epsilon": {
+            "Lower": 0.001,
+            "Upper": 0.1,
+            "Default": 0.001,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "max_iterations": {
+            "Lower": 100,
+            "Upper": 100000,
+            "Default": 100000,
+            "Type": "IntegerHyperparameter",
+            "Region": "TopLevel"
+        },
+        "scale": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "calculate_weights": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "return_optimization_performance": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "L_pos": {
+            "Lower": 0.0,
+            "Upper": 1000,
+            "Default": 1.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "L_neg": {
+            "Lower": 0.0,
+            "Upper": 1000,
+            "Default": 1.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "epsilon": {
+            "Lower": 0.0,
+            "Upper": 1000,
+            "Default": 0.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "epsilon_plus": {
+            "Lower": 0.0,
+            "Upper": 1000,
+            "Default": 0.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "epsilon_minus": {
+            "Lower": 0.0,
+            "Upper": 1000,
+            "Default": 0.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "balance_cost": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "quadratic_loss_pos": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "quadratic_loss_neg": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        },
+        "estimate_performance": {
+            "Categories": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Type": "OrdinalHyperparameter",
+            "Region": "TopLevel"
+        }
+    }
+}

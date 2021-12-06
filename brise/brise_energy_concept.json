@@ -1,0 +1,250 @@
+{
+    "General": {
+        "NumberOfWorkers": 3,
+        "result_storage": "./Results/"
+    },
+    "SelectionAlgorithm": {
+        "type": "Sobol"
+    },
+    "DefaultConfigurationHandler": {
+        "type": "Random"
+    },
+    "DomainDescription": {
+        "DataFile": "./Resources/EnergyExperiment/EnergyExperimentData.json"
+    },
+    "OutliersDetection": {
+        "Dixon": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 30
+        },
+        "Grubbs": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Chauvenet": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Quartiles": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        },
+        "Mad": {
+            "MinActiveNumberOfTasks": 3,
+            "MaxActiveNumberOfTasks": 10000
+        }
+    },
+    "RepetitionManagement": {
+        "DefaultConfiguration": {
+            "TasksPerConfiguration": 10
+        },
+        "Repeaters": {
+            "Repeater": {
+                "AcceptableErrorBased": {
+                    "MaxFailedTasksPerConfiguration": 5,
+                    "BaseAcceptableErrors": 5,
+                    "ConfidenceLevels": 0.95,
+                    "DevicesScaleAccuracies": 0,
+                    "DevicesAccuracyClasses": 0,
+                    "ExperimentAwareness": {
+                        "isEnabled": true,
+                        "MaxAcceptableErrors": 50,
+                        "RatiosMax": 10,
+                        "MinTasksPerUnderperformingConfiguration": 1
+                    },
+                    "MinTasksPerConfiguration": 2,
+                    "MaxTasksPerConfiguration": 10
+                }
+            }
+        }
+    },
+    "Predictor": {
+        "WindowSize": 1.0,
+        "Models": {
+            "Model": {
+                "TPE": {
+                    "Parameters": {
+                        "TopNPercent": 30,
+                        "RandomFraction": 0,
+                        "BandwidthFactor": 3,
+                        "MinBandwirth": 0.001,
+                        "SamplingSize": 96
+                    },
+                    "Type": "brise.TreeParzenEstimator",
+                    "Region": "TopLevel",
+                    "Preprocessing": {
+                        "isEnabled": false,
+                        "Algorithms": [
+                            "None"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "Preprocessing": {
+        "Normalization": "brise.normalization",
+        "Scalarization": "brise.scalarization",
+        "TypeConversion": {
+            "OrdinalHyperparameter": "sklearn.OrdinalEncoder",
+            "NominalHyperparameter": "brise.BinaryEncoder",
+            "IntegerHyperparameter": "sklearn.MinMaxScaler",
+            "FloatHyperparameter": "sklearn.MinMaxScaler"
+        }
+    },
+    "StopConditionTriggerLogic": {
+        "Expression": "(QuantityBased and Guaranteed and ImprovementBased) or BadConfigurationBased or TimeBased or FewShotLearningBased",
+        "InspectionParameters": {
+            "RepetitionPeriod": 10,
+            "TimeUnit": "minutes"
+        }
+    },
+    "StopCondition": {
+        "QuantityBasedSC": {
+            "Parameters": {
+                "MaxConfigs": 15
+            },
+            "Name": "QuantityBasedSC",
+            "Type": "QuantityBased"
+        },
+        "GuaranteedSC": {
+            "Name": "Guaranteed",
+            "Type": "Guaranted"
+        },
+        "BadConfigurationBasedSC": {
+            "Parameters": {
+                "MaxBadConfigurations": 10
+            },
+            "Name": "BadConfigurationBased",
+            "Type": "BadConfigurationBased"
+        },
+        "ImprovementBasedSC": {
+            "Parameters": {
+                "MaxConfigsWithoutImprovement": 5
+            },
+            "Name": "ImprovementBased",
+            "Type": "ImprovementBased"
+        },
+        "TimeBasedSC": {
+            "Parameters": {
+                "MaxRunTime": 10,
+                "TimeUnit": "seconds"
+            },
+            "Name": "TimeBasedSC",
+            "Type": "TimeBased"
+        }
+    },
+    "TransferLearning": {
+        "TransferExpediencyDetermination": {
+            "ComparatorType": "NormDifferenceComparator",
+            "MinNumberOfSamples": 10,
+            "NumberOfSimilarExperiments": {
+                "Categorical": {
+                    "Value": "use_clustering"
+                }
+            },
+            "ClusteringAlgorithm": "MeanShiftClustering"
+        },
+        "MultiTaskLearning": {
+            "Standard": {
+                "Filters": {
+                    "FewShot": true
+                },
+                "OldNewConfigsRatio": 2.416424349152367,
+                "TransferBestConfigsOnly": true,
+                "TransferFromMostSimilarExperimentsFirst": false
+            }
+        },
+        "ModelsRecommendation": {
+            "DynamicModelsRecommendation": {
+                "RecommendationGranularity": {
+                    "Finite": {
+                        "Value": 15
+                    }
+                },
+                "Filters": {
+                    "FewShot": true
+                },
+                "TimeToBuildModelThreshold": 0.2091163669213884,
+                "TimeUnit": "seconds",
+                "ThresholdType": "soft",
+                "PerformanceMetric": "AverageRelativeImprovement"
+            }
+        }
+    },
+    "Context": {
+        "Experiment": {
+            "Title": "EnergyExperiment",
+            "TaskConfiguration": {
+                "TaskName": "energy_consumption",
+                "Scenario": {
+                    "FromFile": {
+                        "WsFile": "./search96.csv"
+                    }
+                },
+                "Objectives": {
+                    "Objective": {
+                        "Name": "energy",
+                        "DataType": "float",
+                        "Minimization": true,
+                        "Priority": 1,
+                        "ModelPriority": 1,
+                        "ExpectedValuesRange": [
+                            0.0,
+                            150000.0
+                        ],
+                        "MaxTimeToRunTask": 10
+                    }
+                }
+            },
+            "SearchSpace": {
+                "Type": null,
+                "Region": "TopLevel",
+                "Frequency": {
+                    "Categories": [
+                        1200.0,
+                        1300.0,
+                        1400.0,
+                        1600.0,
+                        1700.0,
+                        1800.0,
+                        1900.0,
+                        2000.0,
+                        2200.0,
+                        2300.0,
+                        2400.0,
+                        2500.0,
+                        2700.0,
+                        2800.0,
+                        2900.0,
+                        2901.0
+                    ],
+                    "Default": 1200.0,
+                    "Type": "FloatOrdinalHyperparameter",
+                    "Region": "TopLevel"
+                },
+                "Threads": {
+                    "Categories": [
+                        1,
+                        2,
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "Default": 1,
+                    "Type": "IntegerOrdinalHyperparameter",
+                    "Region": "TopLevel"
+                }
+            }
+        },
+        "ExperimentRegions": {
+            "Regions": [
+                "TopLevel"
+            ]
+        },
+        "Model": {
+            "Structure": "Flat"
+        }
+    }
+}

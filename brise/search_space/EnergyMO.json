@@ -1,0 +1,79 @@
+{
+    "EnergyMO": {
+        "Type": "SearchSpace",
+        "Region": "TopLevel",
+        "FreqType": {
+            "High": {
+                "frequency": {
+                    "Categories": [
+                        2200.0,
+                        2300.0,
+                        2400.0,
+                        2500.0,
+                        2700.0,
+                        2800.0,
+                        2900.0,
+                        2901.0
+                    ],
+                    "Default": 2200.0,
+                    "Type": "FloatOrdinalHyperparameter",
+                    "Region": "EnergyMO.FreqType.High"
+                },
+                "threads": {
+                    "Categories": [
+                        1,
+                        2,
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "Default": 1,
+                    "Type": "IntegerOrdinalHyperparameter",
+                    "Region": "EnergyMO.FreqType.High"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "Low": {
+                "frequency": {
+                    "Categories": [
+                        1200.0,
+                        1300.0,
+                        1400.0,
+                        1600.0,
+                        1700.0,
+                        1800.0,
+                        1900.0,
+                        2000.0
+                    ],
+                    "Default": 1200.0,
+                    "Type": "FloatOrdinalHyperparameter",
+                    "Region": "EnergyMO.FreqType.Low"
+                },
+                "threads": {
+                    "Categories": [
+                        1,
+                        2,
+                        4,
+                        8,
+                        16,
+                        32
+                    ],
+                    "Default": 1,
+                    "Type": "IntegerOrdinalHyperparameter",
+                    "Region": "EnergyMO.FreqType.Low"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "Categories": [
+                "High",
+                "Low"
+            ],
+            "Default": "Low",
+            "Type": "NominalHyperparameter",
+            "Region": "TopLevel"
+        }
+    }
+}

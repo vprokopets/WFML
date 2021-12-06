@@ -1,0 +1,50 @@
+
+abstract Model {
+    Type -> predefined
+    Region -> string
+    Preprocessing {
+        isEnabled -> boolean
+        Algorithms -> array
+        [if isEnabled == True then (all Algorithms in childs.Preprocessing) else (Algorithms == None)]
+    }
+    [Region in Context.ExperimentRegions.Regions]
+}
+
+abstract TreeParzenEstimator: Model {
+    Parameters {
+        TopNPercent -> integer
+        RandomFraction -> integer
+        BandwidthFactor -> integer
+        MinBandwirth -> float
+        SamplingSize -> integer
+    }
+    [Type = 'brise.TreeParzenEstimator']
+}
+
+abstract MultiArmedBandit: Model {
+    Parameters {
+        cType -> string
+        c -> float
+        [cType in {int, float, std}]
+        [if cType == float then 0 <= c]
+        [if cType == float then c <= 1]
+        [if cType == std then c = std]
+    }
+    [Type = 'brise.MultiArmedBandit']
+}
+
+abstract SciKitLearn: Model {
+    Type -> string
+    Parameters {
+        SamplingSize -> integer
+        MinimalScore -> float
+        CrossValidationSplits -> integer
+        TestSize -> float
+        UnderlyingModelParameters {
+            n_iter -> integer
+            tol -> float
+            normalize -> boolean
+        }
+    }
+}
+

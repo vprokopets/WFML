@@ -824,6 +824,7 @@ class prec10(ExpressionElement):
         if len(self.op) > 1 and self.op[1] == '=':
             self.flag = True
             self.update_wfml_data('Flags.Update', True)
+            self.flag = False
         try:
             if len(self.op) > 1 and self.op[1] == '=' and flag is None:
                 self.value
@@ -1275,6 +1276,8 @@ class term(ExpressionElement):
 
     def mapping_check(self):
         self_flag = False
+        if isinstance(self.op, ExpressionElement):
+            self.op.mapping_check()
         if isinstance(self.op, str) and not re.match(r'(\w+\.)+\w+', self.op):
             check = f'{self.get_wfml_data("Path")}.{self.op}'
             if check in self.get_wfml_data('Features.Mapped').keys():

@@ -1,0 +1,104 @@
+{
+    "MHjMetalPyGA": {
+        "Type": "SearchSpace",
+        "Region": "TopLevel",
+        "LowLevelHeuristic": {
+            "jMetalPy_GeneticAlgorithm": {
+                "population_size": {
+                    "Lower": 10,
+                    "Upper": 1000,
+                    "Default": 100,
+                    "Type": "IntegerHyperparameter",
+                    "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                },
+                "offspring_population_size": {
+                    "Lower": 10,
+                    "Upper": 1000,
+                    "Default": 100,
+                    "Type": "IntegerHyperparameter",
+                    "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                },
+                "mutation_type": {
+                    "PermutationSwapMutation": {
+                        "mutation_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm.mutation_type.PermutationSwapMutation"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                    },
+                    "ScrambleMutation": {
+                        "mutation_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm.mutation_type.ScrambleMutation"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                    },
+                    "Categories": [
+                        "PermutationSwapMutation",
+                        "ScrambleMutation"
+                    ],
+                    "Default": "PermutationSwapMutation",
+                    "Type": "NominalHyperparameter",
+                    "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                },
+                "crossover_type": {
+                    "PMXCrossover": {
+                        "crossover_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm.crossover_type.PMXCrossover"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                    },
+                    "CXCrossover": {
+                        "crossover_probability": {
+                            "Lower": 0,
+                            "Upper": 1,
+                            "Default": 0.5,
+                            "Type": "FloatHyperparameter",
+                            "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm.crossover_type.CXCrossover"
+                        },
+                        "Type": "Category",
+                        "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                    },
+                    "Categories": [
+                        "PMXCrossover",
+                        "CXCrossover"
+                    ],
+                    "Default": "PMXCrossover",
+                    "Type": "NominalHyperparameter",
+                    "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                },
+                "selection_type": {
+                    "Categories": [
+                        "RouletteWheelSelection",
+                        "BestSolutionSelection",
+                        "BinaryTournamentSelection"
+                    ],
+                    "Default": "BinaryTournamentSelection",
+                    "Type": "OrdinalHyperparameter",
+                    "Region": "MHjMetalPyGA.LowLevelHeuristic.jMetalPy_GeneticAlgorithm"
+                },
+                "Type": "Category",
+                "Region": "TopLevel"
+            },
+            "Categories": [
+                "jMetalPy_GeneticAlgorithm"
+            ],
+            "Default": "jMetalPy_GeneticAlgorithm",
+            "Type": "NominalHyperparameter",
+            "Region": "TopLevel"
+        }
+    }
+}

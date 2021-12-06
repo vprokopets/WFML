@@ -1,0 +1,20 @@
+{
+    "AH": {
+        "Type": "SearchSpace",
+        "Region": "TopLevel",
+        "x": {
+            "Lower": -4.0,
+            "Upper": 5.0,
+            "Default": 1.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        },
+        "y": {
+            "Lower": -4.0,
+            "Upper": 5.0,
+            "Default": 1.0,
+            "Type": "FloatHyperparameter",
+            "Region": "TopLevel"
+        }
+    }
+}

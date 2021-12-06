@@ -15,10 +15,6 @@ DefaultConfigurationHandler ? {
     [if type == AutoModel then Context.Experiment.TaskConfiguration.TaskName in {naiveBayes, randomForest, neuralNet, SVM}]
 }
 
-DomainDescription {
-    DataFile -> string
-}
-
 abstract OutliersDetector 5 {
     MinActiveNumberOfTasks -> integer
     MaxActiveNumberOfTasks -> integer
@@ -81,67 +77,72 @@ abstract Model {
     [Region in Context.ExperimentRegions.Regions]
 }
 
-abstract TreeParzenEstimator: Model {
-    Parameters {
-        TopNPercent -> integer
-        RandomFraction -> integer
-        BandwidthFactor -> integer
-        MinBandwirth -> float
-        SamplingSize -> integer
-    }
-    [Type = 'brise.TreeParzenEstimator']
+abstract LinearRegression: Model {
+    [Type = 'skLearn.LinearRegression']
 }
 
-abstract MultiArmedBandit: Model {
-    Parameters {
-        cType -> string
-        c -> float
-        [cType in {int, float, std}]
-        [if cType == float then 0 <= c]
-        [if cType == float then c <= 1]
-        [if cType == std then c = std]
-    }
-    [Type = 'brise.MultiArmedBandit']
+abstract RANSACRegressor: Model {
+    [Type = 'skLearn.RANSACRegressor']
 }
 
-abstract ModelMock: Model
+abstract SupportVectorRegression: Model {
+    Kernel -> string
+    C -> float
+    GammaType -> string
+    Gamma -> float
+    Epsilon -> float
+    [Kernel in {linear, poly, rbf, sigmoid, precomputed}]
+    [GammaType in {scale, auto, float}]
+    [if GammaType == scale then Gamma == scale]
+    [if GammaType == auto then Gamma == auto]
+    [if GammaType == float then Gamma > 0]
+    [C > 0]
+    [Epsilon > 0]
+    [Type = 'sklearn.SVR']
+}
 
-abstract SciKitLearn: Model {
-    Type -> string
+abstract GaussianProcessRegression: Model {
+    Kernel -> string
+    NRestarts -> integer
+    [Kernel in {KERNEL_MAUNA, KERNEL_SIMPLE, KERNEL_GPML}]
+    [NRestarts > 0]
+    [Type = 'sklearn.GPR']
+}
+abstract ModelMock: Model {
+    [Type = 'brise.ModelMock']
+}
+
+abstract ModelsUnion: Model {
     Parameters {
-        SamplingSize -> integer
-        MinimalScore -> float
-        CrossValidationSplits -> integer
-        TestSize -> float
-        UnderlyingModelParameters {
-            n_iter -> integer
-            tol -> float
-            normalize -> boolean
-        }
+        Models -> array
+        SplitY -> boolean
+        [all Models in childs.Predictor.Models]
     }
+    [Type = 'brise.ModelsUnion']
 }
 
 Predictor {
     WindowSize -> float
     Models {
         xor Model {
-            TPE : TreeParzenEstimator
-            MAB : MultiArmedBandit
+            LinReg : LinearRegression
+            RANSAC : RANSACRegressor
+            SVR: SupportVectorRegression
+            GPR: GaussianProcessRegression
             MM : ModelMock
-            skLearn : SciKitLearn
+            MU: ModelsUnion
         }
     }
+    Optimizer -> predefined
+    Validator -> predefined
+    [if Context.Model.Structure == Flat then Optimizer = RandomSearch else Optimizer = MOEA]
+    [Validator = CrossValidation]
+    [size childs.Predictor.Models == size unique Region at Predictor]
 }
 
 Preprocessing {
     Normalization -> string
-    Scalarization -> string
-    TypeConversion {
-        OrdinalHyperparameter -> string
-        NominalHyperparameter -> string
-        IntegerHyperparameter -> string
-        FloatHyperparameter -> string
-    }
+    [Normalization in {brise.Normalization}]
 }
 
 StopConditionTriggerLogic {
@@ -257,7 +258,6 @@ abstract Hyperparameter {
     Region -> predefined
     [Region = TopLevel]
     [if parent.self.Type == Category then Region = parent.self else Region = parent.self.Region]
-    [if Context.Model.Structure == Flat then Region = TopLevel]
 }
 
 abstract NominalHyperparameter: Hyperparameter {
@@ -281,7 +281,6 @@ abstract OrdinalHyperparameter: Hyperparameter {
     [Type = OrdinalHyperparameter]
     [Default in Categories]
 }
-
 
 abstract FloatHyperparameter: Hyperparameter {
     Lower -> float
@@ -356,42 +355,9 @@ Context {
         SearchSpace {
             Type -> predefined
             Region -> predefined
+            [Type = 'SearchSpace']
             [Region = TopLevel]
-            LowLevelHeuristic: NominalHyperparameter {
-                SimulatedAnnealing: Category {
-                    MutationType: NominalHyperparameter {
-                        PermutationSwapMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                        ScrambleMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                    }
-                }
-                jMetalPyEvolutionStrategy: Category {
-                    mu: IntegerHyperparameter
-                    lambda: IntegerHyperparameter
-                    elitist: OrdinalHyperparameter {
-                        [Categories = {true, false}]
-                    }
-                    MutationType: NominalHyperparameter {
-                        PermutationSwapMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                        ScrambleMutation: Category {
-                            MutationProbability: FloatHyperparameter
-                        }
-                    }
-                }
-                jMetalEvolutionStrategy: Category {
-                    mu: IntegerHyperparameter
-                    lambda: IntegerHyperparameter
-                    elitist: OrdinalHyperparameter {
-                        [Categories = {true, false}]
-                    }
-                    MutationProbability: FloatHyperparameter
-                }
-            }
+            // ReplaceThisWithSearchSpace //
         }
     }
     ExperimentRegions{

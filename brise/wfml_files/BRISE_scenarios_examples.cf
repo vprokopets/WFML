@@ -1,0 +1,674 @@
+EnergySO {
+    Frequency: FloatOrdinalHyperparameter{
+        [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]
+    }
+    Threads: IntegerOrdinalHyperparameter{
+        [Categories = {1, 2, 4, 8, 16, 32}]
+    }
+}
+
+Energy512 {
+    Frequency: FloatOrdinalHyperparameter{
+        [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]
+    }
+    Threads: IntegerHyperparameter{
+        [Lower == 1]
+        [Upper == 32]
+    }
+}
+
+EnergyMO {
+    FreqType: NominalHyperparameter {
+        High: Category {
+            Frequency: FloatOrdinalHyperparameter{
+                [Categories = {2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]
+            }
+            Threads: IntegerOrdinalHyperparameter{
+                [Categories = {1, 2, 4, 8, 16, 32}]
+            }
+        }
+        Low: Category {
+            Frequency: FloatOrdinalHyperparameter{
+                [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0}]
+            }
+            Threads: IntegerOrdinalHyperparameter{
+                [Categories = {1, 2, 4, 8, 16, 32}]
+            }
+        }
+    }
+}
+
+HH {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPySimulatedAnnealing: Category {
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+        jMetalPyEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+        jMetalEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationProbability: FloatHyperparameter
+        }
+    }
+}
+
+GA {
+    generations: IntegerHyperparameter {
+        [Lower == 25000]
+        [Upper == 200000]
+        [Default == 200000]
+    }
+    populationSize: IntegerHyperparameter {
+        [Lower == 100]
+        [Upper == 50000]
+        [Default == 1000]
+    }
+    treeMutateOperatorP: FloatHyperparameter {
+        [Lower == 0.1]
+        [Upper == 1.0]
+        [Default == 0.9]
+    }
+    treeMutateOperatorP1: FloatHyperparameter {
+        [Lower == 0.1]
+        [Upper == 1.0]
+        [Default == 0.7]
+    }
+    treeMutateOperatorP2: FloatHyperparameter {
+        [Lower == 0.1]
+        [Upper == 1.0]
+        [Default == 0.3]
+    }
+    treeMutateOperatorP3: FloatHyperparameter {
+        [Lower == 0.1]
+        [Upper == 1.0]
+        [Default == 0.4]
+    }
+    lambda_: IntegerOrdinalHyperparameter {
+        [Categories = {25}]
+    }
+    crossoverRate: FloatOrdinalHyperparameter {
+        [Categories = {0.95}]
+    }
+    mu: IntegerOrdinalHyperparameter {
+        [Categories = {25}]
+    }
+    tournament: IntegerOrdinalHyperparameter {
+        [Categories = {0}]
+    }
+}
+
+HHSynth {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPySimulatedAnnealing: Category {
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                UniformMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                NonUniformMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+        jMetalPyEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                UniformMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                NonUniformMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+        jMetalEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationProbability: FloatHyperparameter
+        }
+    }
+}
+
+MHjMetalES {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationProbability: FloatHyperparameter
+        }
+    }
+}
+
+MHjMetalPyES {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPyEvolutionStrategy: Category {
+            mu: IntegerHyperparameter
+            lambda: IntegerHyperparameter
+            elitist: OrdinalHyperparameter {
+                [Categories = {true, false}]
+            }
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+    }
+}
+
+MHjMetalPySA {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPySimulatedAnnealing: Category {
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+        }
+    }
+}
+
+MHjMetalPyGA {
+    LowLevelHeuristic: NominalHyperparameter {
+        jMetalPyGeneticAlgorithm: Category {
+            PopulationSize: IntegerHyperparameter {
+                [Lower == 10]
+                [Upper == 1000]
+                [Default == 100]
+            }
+            OffspringPopulationSize: IntegerHyperparameter {
+                [Lower == 10]
+                [Upper == 1000]
+                [Default == 100]
+            }
+            MutationType: NominalHyperparameter {
+                PermutationSwapMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+                ScrambleMutation: Category {
+                    MutationProbability: FloatHyperparameter
+                }
+            }
+            CrossoverType: NominalHyperparameter {
+                PMXCrossover: Category {
+                    CrossoverProbability: FloatHyperparameter
+                }
+                CXCrossover: Category {
+                    CrossoverProbability: FloatHyperparameter
+                }
+            }
+            SelectionType: OrdinalHyperparameter {
+                [Categories = {RouletteWheelSelection, BestSolutionSelection, BinaryTournamentSelection}]
+            }
+        }
+    }
+}
+
+NB {
+    LaplaceCorrection: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+    EstimationMode: NominalHyperparameter {
+        Full: Category {
+            BandwidthSelection: OrdinalHyperparameter {
+                [Categories = {heuristic, fix}]
+            }
+        }
+        Greedy: Category {
+            MinimalBandwidth: FloatHyperparameter {
+                [Lower == 0.001]
+                [Upper == 1000]
+                [Default == 0.5]
+            }
+            KernelsNumber: IntegerHyperparameter {
+                [Lower == 1]
+                [Upper == 1000]
+                [Default == 1]
+            }
+        }
+    }
+    Bandwidth: FloatHyperparameter {
+        [Lower == 0.001]
+        [Upper == 1000]
+        [Default == 10.0]
+    }
+    UseApplicationGrid: OrdinalHyperparameter {
+        ApplicationGridSize: IntegerHyperparameter {
+            [Lower == 10]
+            [Upper == 1000]
+            [Default == 100]
+        }
+        [Categories = {true, false}]
+    }
+}
+
+NN {
+    Layer: IntegerHyperparameter {
+        [Lower == 2]
+        [Upper == 8]
+        [Default == 2]
+    }
+    TrainingCycles: IntegerHyperparameter {
+        [Lower == 200]
+        [Upper == 1000]
+        [Default == 200]
+    }
+    LearningRate: FloatHyperparameter {
+        [Lower == 0.01]
+        [Upper == 1]
+        [Default == 0.01]
+    }
+    Momentum: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1]
+        [Default == 0.9]
+    }
+    Decay: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+    Shuffle: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+    Normalize: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+    ErrorEpsilon: FloatHyperparameter {
+        [Lower == 0.000001]
+        [Upper == 0.0001]
+        [Default == 0.0001] 
+    }
+    UseLocalRandomSeed: NominalHyperparameter {
+        True: Category {
+            LocalRandomSeed: IntegerHyperparameter {
+                [Lower == 1992]
+                [Upper == 1994]
+                [Default == 1992]
+            }
+        }
+        False: Category
+    }
+}
+
+RF {
+    NumberOfTrees: IntegerHyperparameter {
+        [Lower == 2]
+        [Upper == 500]
+        [Default == 500]
+    }
+    Criterion: OrdinalHyperparameter {
+        [Categories = {GainRatio, Accuracy, InformationGain}]
+    }
+    MaximalDepth: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 100]
+        [Default == 10]
+    }
+    ApplyPruning: NominalHyperparameter {
+        True: Category {
+            Confidence: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1.0]
+                [Default == 0.25]
+            }
+        }
+        False: Category
+    }
+    ApplyPrepruning: NominalHyperparameter {
+        True: Category {
+            MinimalGain: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 10.0]
+                [Default == 0.1]
+            }
+            MinimalLeafSize: IntegerHyperparameter {
+                [Lower == 1]
+                [Upper == 500]
+                [Default == 500]
+            }
+            MinimalSizeForSplit: IntegerHyperparameter {
+                [Lower == 1]
+                [Upper == 10]
+                [Default == 4]
+            }
+            NumberOfPrepruningAlternatives: IntegerHyperparameter {
+                [Lower == 1]
+                [Upper == 4]
+                [Default == 3]
+            }
+        }
+        False: Category
+    }
+    RandomSplits: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+    GuessSubsetRatio: NominalHyperparameter {
+        True: Category {
+            SubsetRatio: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1.0]
+                [Default == 0.3]
+            }
+        }
+        False: Category
+    }
+    VotingStrategy: OrdinalHyperparameter {
+        [Categories in {ConfidenceVote, MajorityVote}]
+    }
+    UseLocalRandomSeed: NominalHyperparameter {
+        True: Category {
+            LocalRandomSeed: IntegerHyperparameter {
+                [Lower == 1992]
+                [Upper == 1994]
+                [Default == 1992]
+            }
+        }
+        False: Category
+    }
+    EnableParallelExecution: OrdinalHyperparameter {
+        [Categories = {true, false}]
+    }
+}
+
+SVM {
+    KernelType: NominalHyperparameter {
+        Dot: Category
+        Annova: Category {
+            KernelGamma: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+            KernelDegree: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 2.0]
+            }
+        }
+        Epachnenikov: Category {
+            KernelSigma1: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+            KernelDegree: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 2.0]
+            }
+        }
+        GaussianCombination: Category {
+            KernelSigma1: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+            KernelSigma2: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 0.0]
+            }
+            KernelSigma3: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 2.0]
+            }
+        }
+        Multiquadratic: Category {
+            KernelSigma1: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+            KernelShift: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+        }
+        Neural: Category {
+            KernelA: FloatHyperparameter {
+                [Lower == -1000.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+            KernelB: FloatHyperparameter {
+                [Lower == -1000.0]
+                [Upper == 1000.0]
+                [Default == 0.0]
+            }
+        }
+        Polynomial: Category {
+            KernelDegree: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 2.0]
+            }
+        }
+        Radial: Category {
+            KernelGamma: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1000.0]
+                [Default == 1.0]
+            }
+        }
+    }
+    KernelCache: IntegerHyperparameter {
+        [Lower == 0]
+        [Upper == 1000]
+        [Default == 200]
+    }
+    C: FloatHyperparameter {
+        [Lower == -1.0]
+        [Upper == 1000.0]
+        [Default == 0.0]
+    }
+    ConvergenseEpsilon: FloatHyperparameter {
+        [Lower == 0.001]
+        [Upper == 0.1]
+        [Default == 0.001]
+    }
+    MaxIterations: IntegerHyperparameter {
+        [Lower == 100]
+        [Upper == 100000]
+        [Default == 100000]
+    }
+    Scale: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    CalculateWeights: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    ReturnOptimizationPerformance: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    LPos: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1000]
+        [Default == 1.0]
+    }
+    LNeg: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1000]
+        [Default == 1.0]
+    }
+    Epsilon: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1000]
+        [Default == 0.0]
+    }
+    EpsilonPlus: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1000]
+        [Default == 0.0]
+    }
+    EpsilonMinus: FloatHyperparameter {
+        [Lower == 0.0]
+        [Upper == 1000]
+        [Default == 0.0]
+    }
+    BalanceCost: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    QuadraticLossPos: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    QuadraticLossNeg: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+    EstimatePerformance: OrdinalHyperparameter {
+        [Categories in {true, false}]
+    }
+}
+
+OpenML {
+    Criterion: NominalHyperparameter {
+        Gini: Category {
+            MaxDepth: IntegerHyperparameter {
+                [Lower == 10]
+                [Upper == 120]
+                [Default == 50]
+            }
+            MaxFeatures: OrdinalHyperparameter {
+                [Categories = {sqrt, log2}]
+            }
+            MinSamplesLeaf: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 0.5]
+                [Default == 0.1]
+            }
+            MinSamplesSplit: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1.0]
+                [Default == 0.1]
+            }
+            EstimatorsNumber: IntegerHyperparameter {
+                [Lower == 100]
+                [Upper == 1000]
+                [Default == 100]
+            }
+        }
+        Entropy: Category {
+            MaxDepth: IntegerHyperparameter {
+                [Lower == 10]
+                [Upper == 120]
+                [Default == 50]
+            }
+            MaxFeatures: OrdinalHyperparameter {
+                [Categories = {sqrt, log2}]
+            }
+            MinSamplesLeaf: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 0.5]
+                [Default == 0.1]
+            }
+            MinSamplesSplit: FloatHyperparameter {
+                [Lower == 0.0]
+                [Upper == 1.0]
+                [Default == 0.1]
+            }
+            EstimatorsNumber: IntegerHyperparameter {
+                [Lower == 100]
+                [Upper == 1000]
+                [Default == 100]
+            }
+        }
+    }
+}
+
+SA {
+    subComponentUnassignedFactor: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 10000]
+        [Default == 1]
+    }
+    softwareComponentUnassignedFactor: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 10000]
+        [Default == 5]
+    }
+    hardScoreStartingTemperaturePercentage: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 100]
+        [Default == 100]
+    }
+    softScoreStartingTemperaturePercentage: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 100]
+        [Default == 100]
+    }
+    acceptedCountLimit: IntegerHyperparameter {
+        [Lower == 1]
+        [Upper == 50]
+        [Default == 50]
+    }
+    millisecondsSpentLimit: IntegerOrdinalHyperparameter {
+        [Categories = {10000}]
+    }
+    unimprovedMillisecondsSpentLimit: IntegerOrdinalHyperparameter {
+        [Categories = {10000}]
+    }  
+}
+
+AH {
+    x: FloatHyperparameter {
+        [Lower == -4.0]
+        [Upper == 5.0]
+        [Default == 1.0]
+    }
+    y: FloatHyperparameter {
+        [Lower == -4.0]
+        [Upper == 5.0]
+        [Default == 1.0]
+    }
+}
