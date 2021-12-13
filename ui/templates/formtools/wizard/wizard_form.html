@@ -5,7 +5,15 @@
 {{ wizard.form.media }}
 {% endblock %}
 
+{% block header %}
+  <div class="headerText" style="width: 40%;float:left">Configure product</div>
+  <div style="width: 40%;float: left;">
+    <progress id="file" max={{ wizard.steps.count }} value={{ wizard.steps.step1 }} style="margin-top: 30px;"> 100% </progress>
+  </div>
+{% endblock header %}
+
 {% block content %}
+<main style="left: 1.5%; margin-top: 5%;">
 <p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
@@ -62,5 +70,23 @@
     {% csrf_token %}
     <button type="submit" name='mybtn2' value={{done}}>Download configuration pickle.</button>
 </form>
+
+<style>
+    .form-group {
+        margin-top: 15px
+    }
+    input[type=submit], button[type=submit] {
+      margin-top: 10px;
+      text-align: center;
+      width: 150px;
+      height: 40px;
+    }
+    .alert{
+      background-color: rgb(255, 155, 155);
+    }
     
+
+</style>
+
+</main>
 {% endblock %}

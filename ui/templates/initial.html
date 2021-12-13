@@ -1,23 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
 
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <style>
-    textarea {
-  width: 100%;
-  height: 700px;
-}
-  </style>
-  {% block head %}{% endblock head %}
-</head>
-<body>
-<div>Initial page</div>
-<form action="" method="post" style="width: 100%; height: 700px;">
-  {% csrf_token %}
-  {{form.model_field.label}}
-  {{form.model_field}}
-  <input type="submit" value="Submit" />
+<form action="" id="model" method="post" style="text-align: left;">
+    {% csrf_token %}
+    {{form.model_field}}
+    <input type="submit" form="model" value="Submit model" />
 </form>
-</body>
-</html>
+
+
+<style>
+  textarea {
+    position: absolute;
+    margin-top: 40px;
+    width: 95%;
+    left: 2%;
+    height: 600px;
+    font-size: 11pt;
+  }
+  input {
+    position: absolute;
+    margin-top: 680px;
+    left: 2%;
+    text-align: center;
+    width: 150px;
+    height: 40px;
+    font-size: 12pt;
+  }
+
+</style>
+{% endblock %}

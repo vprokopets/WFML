@@ -3,10 +3,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   {% block head %}{% endblock head %}
 </head>
-<body>
-{% block content %}{% endblock content %}
-</body>
+
+<header>
+  {% block header %}
+  <div class="headerText" style="width: 40%;float:left">Configure model</div>
+  {% endblock header %}
+  <div style="position: absolute; right: 5%; top: 10px; width: 60%; Text-align:right;">
+    <a href="http://127.0.0.1:8000/wizard/initialize/">
+      {% include 'img/WFMLlogo.svg' %}
+    </a>
+  </div>
+</header>
+
+<main>
+  {% block content %}{% endblock content %}
+</main>
+
+
+<footer>
+  <div class="headerText" style="left: 25%; width: 20%;text-align: right; font-size: 12pt;">
+    WFML - DSL that aims at variability management of dynamic multi-model surrogate optimization.
+  </div>
+
+  <div style="position: absolute; right: 10%; top: 25px; width: 40%; Text-align:left;">
+      <i class="fa fa-envelope" style="font-size:14px"></i>
+      <a href="mailto:volodymyr.prokopets@tu-dresden.de" style="font-size: 10pt;"> volodymyr.prokopets@tu-dresden.de</a>
+      <br>
+      <i class="fa fa-github" style="font-size:14px"></i>
+      <a href="https://github.com/vprokopets/WFML"  style="font-size: 10pt;">https://github.com/vprokopets/WFML</a>
+  </div>
+  
+  
+ <style>
+
+   footer{
+    position:absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100px;
+    text-align: center;
+    background: #F5F5F7;
+   }
+   a{
+    border-bottom: 1px solid #666;
+    color: rgb(41, 39, 39);
+    font: 16px serif;
+    text-decoration: none;
+   }
+   .headerText{
+    position: relative;
+    margin-top: 25px;
+    margin-left: 40px;
+    color: rgb(31, 30, 30);
+    font: 22px serif;
+    text-decoration: none;
+   }
+   main{
+    position: relative;
+    z-index: 1;
+    margin-bottom: 100px;
+    margin-top: 75px;
+    color: #222;
+    top: 0;
+    left: 0;
+    right: 0;
+   }
+
+  header{
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    padding-left: 1em;
+    font: bold 16px/48px sans-serif;
+    background: #f2f6fa;
+  }
+
+ </style>
+</footer>
+
 </html>
