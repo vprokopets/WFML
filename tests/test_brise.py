@@ -30,7 +30,7 @@ class TestBRISEUPD():
         self.driver.find_element(By.ID, "id_model_field").send_keys("""
 General {
     NumberOfWorkers -> integer
-    result_storage -> string
+    ResultStorage -> string
     [NumberOfWorkers >= 1]
 }
 
@@ -674,7 +674,7 @@ Context {
         self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(6)").click()
         # 138 | type | id=id_13-General.NumberOfWorkers | 3
         self.driver.find_element(By.ID, "id_13-General.NumberOfWorkers").send_keys("3")
-        # 139 | type | id=id_13-General.result_storage | ./Results/
-        self.driver.find_element(By.ID, "id_13-General.result_storage").send_keys("./Results/")
+        # 139 | type | id=id_13-General.ResultStorage | ./Results/
+        self.driver.find_element(By.ID, "id_13-General.ResultStorage").send_keys("./Results/")
         # 140 | click | css=input:nth-child(7) |
         self.driver.find_element(By.CSS_SELECTOR, "input:nth-child(7)").click()

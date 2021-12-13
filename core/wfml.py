@@ -229,7 +229,8 @@ class prec23(ExpressionElement):
                 else:
                     if self.exception_flag is True:
                         ol = self._tx_position_end - self._tx_position
-                        msg = ''.join(('Expression operation IF returned not boolean',
+                        msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                       ' Expression operation IF returned not boolean',
                                        ' was not satisfied.\n',
                                        f'Error position: Line {get_location(self)["line"]},',
                                        f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -277,7 +278,8 @@ class prec22(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -324,7 +326,8 @@ class prec21(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -371,7 +374,8 @@ class prec20(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation OR ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation OR ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -418,7 +422,8 @@ class prec19(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -466,7 +471,8 @@ class prec18(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation AND ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation AND ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -643,7 +649,7 @@ class prec12(ExpressionElement):
         ret (variable type): previous level object if no prec12 operations are not presented in constraint
                             operation result in opposite case.
         """
-        
+
         self.exception_flag = False
         if len(self.op) == 4:
             shift = 1
@@ -661,7 +667,7 @@ class prec12(ExpressionElement):
                 ret = self.op[0+shift].value
                 logging.info(f'{ret} {operation} {operand.value}')
             if self.op[0] == 'all':
-                ret = list(ret.split(','))
+                ret = list(ret.replace(' ', '').split(','))
             else:
                 ret = [ret]
             for iteration in range(0, len(ret)):
@@ -705,18 +711,20 @@ class prec12(ExpressionElement):
         if ret is False and self.exception_flag is True:
             ol = self._tx_position_end - self._tx_position
             if len(self.op) == 3:
-                msg = ''.join((f'Expression operation ({self.op[0+shift].value} {operation} {operand.value})',
-                            ' was not satisfied.\n',
-                            f'Error position: Line {get_location(self)["line"]},',
-                            f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
-                            f' Filename {get_location(self)["filename"]}\n'))
+                msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                               f' Expression operation ({self.op[0+shift].value} {operation} {operand.value})',
+                               ' was not satisfied.\n',
+                               f'Error position: Line {get_location(self)["line"]},',
+                               f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                               f' Filename {get_location(self)["filename"]}\n'))
             else:
-                msg = ''.join((f'Expression operation ({self.op[0]} {self.op[0+shift].value} {operation} {operand.value})',
-                            ' was not satisfied.\n',
-                            f' Wrong element: {err_ret[err_index]}'
-                            f' Error position: Line {get_location(self)["line"]},',
-                            f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
-                            f' Filename {get_location(self)["filename"]}\n'))
+                msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                               f'Expression operation ({self.op[0]} {self.op[0+shift].value} {operation} {operand.value})',
+                               ' was not satisfied.\n',
+                               f' Wrong element: {err_ret[err_index]}'
+                               f' Error position: Line {get_location(self)["line"]},',
+                               f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                               f' Filename {get_location(self)["filename"]}\n'))
             raise Exception(msg)
 
         # Release exception flag.
@@ -899,17 +907,20 @@ class prec7(ExpressionElement):
         """
         # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            ret = operand.value
+            if isinstance(ret, str):
+                ret = ret.replace(' ', '').split(',')
             if operation == 'min':
                 logging.debug(f"Level 8 min operation: {operation}")
-                ret = min(operand.value)
+                ret = min(ret)
 
             elif operation == 'max':
                 logging.debug(f"Level 8 max operation: {operation}")
-                ret = max(operand.value)
+                ret = max(ret)
 
             elif operation == 'size':
                 logging.debug(f"Level 8 size operation: {operation}")
-                ret = len(operand.value)
+                ret = len(ret)
         if len(self.op) == 1:
             ret = self.op[0].value
 
@@ -2236,10 +2247,12 @@ class textX_API():
                     constraints_validated = 0
                     # Perform constraint validation using feature mappings if such are exist.
                     if self.cname(child1) == "Constraint":
+                        constraint_expression = f'{self.get_wfml_data("ModelDescription").splitlines()[get_location(child1)["line"] - 1].lstrip()}; '
                         msg = (f'Validating constraint: '
-                               f'{self.get_wfml_data("ModelDescription").splitlines()[get_location(child1)["line"] - 1].lstrip()}; '
+                               f'{constraint_expression}; '
                                f'Line: {get_location(child1)["line"]}')
                         logging.info(msg)
+                        self.update_wfml_data('CurrentConstraintExpression', constraint_expression)
                         self.reset_wfml_data('Iterable.Mapping.Current')
                         self.reset_wfml_data('Iterable.Mapping.Total')
                         self.reset_wfml_data('Iterable.Mapping.Structure')
@@ -2302,7 +2315,9 @@ class textX_API():
             for element in self.get_wfml_data('Model').elements:
                 if element.name == feature.super.initial_super_reference_check():
                     super_copy = copy.deepcopy(element.namespace)
-                    feature.namespace.update(super_copy)
+                    for k, v in super_copy.items():
+                        if k not in feature.namespace.keys():
+                            feature.namespace.update({k: v})
                     if len(element.nested) > 0:
                         # If feature has no childs, just copy super feature nested elements.
                         if feature.nested == []:
@@ -2546,6 +2561,9 @@ class textX_API():
 
         self.pickle_wfml_data()
         return res
+
+    def get_json(self):
+        return open('./core/output/configuration.json', 'r')
 
     def define_features(self):
         """

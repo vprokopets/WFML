@@ -54,5 +54,6 @@
     },
     "Path": "",
     "Model": "",
-    "ModelDescription": ""
+    "ModelDescription": "",
+    "CurrentConstraintExpression": ""
 }

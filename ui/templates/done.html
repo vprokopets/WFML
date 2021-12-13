@@ -7,6 +7,21 @@
 </head>
 <body>
 <div>RESULT:</div>
-{{form_data}}
+
+<br>
+<form action="/wizard/download" method="get">
+  <input type="submit" value="Download configured product" 
+       name="Submit" id="frm1_submit" />
+</form>
+
+<br>
+<form action="/wizard/initialize" method="get">
+  <input type="submit" value="Configure new product" 
+       name="Submit" id="frm1_submit" />
+</form>
+
+<br>
+<pre id="json">{{form_data | pprint}}</pre>
+
 </body>
 </html>

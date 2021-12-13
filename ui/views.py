@@ -1,9 +1,12 @@
 import copy
 import logging
+import mimetypes
+import os
 
 from core.wfml import textX_API
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
+from django.http.response import HttpResponse
 from django.urls import reverse
 from formtools.wizard.views import SessionWizardView
 from django import forms
@@ -587,3 +590,17 @@ def factory_wizard(request, *args, **kwargs):
         class ReturnClass(WizardClass):
             form_list = ret_form_list
         return ReturnClass.as_view()(request, *args, **kwargs)
+
+
+def download_file(request):
+    # Define Django project base directory
+    filename = 'configuration.json'
+    path = api.get_json()
+    # Set the mime type
+    mime_type, _ = mimetypes.guess_type(filename)
+    # Set the return value of the HttpResponse
+    response = HttpResponse(path, content_type=mime_type)
+    # Set the HTTP header for sending to browser
+    response['Content-Disposition'] = "attachment; filename=%s" % filename
+    # Return the response value
+    return response
