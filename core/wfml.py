@@ -1260,7 +1260,10 @@ class term(ExpressionElement):
                     res = self.get_wfml_data('Namespace')
                     for section in path:
                         res = res[section]
-                    res = res['value']
+                    try:
+                        res = res['value']
+                    except KeyError:
+                        logging.debug('Non-leaf parameter.')
                 if self.get_wfml_data('Flags.Update') is False:
                     op = res
             return op
