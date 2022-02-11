@@ -350,7 +350,7 @@ class WizardClass(SessionWizardView):
         feature_cardinalities = api.get_wfml_data('Cardinalities.Feature')
         for fcard, value in feature_cardinalities.items():
             logging.debug(f'FCARD: {fcard} value {value}')
-            if type(value) is not int and fcard not in ignore_fields and fcard not in self.ad.keys():
+            if type(value) is not int and fcard not in ignore_fields and fcard.split('.')[0] not in self.ad.keys():
                 allowed = None
                 if value == '*':
                     allowed = '0..inf'

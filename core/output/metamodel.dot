@@ -11,151 +11,151 @@
     edge[dir=black,arrowtail=empty]
 
 
-140425031032624[ label="{Model|}"]
+140696216511216[ label="{Model|}"]
 
-140425031149392[ label="{*Element|}"]
+140696216476816[ label="{*Element|}"]
 
-140425029959856[ label="{Constraint|}"]
+140696216720304[ label="{Constraint|}"]
 
-140425030706160[ label="{Assertion|}"]
+140696216726432[ label="{Assertion|}"]
 
-140425030833792[ label="{Goal|gtype: Goaltype\l}"]
+140696216732560[ label="{Goal|gtype: Goaltype\l}"]
 
-140425031977152[ label="{Feature|abstract: Abstract\lgcard: Gcard\lname: Name\lfcard: Fcard\l}"]
+140696216783440[ label="{Feature|abstract: Abstract\lgcard: Gcard\lname: Name\lfcard: Fcard\l}"]
 
-140425031688880[ label="{*Super|}"]
+140696216801472[ label="{*Super|}"]
 
-140425030186880[ label="{*Reference|}"]
+140696216807008[ label="{*Reference|}"]
 
-140425031242928[ label="{*Init|}"]
+140696216812544[ label="{*Init|}"]
 
-140425032304096[ label="{Nested|}"]
+140696216818080[ label="{Nested|}"]
 
-40207232[ label="{prec24|op: list[OBJECT]\l}"]
+36713152[ label="{prec24|op: list[OBJECT]\l}"]
 
-40208176[ label="{prec23|op: list[OBJECT]\l}"]
+36714096[ label="{prec23|op: list[OBJECT]\l}"]
 
-40209120[ label="{prec22|op: optional\<list[OBJECT]\>\l}"]
+36715040[ label="{prec22|op: optional\<list[OBJECT]\>\l}"]
 
-40210064[ label="{prec21|op: optional\<list[OBJECT]\>\l}"]
+36715984[ label="{prec21|op: optional\<list[OBJECT]\>\l}"]
 
-40211008[ label="{prec20|op: optional\<list[OBJECT]\>\l}"]
+36716928[ label="{prec20|op: optional\<list[OBJECT]\>\l}"]
 
-40211952[ label="{prec19|op: optional\<list[OBJECT]\>\l}"]
+36717872[ label="{prec19|op: optional\<list[OBJECT]\>\l}"]
 
-40212896[ label="{prec18|op: optional\<list[OBJECT]\>\l}"]
+36718816[ label="{prec18|op: optional\<list[OBJECT]\>\l}"]
 
-40213840[ label="{prec17|op: optional\<list[OBJECT]\>\l}"]
+36719760[ label="{prec17|op: optional\<list[OBJECT]\>\l}"]
 
-40214784[ label="{prec16|op: optional\<list[OBJECT]\>\l}"]
+36720704[ label="{prec16|op: optional\<list[OBJECT]\>\l}"]
 
-40215728[ label="{prec15|op: optional\<list[OBJECT]\>\l}"]
+36721648[ label="{prec15|op: optional\<list[OBJECT]\>\l}"]
 
-40218896[ label="{prec14|op: optional\<list[OBJECT]\>\l}"]
+36722592[ label="{prec14|op: optional\<list[OBJECT]\>\l}"]
 
-39265632[ label="{prec13|op: optional\<list[OBJECT]\>\l}"]
+35770112[ label="{prec13|op: optional\<list[OBJECT]\>\l}"]
 
-40230176[ label="{prec12|op: list[OBJECT]\l}"]
+36736144[ label="{prec12|op: list[OBJECT]\l}"]
 
-40231120[ label="{prec11|op: optional\<list[OBJECT]\>\l}"]
+36737088[ label="{prec11|op: optional\<list[OBJECT]\>\l}"]
 
-40232064[ label="{prec10|op: optional\<list[OBJECT]\>\l}"]
+36738032[ label="{prec10|op: optional\<list[OBJECT]\>\l}"]
 
-40233008[ label="{prec9|op: optional\<list[OBJECT]\>\l}"]
+36738976[ label="{prec9|op: optional\<list[OBJECT]\>\l}"]
 
-40233952[ label="{prec8|op: optional\<list[OBJECT]\>\l}"]
+36739920[ label="{prec8|op: optional\<list[OBJECT]\>\l}"]
 
-40234896[ label="{prec7|op: optional\<list[OBJECT]\>\l}"]
+36740864[ label="{prec7|op: optional\<list[OBJECT]\>\l}"]
 
-40235840[ label="{prec6|op: optional\<list[OBJECT]\>\l}"]
+36741808[ label="{prec6|op: optional\<list[OBJECT]\>\l}"]
 
-40236784[ label="{prec50|op: list[OBJECT]\l}"]
+36742752[ label="{prec50|op: list[OBJECT]\l}"]
 
-40237728[ label="{prec5|op: optional\<list[OBJECT]\>\l}"]
+36743696[ label="{prec5|op: optional\<list[OBJECT]\>\l}"]
 
-40238672[ label="{prec4|op: optional\<list[OBJECT]\>\l}"]
+36744640[ label="{prec4|op: optional\<list[OBJECT]\>\l}"]
 
-40240736[ label="{prec3|op: optional\<list[OBJECT]\>\l}"]
+36746704[ label="{prec3|op: optional\<list[OBJECT]\>\l}"]
 
-40241680[ label="{prec2|op: optional\<list[OBJECT]\>\l}"]
+36747648[ label="{prec2|op: optional\<list[OBJECT]\>\l}"]
 
-40242624[ label="{prec1|op: optional\<list[OBJECT]\>\l}"]
+36748592[ label="{prec1|op: optional\<list[OBJECT]\>\l}"]
 
-40243568[ label="{prec0|op: optional\<list[OBJECT]\>\l}"]
+36749536[ label="{prec0|op: optional\<list[OBJECT]\>\l}"]
 
-40244512[ label="{term|op: OBJECT\l}"]
+36750480[ label="{term|op: OBJECT\l}"]
 
 
 
-140425031032624 -> 140425031149392[arrowtail=diamond, dir=both, headlabel="elements 0..*"]
-140425031149392 -> 140425031977152 [dir=back]
-140425031149392 -> 140425030833792 [dir=back]
-140425031149392 -> 140425029959856 [dir=back]
-140425031149392 -> 140425030706160 [dir=back]
-140425029959856 -> 40207232[arrowtail=diamond, dir=both, headlabel="name "]
-140425030706160 -> 40207232[arrowtail=diamond, dir=both, headlabel="name "]
-140425030833792 -> 40207232[arrowtail=diamond, dir=both, headlabel="name "]
-140425031977152 -> 140425031688880[arrowtail=diamond, dir=both, headlabel="super "]
-140425031977152 -> 140425030186880[arrowtail=diamond, dir=both, headlabel="reference "]
-140425031977152 -> 140425031242928[arrowtail=diamond, dir=both, headlabel="init "]
-140425031977152 -> 140425032304096[arrowtail=diamond, dir=both, headlabel="nested 0..*"]
-140425031688880 -> 40243568 [dir=back]
-140425030186880 -> 40240736 [dir=back]
-140425031242928 -> 40207232 [dir=back]
-140425032304096 -> 140425031149392[arrowtail=diamond, dir=both, headlabel="child 1..*"]
-140425030281216[ label="{*OBJECT|}"]
+140696216511216 -> 140696216476816[arrowtail=diamond, dir=both, headlabel="elements 0..*"]
+140696216476816 -> 140696216783440 [dir=back]
+140696216476816 -> 140696216732560 [dir=back]
+140696216476816 -> 140696216720304 [dir=back]
+140696216476816 -> 140696216726432 [dir=back]
+140696216720304 -> 36713152[arrowtail=diamond, dir=both, headlabel="name "]
+140696216726432 -> 36713152[arrowtail=diamond, dir=both, headlabel="name "]
+140696216732560 -> 36713152[arrowtail=diamond, dir=both, headlabel="name "]
+140696216783440 -> 140696216801472[arrowtail=diamond, dir=both, headlabel="super "]
+140696216783440 -> 140696216807008[arrowtail=diamond, dir=both, headlabel="reference "]
+140696216783440 -> 140696216812544[arrowtail=diamond, dir=both, headlabel="init "]
+140696216783440 -> 140696216818080[arrowtail=diamond, dir=both, headlabel="nested 0..*"]
+140696216801472 -> 36749536 [dir=back]
+140696216807008 -> 36746704 [dir=back]
+140696216812544 -> 36713152 [dir=back]
+140696216818080 -> 140696216476816[arrowtail=diamond, dir=both, headlabel="child 1..*"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
-140425030281216[ label="{*OBJECT|}"]
+140696216535360[ label="{*OBJECT|}"]
 
 match_rules [ shape=plaintext, label=< <table>
 	<tr>
