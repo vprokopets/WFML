@@ -7,3 +7,4 @@ django-formtools==2.2
 textX==2.3.0
 deepdiff==5.5.0
 selenium==3.141.0
+numexpr==2.8.1

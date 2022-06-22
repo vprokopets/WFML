@@ -7,7 +7,17 @@
     <input type="submit" form="model" value="Submit model" />
 </form>
 
-
+<script>
+  document.querySelector('#textarea').addEventListener('keydown', e => {
+    if ( e.key === 'Tab' && !e.shiftKey ) {
+      // execCommand operations are "Cmd|Ctrl+Z"-able
+          // note: execCommand is deprecated and may not work in the future
+      document.execCommand('insertText', false, "\t");
+      e.preventDefault();
+      return false;
+    }
+  }); 
+</script>
 <style>
   textarea {
     position: absolute;
@@ -16,6 +26,7 @@
     left: 2%;
     height: 600px;
     font-size: 11pt;
+    tab-size: 4;
   }
   input {
     position: absolute;

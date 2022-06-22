@@ -17,6 +17,7 @@ Feature:
     gcard=Gcard?
     name=Name
     super=Super?
+    type=Type?
     reference=Reference?
     fcard=Fcard?
     init=Init?
@@ -28,7 +29,8 @@ Abstract: "abstract";
 Gcard: INT+[/\..|,/] | "xor" | "or" | "mux" | "opt" | Cardinterval;
 Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
 Super: ":" prec0;
-Reference: "->" prec3 | "->>" prec3;
+Type: "->" TypeList;
+Reference: "->>" prec3;
 Init: "=" prec24 | ":=" prec24;
 Nested: 
     "{"
@@ -37,6 +39,7 @@ Nested:
     "}"
 ;
 Cardinterval: INT ".." (INT | "*");
+TypeList: "integer" | "float" | "string" | "predefined" | "array" | "integerArray" | "floatArray" | "boolean";
 
 prec24:   (op='filter')? op=prec23 ('where' op=prec23)*;
 prec23:   (op='if')? op=prec22 ('then' op=prec22 ('else' op=prec22)?)*; 
@@ -50,9 +53,9 @@ prec16:   op=prec15  (op=op16   op=prec15)*;
 prec15:   (op=op15)*  op=prec14;
 prec14:   (op=op14)*  op=prec13;
 prec13:   (op=op13)*  op=prec12;
-prec12:   (op='all')? op=prec11  (op=op12   op=prec11)*;
+prec12:   op=prec11  (op=op12   op=prec11)*;
 prec11:   op=prec10  (op=op11   op=prec10)*;
-prec10:   op=prec9  (op=op10   op=prec9)*;
+prec10:   (op=term  op=op10)*   op=prec9;
 prec9:   op=prec8  (op=op9   op=prec8)*;
 prec8:   op=prec7  (op=op8   op=prec7)*;
 prec7:   (op=op7)*  op=prec6;
@@ -95,12 +98,13 @@ Quote: /'.+'/ | /".+"/;
 List: /\{.+\}/;
 ComplexName: /(\w+\.)+\w+/;
 
-Quant: QuantNo | QuantNot | QuantLone | QuantOne | QuantSome;
+Quant: QuantNo | QuantNot | QuantLone | QuantOne | QuantSome | QuantAll;
 QuantNo: "no";
 QuantNot: "not";
 QuantLone: "lone";
 QuantOne: "one";
 QuantSome: "some";
+QuantAll: "all";
 
 Comment:
   StringComment | BlockComment

@@ -1,0 +1,19 @@
+a {
+	b {
+		d -> integer
+		e -> integer
+	}
+	c -> integer
+
+	childs_self -> predefined
+	childs_of_child -> predefined
+	path_c -> predefined
+	path_self_c -> predefined
+	value_self_c -> predefined
+
+	[childs_self = childs.self]
+	[childs_of_child = childs.self.b]
+	[path_c = fname.a.c]
+	[path_self_c = fname.self.c]
+	[value_self_c = self.c]
+}

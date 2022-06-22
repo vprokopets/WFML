@@ -1,210 +1,35 @@
 {
-    "General": {
-        "NumberOfWorkers": 3,
-        "ResultStorage": "d"
-    },
-    "SelectionAlgorithm": {
-        "type": "Sobol"
-    },
-    "DefaultConfigurationHandler": {
-        "type": "Random"
-    },
-    "OutliersDetection": {
-        "Chauvenet": {
-            "MinActiveNumberOfTasks": 3,
-            "MaxActiveNumberOfTasks": 3
+    "feature_inheritance": {
+        "feature_for_inheritance_0": {
+            "b_0": {
+                "c": 2
+            },
+            "b_1": {
+                "d": 2
+            },
+            "e": 2,
+            "a": 4
+        },
+        "feature_for_inheritance_1": {
+            "b_0": {
+                "c": 2
+            },
+            "b_1": {
+                "d": 2
+            },
+            "e": 2,
+            "a": 4
         }
     },
-    "RepetitionManagement": {
-        "DefaultConfiguration": {
-            "TasksPerConfiguration": 10
-        },
-        "MaxFailedTasksPerConfiguration": 1,
-        "Repeaters": {
-            "Repeater_0": {
-                "QuantityBased": {
-                    "MinTasksPerConfiguration": 1,
-                    "MaxTasksPerConfiguration": 1
-                }
-            },
-            "Repeater_1": {
-                "QuantityBased": {
-                    "MinTasksPerConfiguration": 1,
-                    "MaxTasksPerConfiguration": 1
-                }
-            }
-        }
+    "cross_tree_feature": {
+        "a": 5
     },
-    "Predictor": {
-        "WindowSize": 1.0,
-        "PortfolioModels": {
-            "Model": {
-                "LinReg": {
-                    "Region": "dummy",
-                    "Scalarization": false,
-                    "Type": "skLearn.LinearRegression",
-                    "Scalarize": "Linear",
-                    "Preprocessing": {
-                        "isEnabled": true,
-                        "Algorithms": [
-                            "Normalization"
-                        ]
-                    }
-                }
-            }
-        },
-        "Models": {
-            "Model": {
-                "LinReg": {
-                    "Type": "skLearn.LinearRegression",
-                    "Region": "TopLevel",
-                    "Scalarize": "Linear",
-                    "Preprocessing": {
-                        "isEnabled": true,
-                        "Algorithms": [
-                            "Normalization"
-                        ]
-                    }
-                }
-            }
-        },
-        "Optimizer": "RandomSearch",
-        "Validator": "CrossValidation"
+    "cycled_feature_a": {
+        "a": 6,
+        "b": 5
     },
-    "Preprocessing": {
-        "Normalization": "brise.Normalization"
-    },
-    "StopConditionTriggerLogic": {
-        "Expression": "1",
-        "InspectionParameters": {
-            "RepetitionPeriod": 1,
-            "TimeUnit": "seconds"
-        }
-    },
-    "StopCondition": {
-        "QuantityBasedSC": {
-            "Parameters": {
-                "MaxConfigs": 1
-            },
-            "Name": "1",
-            "Type": "QuantityBased"
-        },
-        "GuaranteedSC": {
-            "Name": "1",
-            "Type": "Guaranteed"
-        },
-        "BadConfigurationBasedSC": {
-            "Parameters": {
-                "MaxBadConfigurations": 1
-            },
-            "Name": "1",
-            "Type": "BadConfigurationBased"
-        },
-        "ImprovementBasedSC": {
-            "Parameters": {
-                "MaxConfigsWithoutImprovement": 1
-            },
-            "Name": "1",
-            "Type": "ImprovementBased"
-        },
-        "TimeBasedSC": {
-            "Parameters": {
-                "MaxRunTime": 1,
-                "TimeUnit": "seconds"
-            },
-            "Name": "1",
-            "Type": "TimeBased"
-        },
-        "FewShotLearningBasedSC": {
-            "Name": "1",
-            "Type": "FewShotLearningBased"
-        }
-    },
-    "Context": {
-        "Experiment": {
-            "Title": "EnergyConsumption",
-            "TaskConfiguration": {
-                "TaskName": "energy_consumption",
-                "Scenario": {
-                    "FromFile": {
-                        "WsFile": "search_space_96/Radix-500mio_full.csv"
-                    }
-                },
-                "Objectives": {
-                    "Objective_0": {
-                        "Name": "energy",
-                        "DataType": "float",
-                        "Minimization": true,
-                        "Priority": 1,
-                        "ModelPriority": 1,
-                        "ExpectedValuesRange": [
-                            0.0,
-                            150000.0
-                        ],
-                        "MaxTimeToRunTask": 10
-                    },
-                    "Objective_1": {
-                        "Name": "time",
-                        "DataType": "float",
-                        "Minimization": true,
-                        "Priority": 1,
-                        "ModelPriority": 1,
-                        "ExpectedValuesRange": [
-                            0.0,
-                            150000.0
-                        ],
-                        "MaxTimeToRunTask": 10
-                    }
-                }
-            },
-            "SearchSpace": {
-                "Type": "SearchSpace",
-                "Region": "TopLevel",
-                "frequency": {
-                    "Categories": [
-                        1200.0,
-                        1300.0,
-                        1400.0,
-                        1600.0,
-                        1700.0,
-                        1800.0,
-                        1900.0,
-                        2000.0,
-                        2200.0,
-                        2300.0,
-                        2400.0,
-                        2500.0,
-                        2700.0,
-                        2800.0,
-                        2900.0,
-                        2901.0
-                    ],
-                    "Default": 2900.0,
-                    "Type": "FloatOrdinalHyperparameter",
-                    "Region": "TopLevel"
-                },
-                "threads": {
-                    "Categories": [
-                        1,
-                        2,
-                        4,
-                        8,
-                        16,
-                        32
-                    ],
-                    "Default": 32,
-                    "Type": "IntegerOrdinalHyperparameter",
-                    "Region": "TopLevel"
-                }
-            }
-        },
-        "ExperimentRegions": {
-            "Regions": [
-                "TopLevel"
-            ]
-        },
-        "Model": {
-            "Structure": "Flat"
-        }
+    "cycled_feature_b": {
+        "a": 5,
+        "b": 6
     }
 }

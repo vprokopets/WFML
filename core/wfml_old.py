@@ -765,6 +765,7 @@ class prec11(ExpressionElement):
                 flag_left = False
                 flag_right = False
                 for element in self.get_wfml_data('Model').elements:
+                    print(f'Name {element.name}')
                     if element.name == ret:
                         flag_left = True
                     elif element.name == operand.value:
@@ -1916,7 +1917,7 @@ class textX_API():
         """
         Subfunction to define sequence of features to validate. The analogue of directed graph path.
 
-        INPUTS
+        INPUTSe
         dependency_pairs: list of cross-tree dependencies pairs.
 
         RETURN
