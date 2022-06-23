@@ -4,7 +4,9 @@
 <form action="" id="model" method="post" style="text-align: left;">
     {% csrf_token %}
     {{form.model_field}}
-    <input type="submit" form="model" value="Submit model" />
+    <p>
+      <input type="submit" form="model" value="Submit model" />
+    </p>
 </form>
 
 <script>
@@ -20,17 +22,17 @@
 </script>
 <style>
   textarea {
-    position: absolute;
+    position: relative;
     margin-top: 40px;
-    width: 95%;
+    width: 96%;
     left: 2%;
     height: 600px;
     font-size: 11pt;
     tab-size: 4;
   }
   input {
-    position: absolute;
-    margin-top: 680px;
+    position: relative;
+    margin-top: 20px;
     left: 2%;
     text-align: center;
     width: 150px;

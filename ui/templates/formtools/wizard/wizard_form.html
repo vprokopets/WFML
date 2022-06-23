@@ -6,14 +6,14 @@
 {% endblock %}
 
 {% block header %}
-  <div class="headerText" style="width: 40%;float:left">Configure product</div>
-  <div style="width: 40%;float: left;">
-    <progress id="file" max={{ wizard.steps.count }} value={{ wizard.steps.step1 }} style="margin-top: 30px;"> 100% </progress>
+  <div class="headerText">Configure product</div>
+  <div class="progressBar">
+    <progress id="file" max={{ wizard.steps.count }} value={{ wizard.steps.step1 }}> 100% </progress>
   </div>
 {% endblock header %}
 
 {% block content %}
-<main style="left: 1.5%; margin-top: 5%;">
+<main style="margin-left: 1.5%; margin-top: 10px; margin-right: 1.5%;">
 <p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
@@ -42,6 +42,7 @@
 {% else %}
     {% for field in wizard.form %}
     <div class="form-group">
+
         {{ field.label }}<br>
         {{ field }}
         {% if field.errors %}
@@ -57,29 +58,41 @@
     </div>
     {% endif %}
 {% endif %}
-
+<hr style="margin-top: 40px;">
 </table>
 {% if wizard.steps.prev %}
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.first }}">{% trans "first step" %}</button>
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}">{% trans "prev step" %}</button>
+<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.first }}" disabled>{% trans "first step" %}</button>
+<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}" disabled>{% trans "prev step" %}</button>
 {% endif %}
 <input type="submit" value="{% trans "Next step" %}"/>
 </form>
 <br>
 <form action="" method="post">{% csrf_token %}
     {% csrf_token %}
-    <button type="submit" name='mybtn2' value={{done}}>Download configuration pickle.</button>
+    <button type="submit" name='mybtn2' value={{done}} disabled>Download configuration pickle.</button>
 </form>
 
 <style>
     .form-group {
-        margin-top: 15px
+        margin-top: 15px;
+        width: 100%;
+    }
+    input {
+      margin-top: 10px;
+      width: 400px;
+      height: 30px;
     }
     input[type=submit], button[type=submit] {
-      margin-top: 10px;
+      margin-top: 20px;
       text-align: center;
       width: 150px;
       height: 40px;
+    }
+    select {
+        margin-top: 10px;
+        text-align: center;
+        width: 120px;
+        height: 30px;
     }
     .alert{
       background-color: rgb(255, 155, 155);

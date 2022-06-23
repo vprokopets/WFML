@@ -1,35 +1,9 @@
 {
-    "feature_inheritance": {
-        "feature_for_inheritance_0": {
-            "b_0": {
-                "c": 2
-            },
-            "b_1": {
-                "d": 2
-            },
-            "e": 2,
-            "a": 4
-        },
-        "feature_for_inheritance_1": {
-            "b_0": {
-                "c": 2
-            },
-            "b_1": {
-                "d": 2
-            },
-            "e": 2,
-            "a": 4
-        }
+    "MandatoryFeature": {
+        "a": 2,
+        "b": 23
     },
-    "cross_tree_feature": {
-        "a": 5
-    },
-    "cycled_feature_a": {
-        "a": 6,
-        "b": 5
-    },
-    "cycled_feature_b": {
-        "a": 5,
-        "b": 6
+    "SubOptionalFeature": {
+        "a": 1
     }
 }

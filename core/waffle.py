@@ -704,10 +704,19 @@ class term(ExpressionElement):
         op = self.op
         if f'{self.rf}.{op}' in self.api.namespace[self.tlf]['Features'].keys():
             op = f'{self.rf}.{op}'
-        if re.match(r'(\w+\.)+\w+', op):
+        if re.match(r'\{.+\}', op):
+            op = op.replace('{', '').replace('}', '').replace(' ', '')
+            logging.debug("List object")
+            op = op.split(',')
+            for index, element in enumerate(op):
+                op[index] = self.autoconvert(element)
+            logging.debug(op)
+        elif re.match(r'(\w+\.)+\w+', op):
             split = op.split('.', 2)
             if 'self' in split:
                 split[split.index('self')] = self.rf
+            elif 'parent' in split:
+                split[split.index('parent')] = self.rf.split('.')[0]
             op_type = split[0] if split[0] in ['fname', 'childs'] else None
             if op_type == 'childs':
                 op = self.api.get_feature_childrens('.'.join(split[1:]))
@@ -767,7 +776,7 @@ class term(ExpressionElement):
         self.tmp = False
         self.constraint_expression = api.constraint_expression
         if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
-            if 'self' in op.split('.', 2):
+            if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2):
                 return
             forbidden_flag = False
             path = op.split('.', 1)
@@ -788,6 +797,22 @@ class term(ExpressionElement):
                     api.cross_tree_dependencies.append([path[0], tlf])
             except Exception:
                 raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
+
+    def boolify(self, string):
+        if string == 'True':
+            return True
+        if string == 'False':
+            return False
+        raise ValueError('String value is not Boolean.')
+
+    def autoconvert(self, string):
+        for fn in (self.boolify, int, float):
+            try:
+                return fn(string)
+            except ValueError:
+                pass
+        return string
+
 
 class Waffle():
 

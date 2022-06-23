@@ -2,6 +2,7 @@ a {
 	b {
 		d -> integer
 		e -> integer
+		[d > parent.c]
 	}
 	c -> integer
 
