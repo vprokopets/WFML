@@ -1,9 +1,25 @@
 {
-    "MandatoryFeature": {
-        "a": 2,
-        "b": 23
-    },
-    "SubOptionalFeature": {
-        "a": 1
+    "a": {
+        "b": {
+            "d": 2,
+            "e": 2
+        },
+        "c": 1,
+        "childs_self": [
+            "a.b",
+            "a.c",
+            "a.childs_self",
+            "a.childs_of_child",
+            "a.path_c",
+            "a.path_self_c",
+            "a.value_self_c"
+        ],
+        "childs_of_child": [
+            "a.b.d",
+            "a.b.e"
+        ],
+        "path_c": "a.c",
+        "path_self_c": "a.c",
+        "value_self_c": 1
     }
 }
