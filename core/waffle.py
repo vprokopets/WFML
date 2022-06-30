@@ -2,10 +2,12 @@ import copy
 import json
 import itertools
 import logging
+from unittest.mock import NonCallableMagicMock
 import numexpr as ne
 import pandas as pd
 import re
 import numpy as np
+from core.feature_analyzer import FeatureAnalyzer
 from core.feature_initializer import FeatureInitializer
 from collections import defaultdict
 from functools import reduce
@@ -44,12 +46,17 @@ class ExpressionElement(object):
                        f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol}\n'))
         return msg
 
-    def parse(self, exception: bool = False):
-        self.exception = exception
+    def parse(self):
         if len(self.op) == 1:
-            ret = self.op[0].parse(exception=True)
+            ret = self.op[0].parse()
         else:
+            if self.api.exception_flag is False:
+                self.api.exception_flag = True
+                self.exception = True
+            else:
+                self.exception = False
             ret = self.value
+            self.api.exception_flag = False
         return ret
 
     def update(self):
@@ -59,15 +66,13 @@ class ExpressionElement(object):
         if res is False and self.exception is True:
             raise Exception(self.get_error_message(err_msg))
 
-    def cross_tree_check(self, reverse: bool = False, tlf=None, api=None, rf=None):
+    def cross_tree_check(self, reverse: bool = False, api=None):
         self.src = False
         self.api = api
-        self.tlf = tlf
-        self.rf = rf
         self.constraint_expression = api.constraint_expression
         for part in self.op:
             if isinstance(part, ExpressionElement):
-                part.cross_tree_check(reverse, tlf, api, rf)
+                part.cross_tree_check(reverse, api)
 
     def get_mappings(self):
         result = {}
@@ -140,7 +145,7 @@ class prec23(ExpressionElement):
         if statement is True:
             self.op[2].parse()
         # If not, then perform ELSE expression if it exist. In the opposite case, do nothing.
-        elif statement is False and len(self.op > 3):
+        elif statement is False and len(self.op) > 3:
             self.op[3].parse()
         return statement
 
@@ -163,7 +168,7 @@ class prec22(ExpressionElement):
         logging.debug("Level 22 boolean IFF operation")
 
         left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
-        ret = (left % 2 == 0) == (left % right == 0)
+        ret = left == right
 
         self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
@@ -402,7 +407,22 @@ class prec12(ExpressionElement):
 
         left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
         logging.debug(f'Level 12 comparison {operation} operation')
-        ret = bool(ne.evaluate(f'{left}{operation}{right}'))
+        if operation == '<':
+            ret = left < right
+        elif operation == '>':
+            ret = left > right
+        elif operation == '==':
+            ret = left == right
+        elif operation == '>=':
+            ret = left >= right
+        elif operation == '<=':
+            ret = left <= right
+        elif operation == '!=':
+            ret = left != right
+        elif operation == 'in':
+            ret = left in right
+        elif operation == 'not in':
+            ret = left not in right
         self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
 
@@ -440,22 +460,23 @@ class prec10(ExpressionElement):
         ret (variable type): previous level object if no prec10 operations are not presented in constraint
                             operation result in opposite case.
         """
-        left, right = self.op[0].parse(upd_flag=True), self.op[2].parse()
-        self.api.update_namespace({left: right})
+        self.api.upd_flag = True
+        left = self.op[0].parse()
+        self.api.upd_flag = False
+        right = self.op[2].parse()
+        self.api.update_namespace({left: right}, True)
 
         return True
 
-    def cross_tree_check(self, reverse: bool = False, tlf=None, api=None, rf=None):
+    def cross_tree_check(self, reverse: bool = False, api=None):
         self.src = False
         self.api = api
-        self.tlf = tlf
-        self.rf = rf
         self.constraint_expression = api.constraint_expression
         for index, part in enumerate(self.op):
             if isinstance(part, ExpressionElement) and len(self.op) > 1 and index == 0:
-                part.cross_tree_check(reverse=True, tlf=tlf, api=api, rf=rf)
+                part.cross_tree_check(reverse=True, api=api)
             elif isinstance(part, ExpressionElement):
-                part.cross_tree_check(reverse, tlf, api, rf)
+                part.cross_tree_check(reverse=reverse, api=api)
 
 class prec9(ExpressionElement):
     @property
@@ -702,8 +723,8 @@ class term(ExpressionElement):
 
     def parse_string(self, for_mapping=False):
         op = self.op
-        if f'{self.rf}.{op}' in self.api.namespace[self.tlf]['Features'].keys():
-            op = f'{self.rf}.{op}'
+        if f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
+            op = f'{self.api.rf}.{op}'
         if re.match(r'\{.+\}', op):
             op = op.replace('{', '').replace('}', '').replace(' ', '')
             logging.debug("List object")
@@ -714,9 +735,11 @@ class term(ExpressionElement):
         elif re.match(r'(\w+\.)+\w+', op):
             split = op.split('.', 2)
             if 'self' in split:
-                split[split.index('self')] = self.rf
+                split[split.index('self')] = self.api.rf
             elif 'parent' in split:
-                split[split.index('parent')] = self.rf.split('.')[0]
+                split[split.index('parent')] = '.'.join(self.api.rf.split('.')[:len(self.api.rf.split('.')) - 1])
+            elif 'tlf' in split:
+                split[split.index('tlf')] = self.api.rf.split('.')[0]
             op_type = split[0] if split[0] in ['fname', 'childs'] else None
             if op_type == 'childs':
                 op = self.api.get_feature_childrens('.'.join(split[1:]))
@@ -729,21 +752,21 @@ class term(ExpressionElement):
                     else:
                         split = split[1:]
                 feature_name = '.'.join(split)
-                if self.upd_flag is False:
+                if self.api.upd_flag is False:
                     feature_type = self.api.get_feature(feature_name, self.tmp, 'Type')
                     op = self.api.get_feature(feature_name, self.tmp)
-                    for key, value in copy.copy(op).items():
-                        if key in self.mappings:
-                            op = value
-                    if for_mapping is True and feature_type == 'predefined':
-                        op = {feature_name: None}
+                    if isinstance(op, dict):
+                        for key, value in copy.copy(op).items():
+                            if key in self.mappings:
+                                op = value
+                        if for_mapping is True and feature_type == 'predefined':
+                            op = {feature_name: None}
                 else:
                     op = feature_name
 
         return op
 
-    def parse(self, exception: bool = False, upd_flag=False):
-        self.upd_flag = upd_flag
+    def parse(self):
         self.tmp = True
         return self.value
 
@@ -755,7 +778,6 @@ class term(ExpressionElement):
 
     def get_mappings(self):
         result = {}
-        self.upd_flag = False
         self.tmp = True
         if type(self.op) is str and self.op not in keywords:
             res = self.parse_string(True)
@@ -766,12 +788,10 @@ class term(ExpressionElement):
                 result.update({self.op: res})
         return result
 
-    def cross_tree_check(self, reverse: bool = False, tlf=None, api=None, rf=None):
+    def cross_tree_check(self, reverse: bool = False, api=None):
         self.src = False
         self.mappings = []
         self.api = api
-        self.tlf = tlf
-        self.rf = rf
         op = self.op
         self.tmp = False
         self.constraint_expression = api.constraint_expression
@@ -786,15 +806,14 @@ class term(ExpressionElement):
                 path = path[1].split('.', 1)
 
             # Forbid to add to cross-tree features own features written in full-path form.
-            if path[0] == tlf:
+            if path[0] == self.api.tlf:
                 forbidden_flag = True
-
             try:
                 api.namespace[path[0]]['Features'][f'{path[0]}.{path[1]}']
                 if forbidden_flag is False and reverse is False:
-                    api.cross_tree_dependencies.append([tlf, path[0]])
+                    api.cross_tree_dependencies.append([self.api.tlf, path[0]])
                 elif forbidden_flag is False and reverse is True:
-                    api.cross_tree_dependencies.append([path[0], tlf])
+                    api.cross_tree_dependencies.append([path[0], self.api.tlf])
             except Exception:
                 raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
 
@@ -863,9 +882,12 @@ class Waffle():
 
     def reset(self):
         self.namespace, self.cycles, self.stage_snap, self.last_snap = {}, {}, {}, {}
-        self.description, self.model = '', ''
+        self.description, self.model, self.tlf, self.rf = '', '', '', ''
         self.cross_tree_dependencies = []
+        self.exception_flag, self.upd_flag = False, False
+        self.feature_analyzer = FeatureAnalyzer()
         self.feature_initializer = FeatureInitializer()
+
         self.stages = {
             "Generated": [],
             "Original": []
@@ -883,23 +905,38 @@ class Waffle():
             construct.append(re.sub(r'_[0-9]+', '', part))
         return '.'.join(construct)
 
-    def update_namespace(self, data):
+    def update_namespace(self, data, tmp=False):
         for key, value in data.items():
             field_type = key.split('.', 1)[0] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
             feature = key.split('.', 1)[1] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else key
             original_feature = re.sub(r'_[0-9]+', '', feature.replace('Fcard.', '').replace('Gcard.', ''))
             tlf = original_feature.split('.', 1)[0]
-            self.namespace[tlf]['Features'][original_feature][field_type].update({feature: value})
+            if tmp is True:
+                self.last_snap['Namespace'][tlf]['Features'][original_feature][field_type].update({feature: value})
+            else:
+                self.namespace[tlf]['Features'][original_feature][field_type].update({feature: value})
 
     def get_feature(self, data, tmp=False, field_type=None):
-        if field_type is None:
-            field_type = data.split('.', 1)[0] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+
         feature = data.split('.', 1)[1] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else data
         tlf = feature.split('.', 1)[0]
         if tmp is True:
-            return self.last_snap['Namespace'][tlf]['Features'][feature][field_type]
+            features_data = self.last_snap['Namespace'][tlf]['Features']
         else:
-            return self.namespace[tlf]['Features'][feature][field_type]
+            features_data = self.namespace[tlf]['Features']
+        if field_type is None:
+            field_type = data.split('.', 1)[0] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+        if features_data[feature]['Type'] is None:
+            try:
+                check = self.name_builder(feature, features_data)
+                if isinstance(check, list) and len(check) == 0:
+                    return False
+                else:
+                    return True
+            except Exception:
+                return True
+        else:
+            return features_data[feature][field_type]
 
     def validate_feature(self, tlf):
         debug_mode = False
@@ -917,6 +954,12 @@ class Waffle():
         for constraint in self.namespace[tlf]['Constraints'].values():
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
             if isinstance(check, list) and len(check) > 0:
+                constraint_expression = f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
+                logging.info(f'Constraint validation for feature {self.tlf}: {constraint_expression}')
+                self.tlf = tlf
+                self.rf = constraint['RelatedFeature']
+                self.exception_flag = False
+                self.upd_flag = False
                 constraint['Constraint'].name.check_cardinalities()
                 constraint['Constraint'].name.set_mappings([])
                 mappings = constraint['Constraint'].name.get_mappings()
@@ -1132,7 +1175,9 @@ class Waffle():
         for tlf, tlf_value in self.namespace.items():
             for constraint in tlf_value['Constraints'].values():
                 self.constraint_expression = f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
-                constraint['Constraint'].name.cross_tree_check(tlf=tlf, api=self, rf=constraint['RelatedFeature'])
+                self.tlf = tlf
+                self.rf = constraint['RelatedFeature']
+                constraint['Constraint'].name.cross_tree_check(api=self)
         logging.info('Processing cross-tree dependencies: Starting')
         self.cross_tree_dependencies.sort()
         self.cross_tree = list(k for k, _ in itertools.groupby(self.cross_tree_dependencies))

@@ -1,0 +1,11 @@
+feature_model {
+	test -> integer
+	Mob
+	Duck ?
+	Witch ?
+	Floats ?
+	[Floats => Duck]
+	[Floats <=> Witch]
+	[!Duck]
+	[Witch]
+}

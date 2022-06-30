@@ -2,7 +2,7 @@ import copy
 import logging
 import mimetypes
 from core.waffle import Waffle
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.http import HttpResponseRedirect
 from django.http.response import HttpResponse
 from django.urls import reverse
@@ -348,6 +348,9 @@ def factory_wizard(request, *args, **kwargs):
             form_list = factory_forms
         return ReturnClass.as_view()(request, *args, **kwargs)
 
+def redirect_to_homepage(request):
+    response = redirect('/wizard/initialize/')
+    return response
 
 def download_file(request):
     # Define Django project base directory

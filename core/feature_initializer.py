@@ -1,6 +1,5 @@
 import copy
 import logging
-import pprint
 
 class FeatureInitializer:
     def __init__(self) -> None:
@@ -104,8 +103,9 @@ class FeatureInitializer:
                 for constraint, constraint_value in tlf_value['Constraints'].items():
                     split = constraint_value['RelatedFeature'].split('.')
                     split[0] = feature_name
-                    constraint_value.update({'RelatedFeature': '.'.join(split)})
-                    self.namespace[top_level_feature]['Constraints'].update({constraints_count + constraint: constraint_value})
+                    inh_constraint = copy.copy(constraint_value)
+                    inh_constraint.update({'RelatedFeature': '.'.join(split)})
+                    self.namespace[top_level_feature]['Constraints'].update({constraints_count + constraint: inh_constraint})
 
     def initialize_namespace(self, model):
         """
