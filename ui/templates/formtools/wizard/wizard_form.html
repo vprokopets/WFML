@@ -34,6 +34,7 @@
             </div>
         {% endfor %}
         {% if form.non_field_errors %}
+        <hr style="margin-top: 20px;">
         <div class="alert alert-danger" role="alert">
             {{ wizard.form.non_field_errors }}
         </div>
@@ -53,6 +54,7 @@
     </div>
     {% endfor %}
     {% if form.non_field_errors %}
+    <hr style="margin-top: 20px;">
     <div class="alert alert-danger" role="alert">
         {{ wizard.form.non_field_errors }}
     </div>

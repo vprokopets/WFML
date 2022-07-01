@@ -6,6 +6,7 @@ from unittest.mock import NonCallableMagicMock
 import numexpr as ne
 import pandas as pd
 import re
+import pprint
 import numpy as np
 from core.feature_analyzer import FeatureAnalyzer
 from core.feature_initializer import FeatureInitializer
@@ -73,6 +74,11 @@ class ExpressionElement(object):
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.cross_tree_check(reverse, api)
+
+    def get_required_cardinalities(self):
+        for part in self.op:
+            if isinstance(part, ExpressionElement):
+                part.get_required_cardinalities()
 
     def get_mappings(self):
         result = {}
@@ -721,7 +727,7 @@ class term(ExpressionElement):
             op = self.parse_string()
         return op
 
-    def parse_string(self, for_mapping=False):
+    def parse_string(self, for_mapping=False, get_name_only=False):
         op = self.op
         if f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
             op = f'{self.api.rf}.{op}'
@@ -752,7 +758,7 @@ class term(ExpressionElement):
                     else:
                         split = split[1:]
                 feature_name = '.'.join(split)
-                if self.api.upd_flag is False:
+                if self.api.upd_flag is False and get_name_only is False:
                     feature_type = self.api.get_feature(feature_name, self.tmp, 'Type')
                     op = self.api.get_feature(feature_name, self.tmp)
                     if isinstance(op, dict):
@@ -787,6 +793,17 @@ class term(ExpressionElement):
                     res.remove('Original')
                 result.update({self.op: res})
         return result
+
+    def get_required_cardinalities(self):
+        op = self.op
+        if type(op) is str and op not in keywords and self.src is False:
+            fname = self.parse_string(get_name_only=True)
+            if fname not in self.api.req_card.keys():
+                self.api.req_card.update({fname: [1]})
+            else:
+                new_list = self.api.req_card[fname]
+                new_list.append(1)
+                self.api.req_card.update({fname: new_list})
 
     def cross_tree_check(self, reverse: bool = False, api=None):
         self.src = False
@@ -881,7 +898,7 @@ class Waffle():
         return output
 
     def reset(self):
-        self.namespace, self.cycles, self.stage_snap, self.last_snap = {}, {}, {}, {}
+        self.namespace, self.cycles, self.stage_snap, self.last_snap, self.req_card = {}, {}, {}, {}, {}
         self.description, self.model, self.tlf, self.rf = '', '', '', ''
         self.cross_tree_dependencies = []
         self.exception_flag, self.upd_flag = False, False
@@ -954,7 +971,8 @@ class Waffle():
         for constraint in self.namespace[tlf]['Constraints'].values():
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
             if isinstance(check, list) and len(check) > 0:
-                constraint_expression = f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
+                constraint_expression = f' \
+                    {self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
                 logging.info(f'Constraint validation for feature {self.tlf}: {constraint_expression}')
                 self.tlf = tlf
                 self.rf = constraint['RelatedFeature']
@@ -1178,6 +1196,7 @@ class Waffle():
                 self.tlf = tlf
                 self.rf = constraint['RelatedFeature']
                 constraint['Constraint'].name.cross_tree_check(api=self)
+                constraint['Constraint'].name.get_required_cardinalities()
         logging.info('Processing cross-tree dependencies: Starting')
         self.cross_tree_dependencies.sort()
         self.cross_tree = list(k for k, _ in itertools.groupby(self.cross_tree_dependencies))
@@ -1315,9 +1334,9 @@ class Waffle():
         else:
             strspl = original_card.split(',')
             for lexem in strspl:
-                if re.match(r'(\d+\.\.)+\d+', lexem):
+                if re.match(r'(\d+\.\.)+(\d+|\*)', lexem):
                     lexspl = lexem.split('..')
-                    res.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'])
+                    res.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'] if lexspl[1] != '*' else [f'x>={lexspl[0]}'])
                 else:
                     res.append(f'x=={lexem}')
         match_group_res = []
@@ -1367,6 +1386,7 @@ class Waffle():
         self.model = mm.model_from_str(self.description)
         self.namespace = self.feature_initializer.initialize_namespace(self.model)
         self.cross_tree_dependencies_handler()
+        pprint.pprint(self.req_card)
         stages = self.staging(self.cross_tree)
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.

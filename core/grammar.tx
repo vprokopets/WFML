@@ -26,8 +26,8 @@ Feature:
 
 Name: ID;
 Abstract: "abstract";
-Gcard: INT+[/\..|,/] | "xor" | "or" | "mux" | "opt" | Cardinterval;
-Fcard: INT+[/\..|,/] | "?" | "*" | "+" | Cardinterval;
+Gcard: "xor" | "or" | "mux" | "opt" | Cardinterval | INT+[/\..|,/];
+Fcard: "?" | "*" | "+" | Cardinterval | INT+[/\..|,/];
 Super: ":" prec0;
 Type: "->" TypeList;
 Reference: "->>" prec3;

@@ -66,6 +66,8 @@ class WizardStepForm(forms.Form):
                         self.add_error(subparam, f'This field returned error: {param["error"]}')
                     else:
                         self.add_error(None, f'Feature`s {param["element"]} parameter {subparam} returned error: {param["error"]}')
+                if param['params'] == ():
+                    self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
             if self.up != []:
                 api.namespace = api.last_snap['Namespace']
         return cd
