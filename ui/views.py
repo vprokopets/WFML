@@ -38,7 +38,7 @@ class WizardStepForm(forms.Form):
         logging.debug(f'Label: {self.label}')
         # Write data from form fields to global namespace.
         api.update_namespace(cd)
-        if list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
+        if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
             self.up = {}
             for key, value in cd.items():
                 check = api.cardinality_solver(key, value)
@@ -159,9 +159,12 @@ class WizardClass(CookieWizardView):
         if snap_name not in api.stage_snap.keys():
             data = api.define_layer(tlf)
             api.save_stage_snap(snap_name, data)
+            if data == 'Empty stage':
+                return
         else:
             data = api.stage_snap[snap_name]['Fields']
-
+        if tlf in api.empty_stages:
+            return
         if 'Fcard' in data.keys() and 'Gcard' in data.keys():
             self.construct_feature_cardinality_form(data['Fcard'])
             self.construct_group_cardinality_form(data['Gcard'])

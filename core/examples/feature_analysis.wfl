@@ -1,5 +1,5 @@
 feature_model {
-	test -> integer
+	test -> predefined
 	Mob
 	Duck ?
 	Witch ?

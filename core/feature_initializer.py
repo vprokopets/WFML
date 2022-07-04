@@ -97,8 +97,9 @@ class FeatureInitializer:
             if tlf == super_feature_name:
                 for feature, feature_value in tlf_value['Features'].items():
                     inherited_fname = f'{feature_name}.{feature.split(".", 1)[-1]}'
+                    inh_value = copy.deepcopy(feature_value)
                     if inherited_fname not in self.namespace[top_level_feature]['Features'].keys():
-                        self.namespace[top_level_feature]['Features'].update({inherited_fname: feature_value})
+                        self.namespace[top_level_feature]['Features'].update({inherited_fname: inh_value})
                 constraints_count = len(list(self.namespace[top_level_feature]['Constraints'].keys()))
                 for constraint, constraint_value in tlf_value['Constraints'].items():
                     split = constraint_value['RelatedFeature'].split('.')
