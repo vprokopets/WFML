@@ -2,13 +2,11 @@ import copy
 import json
 import itertools
 import logging
-from unittest.mock import NonCallableMagicMock
 import numexpr as ne
 import pandas as pd
 import re
 import pprint
 import numpy as np
-from tempita import sub
 from core.feature_analyzer import FeatureAnalyzer
 from core.feature_initializer import FeatureInitializer
 from collections import defaultdict
