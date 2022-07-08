@@ -56,7 +56,8 @@ class ExpressionElement(object):
             else:
                 self.exception = False
             ret = self.value
-            self.api.exception_flag = False
+            if self.exception is True:
+                self.api.exception_flag = False
         return ret
 
     def update(self):
@@ -70,6 +71,10 @@ class ExpressionElement(object):
         self.src = False
         self.api = api
         self.constraint_expression = api.constraint_expression
+        if len(self.op) > 1:
+            self.api.constraint['Operations'].append(self.__class__.__name__)
+            if self.api.constraint['HigherOperation'] is None:
+                self.api.constraint.update({'HigherOperation': self.__class__.__name__})
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.cross_tree_check(reverse, api)
@@ -108,21 +113,25 @@ class ExpressionElement(object):
 
 
 class prec24(ExpressionElement):
-    card_mode = 'Full'
     @property
     def value(self):
-        logging.debug(f'Level 24 Operation filter x where y.')
+        logging.info(f'Level 24 Operation filter x where y.')
+        self.api.keyword = 'ChildNamespace'
         key, condition = self.op[1].parse(), self.op[2]
+        self.api.keyword = ''
         return self.filter(condition, key)
 
     def filter(self, condition, key):
         res = []
-        old_path = self.get_wfml_data('Path')
+        self.api.keyword = 'ReplaceFeature'
         for item in key:
-            self.update_wfml_data('Path', f'{old_path}.{item}')
-            if condition.parse() is True:
-                res.append(item)
-        self.update_wfml_data('Path', old_path)
+            try:
+                self.api.replace_feature = item
+                if condition.parse() is True:
+                    res.append(item)
+            except KeyError:
+                pass
+        self.api.keyword = ''
         logging.debug(f'filter Result: {res}')
         return res
 
@@ -477,6 +486,10 @@ class prec10(ExpressionElement):
         self.src = False
         self.api = api
         self.constraint_expression = api.constraint_expression
+        if len(self.op) > 1:
+            self.api.constraint['Operations'].append(self.__class__.__name__)
+            if self.api.constraint['HigherOperation'] is None:
+                self.api.constraint.update({'HigherOperation': self.__class__.__name__})
         for index, part in enumerate(self.op):
             if isinstance(part, ExpressionElement) and len(self.op) > 1 and index == 0:
                 part.cross_tree_check(reverse=True, api=api)
@@ -570,7 +583,10 @@ class prec6(ExpressionElement):
 class prec50(ExpressionElement):
     @property
     def value(self):
-        left, right = self.op[1].parse(), self.op[2].parse()
+        self.api.keyword = 'AllFeatures'
+        right = self.op[2].parse()
+        self.api.keyword = ''
+        left = self.op[1].parse()
         logging.debug(f'Level 5.0 Operation unique x in y.')
         ret = self.find_unique(right, left)
 
@@ -579,15 +595,11 @@ class prec50(ExpressionElement):
     def find_unique(self, input, key, res=None):
         if res is None:
             res = []
-        for k, v in input.items():
-            if k == key:
-                if type(v) is dict and 'value' in v.keys() and v['value'] not in res:
-                    res.append(v['value'])
-                elif type(v) is not dict and v not in res:
-                    res.append(v)
-            if type(v) is dict:
-                self.find_unique(v, key, res)
-        logging.debug(f'find_unique Result: {res}')
+        for feature, namespace in input.items():
+            if feature.split('.')[-1] == key and namespace['Type'] is not None:
+                for subfeature, value in namespace['Value'].items():
+                    if subfeature != 'Original' and value not in res:
+                        res.append(value)
         return res
 
 
@@ -722,9 +734,16 @@ class term(ExpressionElement):
         op (variable type): variable, number, string, etc.
         """
         op = self.op
-        if type(op) is str and op not in keywords and self.src is False:
+        if isinstance(op, ExpressionElement):
+            logging.debug(f"Operation object: {op} with value {type(op)}")
+            return op.parse()
+        elif isinstance(op, str) and op not in keywords and self.src is False:
             feature_name, check = self.parse_string()
-            if self.api.keyword != 'Update' and check is True:
+            if self.api.keyword == 'Update' and check is True:
+                op = feature_name
+            elif self.api.keyword == 'AllFeatures':
+                op = self.api.get_feature_childrens(feature_name, own_childrens_only=False)
+            elif check is True:
                 op = self.api.get_feature(feature_name, self.tmp)
                 if isinstance(op, dict):
                     for key, value in copy.copy(op).items():
@@ -739,7 +758,10 @@ class term(ExpressionElement):
         check = False
         if '"' in op or "'" in op:
             op = op.replace("'", '').replace('"', '')
-        if f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
+            return op, check
+        if self.api.keyword == 'ReplaceFeature':
+            op = f'{self.api.replace_feature}.{op}'
+        elif f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
             op = f'{self.api.rf}.{op}'
         if re.match(r'\{.+\}', op):
             op = op.replace('{', '').replace('}', '').replace(' ', '')
@@ -809,7 +831,14 @@ class term(ExpressionElement):
         op = self.op
         self.tmp = False
         self.constraint_expression = api.constraint_expression
-        if type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
+        if self.api.constraint['HigherOperation'] is None:
+            self.api.constraint.update({'HigherOperation': self.__class__.__name__})
+        if type(op) is str and op not in keywords:
+            self.constraint_sequence_check(op, reverse)
+        if isinstance(op, ExpressionElement):
+            logging.debug(f"Operation object: {op} with value {type(op)}")
+            return op.cross_tree_check(reverse, api)
+        elif type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
             if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2):
                 return
             forbidden_flag = False
@@ -830,6 +859,18 @@ class term(ExpressionElement):
                     api.cross_tree_dependencies.append([path[0], self.api.tlf])
             except Exception:
                 raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
+
+    def constraint_sequence_check(self, op, reverse):
+        op, check = self.parse_string(op)
+        if check is True:
+            try:
+                self.api.get_feature(op)
+                if reverse is True:
+                    self.api.constraint['FeaturesToAssign'].append(op)
+                else:
+                    self.api.constraint['Features'].append(op)
+            except KeyError:
+                pass
 
     def boolify(self, string):
         if string == 'True':
@@ -896,9 +937,11 @@ class Waffle():
 
     def reset(self):
         self.namespace, self.cycles, self.stage_snap, self.last_snap, self.req_card = {}, {}, {}, {}, {}
-        self.description, self.model, self.tlf, self.rf, self.keyword = '', '', '', '', ''
+        self.description, self.model, self.tlf, self.rf, self.keyword, self.replace_feature = '', '', '', '', '', ''
         self.cross_tree_dependencies, self.empty_stages = [], []
         self.exception_flag = False
+        self.constraint = None
+        self.tmp = False
         self.feature_analyzer = FeatureAnalyzer()
         self.feature_initializer = FeatureInitializer()
 
@@ -959,19 +1002,26 @@ class Waffle():
         top_level_features[feature][update_type] = new_value[update_type]
         return top_level_features
 
-    def get_feature_childrens(self, feature):
+    def get_feature_childrens(self, feature, own_childrens_only=True):
         split = feature.split('.')
         tlf = self.get_original_name(split[0])
-        childrens = []
-        for subfeature in self.last_snap['Namespace'][tlf]['Features'].keys():
-            if len(subfeature.split('.')) == len(split) + 1 \
-                    and self.get_original_name(feature) in self.get_original_name(subfeature):
-                childrens.append(subfeature)
-        return childrens
+        childrens = {}
+        if self.tmp is True:
+            features_data = self.last_snap['Namespace'][tlf]['Features']
+        else:
+            features_data = self.namespace[tlf]['Features']
+        for fname, subfeature in features_data.items():
+            if subfeature['Abstract'] is None:
+                if own_childrens_only is True and (len(fname.split('.')) == len(split) + 1
+                                                and self.get_original_name(feature) in self.get_original_name(fname)):
+                    childrens.update({fname: subfeature})
+                elif own_childrens_only is False and (len(fname.split('.')) >= len(split) + 1
+                                                and self.get_original_name(feature) in self.get_original_name(fname)):
+                    childrens.update({fname: subfeature})
+        return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else list(childrens.keys())
 
     def validate_feature(self, tlf):
-        debug_mode = False
-        if debug_mode is True:
+        if self.debug_mode is True:
             self.validation_pipeline(tlf)
         else:
             try:
@@ -982,32 +1032,32 @@ class Waffle():
         return True
 
     def validation_pipeline(self, tlf):
-        for constraint in self.namespace[tlf]['Constraints'].values():
-            check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
-            if isinstance(check, list) and len(check) > 0:
-                constraint_expression = f' \
-                    {self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
-                logging.info(f'Constraint validation for feature {self.tlf}: {constraint_expression}')
-                self.tlf = tlf
-                self.rf = constraint['RelatedFeature']
-                self.exception_flag = False
-                self.keyword = ''
-                constraint['Constraint'].name.check_cardinalities()
-                constraint['Constraint'].name.set_mappings([])
-                mappings = constraint['Constraint'].name.get_mappings()
-                self.map_and_parse(mappings, constraint['Constraint'].name)
+        for feature_to_validate in self.namespace[tlf]['ConstraintsValidationOrder'].keys():
+            for constraint in self.namespace[tlf]['Constraints'].values():
+                if constraint['RelatedFeature'] == feature_to_validate:
+                    check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
+                    if isinstance(check, list) and len(check) > 0:
+                        self.tlf = tlf
+                        self.rf = constraint['RelatedFeature']
+                        self.exception_flag = False
+                        self.keyword = ''
+                        constraint_expression = f' \
+                            {self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
+                        logging.info(f'Constraint validation for feature {self.rf}: {constraint_expression}')
+                        constraint['Constraint'].name.check_cardinalities()
+                        constraint['Constraint'].name.set_mappings([])
+                        mappings = constraint['Constraint'].name.get_mappings()
+                        self.map_and_parse(mappings, constraint['Constraint'].name)
 
     def map_and_parse(self, mappings, constraint):
         done = False
         combinations = itertools.product(*mappings.values())
         for iter, comb in enumerate(combinations):
-            logging.info(f'Mapping {iter}: {comb}')
             done = True
             self.iterable['UnvalidatedFeatures'] = comb
             constraint.set_mappings(comb)
             constraint.parse()
         if done is False:
-            logging.info('Single mapping')
             constraint.set_mappings([])
             constraint.parse()
 
@@ -1091,8 +1141,14 @@ class Waffle():
                         feature = raw_feature.rsplit("_", 1)[0]
                     else:
                         feature = raw_feature
-                    if feature == f'{key}.{value.split(".")[-1]}':
-                        gcard_features.append(raw_feature)
+                    if isinstance(value, list):
+                        for subvalue in value:
+                            if feature == f'{key}.{subvalue.split(".")[-1]}':
+                                gcard_features.append(raw_feature)
+                    else:
+                        subvalue = value
+                        if feature == f'{key}.{subvalue.split(".")[-1]}':
+                            gcard_features.append(raw_feature)
         if len(gcard.keys()) > 1:
             features = gcard_features
         return features
@@ -1197,15 +1253,19 @@ class Waffle():
         self.cross_tree_dependencies = []
 
         for tlf, tlf_value in self.namespace.items():
-            for constraint in tlf_value['Constraints'].values():
-                self.constraint_expression = f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
-                self.tlf = tlf
-                self.rf = constraint['RelatedFeature']
-                constraint['Constraint'].name.cross_tree_check(api=self)
-                #constraint['Constraint'].name.get_required_cardinalities()
+            if tlf_value['Features'][tlf]['Abstract'] is None:
+                for constraint in tlf_value['Constraints'].values():
+                    self.constraint = constraint
+                    self.constraint_expression = f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
+                    self.constraint['Expression'] = self.constraint_expression
+                    self.tlf = tlf
+                    self.rf = constraint['RelatedFeature']
+                    constraint['Constraint'].name.cross_tree_check(api=self)
+                    #constraint['Constraint'].name.get_required_cardinalities()
         logging.info('Processing cross-tree dependencies: Starting')
         self.cross_tree_dependencies.sort()
         self.cross_tree = list(k for k, _ in itertools.groupby(self.cross_tree_dependencies))
+        self.tmp = True
         logging.info('Processing cross-tree dependencies: Done')
 
     def topological_sort(self, dependency_pairs):
@@ -1375,6 +1435,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
+        self.debug_mode = False
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
@@ -1392,7 +1453,8 @@ class Waffle():
         self.model = mm.model_from_str(self.description)
         self.namespace = self.feature_initializer.initialize_namespace(self.model)
         self.cross_tree_dependencies_handler()
-        pprint.pprint(self.req_card)
+        if self.debug_mode is True:
+            pprint.pprint(self.namespace)
         stages = self.staging(self.cross_tree)
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
