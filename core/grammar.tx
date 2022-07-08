@@ -28,9 +28,9 @@ Name: ID;
 Abstract: "abstract";
 Gcard: (Cardinterval | INT)+[/,/] |"xor" | "or" | "mux" | "opt" | Cardinterval;
 Fcard: (Cardinterval | INT)+[/,/] |"?" | "*" | "+" | Cardinterval;
-Super: ":" prec0;
+Super: ":" ID;
 Type: "->" TypeList;
-Reference: "->>" prec3;
+Reference: "->>" ID | "->>>" ID;
 Init: "=" prec24 | ":=" prec24;
 Nested: 
     "{"

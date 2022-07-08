@@ -942,8 +942,8 @@ class Waffle():
         self.exception_flag = False
         self.constraint = None
         self.tmp = False
-        self.feature_analyzer = FeatureAnalyzer()
-        self.feature_initializer = FeatureInitializer()
+        self.feature_analyzer = FeatureAnalyzer(self)
+        self.feature_initializer = FeatureInitializer(self)
 
         self.stages = {
             "Generated": [],
@@ -1267,6 +1267,34 @@ class Waffle():
         self.tmp = True
         logging.info('Processing cross-tree dependencies: Done')
 
+    def define_sequence_for_deps(self, dependencies):
+        # Create networkx graph object
+        G = nx.DiGraph(dependencies)
+        index = 0
+        remove_dependencies = []
+        cycles = {}
+        # Find all cycles in graph. Create list of cycle dependencies.
+        for cycle in nx.simple_cycles(G):
+            index += 1
+            cycles.update({f'cycle{index}': cycle})
+            logging.debug(f'Cycle cycle{index} contain elements: {cycle}')
+            for dep in dependencies:
+                if dep[0] in cycle and dep[1] not in cycle:
+                    dep[0] = f'cycle{index}'
+                elif dep[0] not in cycle and dep[1] in cycle:
+                    dep[1] = f'cycle{index}'
+                elif dep[0] in cycle and dep[1] in cycle:
+                    remove_dependencies.append(dep)
+        for dep in remove_dependencies:
+            try:
+                dependencies.remove(dep)
+            except ValueError:
+                logging.debug(f'Dependency {dep} already removed.')
+        # Perform topological sort for dependencies.
+        res = self.topological_sort(dependencies)
+        res.reverse()
+        return cycles, res
+
     def topological_sort(self, dependency_pairs):
         """
         Subfunction to define sequence of features to validate. The analogue of directed graph path.
@@ -1307,48 +1335,21 @@ class Waffle():
         logging.info('Performing staging algorithm: Starting')
         # Define cross-tree and independent features
         all_features = list(self.namespace.keys())
-        features_from, features_to = ([] for i in range(2))
-
+        features_from, features_to = ([] for _ in range(2))
         for dep in cross_tree_dependencies:
             features_from.append(dep[0])
             features_to.append(dep[1])
-
         independent_features = [x for x in all_features if x not in features_from
                                 and x not in features_to
                                 and self.namespace[x]['Features'][x]['Abstract'] is None]
 
-        # Create networkx graph object
-        G = nx.DiGraph(cross_tree_dependencies)
-        index = 0
-        remove_dependencies = []
-        self.cycles = {}
-        # Find all cycles in graph. Create list of cycle dependencies.
-        for cycle in nx.simple_cycles(G):
-            index += 1
-            self.cycles.update({f'cycle{index}': cycle})
-            logging.debug(f'Cycle cycle{index} contain elements: {cycle}')
-            for dep in cross_tree_dependencies:
-                if dep[0] in cycle and dep[1] not in cycle:
-                    dep[0] = f'cycle{index}'
-                elif dep[0] not in cycle and dep[1] in cycle:
-                    dep[1] = f'cycle{index}'
-                elif dep[0] in cycle and dep[1] in cycle:
-                    remove_dependencies.append(dep)
-        for dep in remove_dependencies:
-            try:
-                cross_tree_dependencies.remove(dep)
-            except ValueError:
-                logging.debug(f'Dependency {dep} already removed.')
-
-        # Perform topological sort for dependencies.
-        res = self.topological_sort(cross_tree_dependencies)
-        res.reverse()
+        self.cycles, res = self.define_sequence_for_deps(cross_tree_dependencies)
         independent_features.reverse()
-        result = res + independent_features
+        result = res + independent_features if res is not None else independent_features
 
         # Add independent cycles
         index = 0
-        for cycle in nx.simple_cycles(G):
+        for cycle in self.cycles:
             index += 1
             if f'cycle{index}' not in result:
                 result.append(f'cycle{index}')
@@ -1452,8 +1453,6 @@ class Waffle():
         self.model = mm.model_from_str(self.description)
         self.namespace = self.feature_initializer.initialize_namespace(self.model)
         self.cross_tree_dependencies_handler()
-        if self.debug_mode is True:
-            pprint.pprint(self.namespace)
         stages = self.staging(self.cross_tree)
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
