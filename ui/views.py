@@ -193,7 +193,7 @@ class WizardClass(CookieWizardView):
                     choises_list = []
                     for v in [True, False]:
                         choises_list.append((v, v))
-                    self.form.fields[key] = forms.ChoiceField(choices=choises_list, widget=forms.RadioSelect)
+                    self.form.fields[key] = forms.ChoiceField(label=key, choices=choises_list, widget=forms.RadioSelect)
                 # Sort fields by names. This will group generated fields.
                 self.form.fields = OrderedDict(sorted(self.form.fields.items()))
 
@@ -224,10 +224,13 @@ class WizardClass(CookieWizardView):
             # CookieWizardView validates each form twice: right after their filling and in the end.
 
             if value['Original'] == 'xor':
-                self.form.fields[f'Gcard.{gcard}'] = forms.ChoiceField(choices=choises_list)
+                self.form.fields[f'Gcard.{gcard}'] = forms.ChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
+                                                                       widget=forms.RadioSelect)
             elif type(value['Original']) is int or value['Original'] == 'or':
-                self.form.fields[f'Gcard.{gcard}'] = forms.MultipleChoiceField(choices=choises_list,
+                self.form.fields[f'Gcard.{gcard}'] = forms.MultipleChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
                                                                                widget=forms.CheckboxSelectMultiple)
+            # Fix for lowercase label
+            self.form.fields[f'Gcard.{gcard}'].label = f'Gcard.{gcard}'
 
     def process_step(self, form):
         """

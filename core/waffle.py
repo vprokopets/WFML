@@ -1124,9 +1124,8 @@ class Waffle():
                     elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], str):
                         for feature in feature_list[feature_split[index - 1]]:
                             features.append(f'{feature}.{part}')
-                if cardinality_type != 'Gcard':
-                    gcard = namespace[parent_feature]['Gcard']
-                    features = self.filter_gcards(gcard, features)
+                gcard = namespace[parent_feature]['Gcard']
+                features = self.filter_gcards(gcard, features)
 
             feature_list.update({part: features})
         return feature_list[feature_split[-1]]
