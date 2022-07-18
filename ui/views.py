@@ -38,16 +38,19 @@ class WizardStepForm(forms.Form):
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
         # Write data from form fields to global namespace.
-        api.update_namespace(cd)
+
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
+            originals = api.define_layer(tlf)
             self.up = {}
             for key, value in cd.items():
-                check = api.cardinality_solver(key, value)
+                check = api.cardinality_solver(key, value, originals)
                 if check is not True:
                     self.up.update({key: check})
             for key, error in self.up.items():
                 self.add_error(key, error)
+            api.update_namespace(cd)
         else:
+            api.update_namespace(cd)
             # Validate all constraints, related to current top-level feature.
             self.up = []
             cycles = api.cycles
@@ -56,7 +59,6 @@ class WizardStepForm(forms.Form):
                     self.validation(element)
             else:
                 self.validation(self.label)
-
             # Assign unvalidated parameters error to appropriate fields.
             for param in self.up:
                 element = param['element']
@@ -67,7 +69,7 @@ class WizardStepForm(forms.Form):
                         self.add_error(subparam, f'This field returned error: {param["error"]}')
                     else:
                         self.add_error(None, f'Feature`s {param["element"]} parameter {subparam} returned error: {param["error"]}')
-                if param['params'] == ():
+                if param['params'] == () or param['params'] == []:
                     self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
             if self.up != []:
                 api.namespace = api.last_snap['Namespace']
@@ -243,6 +245,7 @@ class WizardClass(CookieWizardView):
         """
         step = self.steps.current
         self.check = None
+        api.namespace = copy.copy(api.last_snap['Namespace'])
         logging.info(f'STEP {step} FINISHED.')
         cycles = api.cycles
         if self.current_step in cycles.keys():
@@ -260,7 +263,7 @@ class WizardClass(CookieWizardView):
             factory_forms[int(self.steps.current) + 1] = WizardStepForm
             logging.info('Rendering additional step.')
             generated_steps.append(str(int(self.steps.current) + 1))
-        api.namespace = copy.copy(api.last_snap['Namespace'])
+
         return self.get_form_step_data(form)
 
     def render_next_step(self, form, **kwargs):

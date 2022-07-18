@@ -1,0 +1,17 @@
+Model 2{
+    xor SurrogateType {
+        Single
+        Compositional
+        Portfolio
+		
+    }
+    Surrogate 2{
+        LinearRegression {
+            Type -> string
+        }
+        GaussianProcessRegressor {
+			Type -> string
+		}
+    }
+    [if gcard.self.SurrogateType == "Single" then gcard.self.Surrogate = 'xor']
+}

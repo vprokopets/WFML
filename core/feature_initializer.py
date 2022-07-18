@@ -1,20 +1,20 @@
 import copy
 import logging
-from typing import OrderedDict
 
 class FeatureInitializer:
     def __init__(self, api) -> None:
         self.api = api
         self.feature_pattern = {
+            'Active': None,
             'Value': None,
             'Type': None,
             'Fcard': None,
             'Gcard': None,
-            'Active': None,
             'Abstract': None,
             'SuperFeature': None,
             'Reference': None,
-            'DeepReference': None
+            'DeepReference': None,
+            'RequiredFcard': None
         }
 
         self.constraint_pattern = {
@@ -30,7 +30,7 @@ class FeatureInitializer:
         self.top_level_pattern = {
             'Features': {},
             'Constraints': {},
-            'ConstraintsValidationOrder': OrderedDict()
+            'ConstraintsValidationOrder': []
         }
 
         self.namespace = {}
@@ -64,6 +64,7 @@ class FeatureInitializer:
         feature_tmpl['Gcard'] = {'Original': feature.gcard} if feature.gcard is not None else {'Original': None}
         feature_tmpl['Value'] = {'Original': feature.init} if feature.init is not None else {'Original': None}
         feature_tmpl['Abstract'] = feature.abstract
+        feature_tmpl['Active'] = {'Original': True}
 
         super_feature, reference_feature, deepness = self.analyze_super_reference_relations(feature, full_name)
         feature_tmpl['SuperFeature'] = super_feature
@@ -77,6 +78,7 @@ class FeatureInitializer:
         super, reference, deep = None, None, None
         if feature.super is not None:
             super = feature.super.replace(':', '')
+            self.dependencies.append([full_name.split('.')[0], super])
             self.super_dependencies.append([full_name.split('.')[0], super])
         if feature.reference is not None:
             if '->>>' in feature.reference:
@@ -85,7 +87,14 @@ class FeatureInitializer:
             else:
                 deep = False
                 reference = feature.reference.replace('->>', '')
-            self.reference_dependencies.append([full_name.split('.')[0], reference])
+            check = False
+            for dep in self.super_dependencies:
+                if reference == dep[1]:
+                    self.dependencies.append([f'{full_name.split(".")[0]}', dep[0]])
+                    check = True
+            if check is False:
+                self.dependencies.append([f'{full_name.split(".")[0]}', reference])
+
         return super, reference, deep
 
     def define_feature(self, feature, parent_name=None):
@@ -102,8 +111,6 @@ class FeatureInitializer:
         parent_namespace (type = dict): fullfilled parent namespace. Only for not top-level features.
         """
         feature_name = feature.name if parent_name is None else f'{parent_name}.{feature.name}'
-        if feature_name not in self.top_level_feature['ConstraintsValidationOrder'].keys():
-            self.top_level_feature['ConstraintsValidationOrder'].update({feature_name: None})
         for child in feature.nested:
             for child1 in child.child:
                 if self.cname(child1) == 'Feature':
@@ -139,8 +146,6 @@ class FeatureInitializer:
             inh_value = copy.deepcopy(feature_value)
             if inherited_fname not in self.namespace[top_level_feature]['Features'].keys():
                 self.namespace[top_level_feature]['Features'].update({inherited_fname: inh_value})
-                if inherited_fname not in self.top_level_feature['ConstraintsValidationOrder'].keys():
-                    self.top_level_feature['ConstraintsValidationOrder'].update({inherited_fname: None})
         constraints_count = len(list(self.namespace[top_level_feature]['Constraints'].keys()))
         for constraint, constraint_value in tlf_value['Constraints'].items():
             split = constraint_value['RelatedFeature'].split('.')
@@ -163,8 +168,6 @@ class FeatureInitializer:
                         inh_value.update({'Abstract': None})
                     if inherited_fname not in self.namespace[top_level_feature]['Features'].keys():
                         self.namespace[top_level_feature]['Features'].update({inherited_fname: inh_value})
-                        if inherited_fname not in self.top_level_feature['ConstraintsValidationOrder'].keys():
-                            self.top_level_feature['ConstraintsValidationOrder'].update({inherited_fname: None})
                 constraints_count = len(list(self.namespace[top_level_feature]['Constraints'].keys()))
                 for constraint, constraint_value in tlf_value['Constraints'].items():
                     inh_constraint = copy.deepcopy(self.constraint_pattern)
@@ -180,8 +183,8 @@ class FeatureInitializer:
         """
         logging.info('Feature definition: Starting.')
         self.namespace = {}
+        self.dependencies = []
         self.super_dependencies = []
-        self.reference_dependencies = []
         for element in model.elements:
             if self.cname(element) == 'Feature':
                 self.constraints_counter = 0
@@ -189,37 +192,23 @@ class FeatureInitializer:
                 self.define_feature(element)
                 self.namespace.update({str(element.name): copy.copy(self.top_level_feature)})
         logging.info('Feature definition: Finished.')
-
-        super_cycles, super_sequence = self.api.define_sequence_for_deps(self.super_dependencies)
-        if super_cycles != {}:
-            raise Exception(f'There are cycled super relations: {super_cycles}')
+        print(f'Dependencies: {self.dependencies}')
+        cyckes, sequence = self.api.define_sequence_for_deps(self.dependencies)
+        if cyckes != {}:
+            raise Exception(f'There are cycled super relations: {cyckes}')
         right_parts = []
-        for dep in self.super_dependencies:
+        for dep in self.dependencies:
             right_parts.append(dep[0])
-        for feature in copy.copy(super_sequence):
+        for feature in copy.copy(sequence):
             if feature not in right_parts:
-                del super_sequence[super_sequence.index(feature)]
-
-        reference_cycles, reference_sequence = self.api.define_sequence_for_deps(self.reference_dependencies)
-        if reference_cycles != {}:
-            raise Exception(f'There are cycled reference relations: {reference_cycles}')
-        right_parts = []
-        for dep in self.reference_dependencies:
-            right_parts.append(dep[0])
-        for feature in copy.copy(reference_sequence):
-            if feature not in right_parts:
-                del reference_sequence[reference_sequence.index(feature)]
-
+                del sequence[sequence.index(feature)]
+        print(f'Sequence: {sequence}')
         logging.info('Feature super relation filling: Starting')
-        for tlf in super_sequence:
+        for tlf in sequence:
             for feature, feature_value in self.namespace[tlf]['Features'].copy().items():
                 if feature_value['SuperFeature'] is not None:
                     self.define_super_relations(tlf, feature, feature_value['SuperFeature'])
-        logging.info('Feature super relation filling: Finished')
-        logging.info('Feature reference relation filling: Starting')
-        for tlf in reference_sequence:
-            for feature, feature_value in self.namespace[tlf]['Features'].copy().items():
-                if feature_value['Reference'] is not None:
+                elif feature_value['Reference'] is not None:
                     self.define_references(tlf, feature, [feature_value['Reference']])
                 elif feature_value['DeepReference'] is not None:
                     deep_references = [feature_value['DeepReference']]
@@ -228,7 +217,7 @@ class FeatureInitializer:
                         temp = []
                         end_loop = True
                         for ref in deep_references:
-                            for super_dep in self.super_dependencies:
+                            for super_dep in self.dependencies:
                                 if ref == super_dep[1] and super_dep[0] not in deep_references:
                                     end_loop = False
                                     temp.append(super_dep[0])

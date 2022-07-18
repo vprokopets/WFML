@@ -67,14 +67,14 @@ prec3:   op=prec2  (op=op3   op=prec2)*;
 prec2:   op=prec1  (op=op2   op=prec1)*;
 prec1:   op=prec0  (op=op1   op=prec0)*;
 prec0:   op=term   (op=op0   op=term)*;
-term:    op=NUMBER | op = BOOL | op=ComplexName | op = ID | op = Quote | op = List | ('(' op=prec24 ')');
+term:    op=NUMBER | op = BOOL | op=ComplexName | op = Quote | op = List | ('(' op=prec24 ')') | op = ID;
 
 
-op22: '<=>'                                                     ;
-op21: '=>'                                                      ;
-op20: '||'                                                      ;
+op22: '<=>' | 'iff'                                             ;
+op21: '=>' | 'implies'                                          ;
+op20: '||' | 'and'                                              ;
 op19: 'xor'                                                     ;
-op18: '&&'                                                      ;
+op18: '&&' | 'or'                                               ;
 op17: 'U' | 'until'                                             ;
 op16: 'W' | 'weakuntil'                                         ;
 op15: 'F' | 'eventually' | 'G' | 'globally' | 'X' | 'next'      ;
