@@ -1,17 +1,28 @@
-Model 2{
+Model 3 {
     xor SurrogateType {
         Single
         Compositional
         Portfolio
-		
     }
-    Surrogate 2{
+   Surrogate {
         LinearRegression {
-            Type -> string
+            Type -> predefined
+            [Type = "LinearRegression"]
         }
         GaussianProcessRegressor {
-			Type -> string
-		}
+            Type -> predefined
+            [Type = "GaussianProcessRegressor"]
+        }
     }
     [if gcard.self.SurrogateType == "Single" then gcard.self.Surrogate = 'xor']
+    [if gcard.self.SurrogateType == "Compositional" then gcard.self.Surrogate = size childs.Context.Objectives]
+    [if gcard.self.SurrogateType == "Portfolio" then gcard.self.Surrogate = 'or']
+}
+
+Context {
+    Objectives {
+        Objective 1..2 {
+            test -> integer
+        }
+    }
 }

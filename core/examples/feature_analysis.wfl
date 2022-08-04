@@ -1,9 +1,7 @@
 feature_model {
-	test -> predefined
-	Mob
-	Duck ?
-	Witch ?
-	Floats ?
+	Duck -> string ?
+	Witch -> string ?
+	Floats -> string ?
 	[Floats => Duck]
 	[Floats <=> Witch]
 	[!Duck]

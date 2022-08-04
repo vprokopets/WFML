@@ -8,9 +8,8 @@ abstract Hyperparameter {
 
 abstract CategoricalHyperparameter : Hyperparameter {
     Categories -> predefined
-    Default -> string
+    Default -> predefined
     [Default in Categories]
-    [Categories = (filter childs.self where Type == "Category")]
 }
 
 abstract OrdinalHyperparameter: CategoricalHyperparameter {

@@ -1,3 +1,6 @@
+import itertools
+from pprint import pprint
+
 
 class FeatureAnalyzer:
     def __init__(self, api) -> None:
@@ -5,6 +8,8 @@ class FeatureAnalyzer:
 
     def analyze_feature_model(self, stages):
         self.namespace = self.api.namespace
+        self.cardinalities_analysis()
+        self.type_analysis()
         self.cycles = self.api.cycles
         for stage in stages:
             if stage in self.cycles.keys():
@@ -21,6 +26,7 @@ class FeatureAnalyzer:
         else:
             temp = self.namespace[tlf]['Constraints']
         self.constraints_sequence_definition(constraints=temp, tlf=tlf, cycle=cycle)
+        # self.define_conditions_set(constraints=temp, tlf=tlf, cycle=cycle)
 
     def constraints_sequence_definition(self, constraints, tlf=None, cycle=None):
         assign_constraints, dependencies = [], []
@@ -29,8 +35,8 @@ class FeatureAnalyzer:
                 assign_constraints.append(constraint)
         for assign_constraint in assign_constraints:
             for constraint, value in constraints.items():
-                for assign_feature in constraints[assign_constraint]['FeaturesToAssign']:
-                    if assign_feature in value['Features'] and [assign_constraint, constraint] not in dependencies:
+                for assign_feature in constraints[assign_constraint]['FeaturesToAssign']['Value']:
+                    if assign_feature in value['Features']['Value'] and [assign_constraint, constraint] not in dependencies:
                         dependencies.append([assign_constraint, constraint])
 
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
@@ -41,13 +47,15 @@ class FeatureAnalyzer:
                 second = constraints[value[1]]['Expression']
                 rf_first = constraints[value[0]]['RelatedFeature']
                 rf_second = constraints[value[1]]['RelatedFeature']
-                raise Exception(f'There are cycled constraints: {first} for feature {rf_first} and {second} for feature {rf_second}.\n \
-Please rewrite them to avoid cycled dependencies.')
+                msg = '\n'.join(('There are cycled constraints:',
+                                 f'{first} for feature {rf_first} and {second} for feature {rf_second}.',
+                                 'Please rewrite them to avoid cycled dependencies.'))
+                raise Exception(msg)
         independent_constraints = []
         for constraint in constraints.keys():
             if constraint not in dependent_constraints:
                 independent_constraints.append(constraint)
-        res = independent_constraints + dependent_constraints
+        res = dependent_constraints + independent_constraints
         if cycle is None:
             self.namespace[tlf]['ConstraintsValidationOrder'] = res
         else:
@@ -57,10 +65,53 @@ Please rewrite them to avoid cycled dependencies.')
                     if sub_tlf in feature:
                         subres.append(int(feature.replace(f'{sub_tlf}_', '')))
                 self.namespace[sub_tlf]['ConstraintsValidationOrder'] = subres
-        print(f'Success')
 
     def cardinalities_analysis(self):
-        pass
+        self.validity = {}
+        self.inconsistencies = {}
+        expressions = list(self.api.requirements.keys())
+        if len(expressions) == 0:
+            return
+        combinations = itertools.product(*self.api.requirements.values())
+        for iter, comb in enumerate(combinations):
+            temp = {}
+            for index, constraint in enumerate(comb):
+                for feature, value in constraint.items():
+                    if feature not in temp.keys():
+                        temp.update({feature: {True: [], False: []}})
+                    temp[feature][value].append(expressions[index])
+                validity = True
+                for feature, value in temp.items():
+                    check = all(x != [] for x in list(value.values()))
+                    if check is True:
+                        validity = False
+                        if feature not in self.inconsistencies.keys():
+                            self.inconsistencies.update({feature: []})
+                        features = self.inconsistencies[feature]
+                        for x in list(value.values()):
+                            features = list(set(features + x))
+                        self.inconsistencies.update({feature: features})
+                self.validity.update({iter: validity})
+        if not any(list(self.validity.values())):
+            msg = ''.join(('Constraints cardinalities inconsistencies, please check the following constraints \n',
+                           '\n'.join(f'{k}: {v}' for k, v in self.inconsistencies.items())))
+            msg = msg.replace('; ', '')
+            raise Exception(msg)
 
     def type_analysis(self):
-        pass
+        for tlf in self.namespace.keys():
+            for feature, value in self.namespace[tlf]['Features'].items():
+                if value['Type'] == 'predefined' and self.namespace[tlf]['Features'][tlf]['Abstract'] is None:
+                    check = self.search_for_constraint_assignment(feature)
+                    if check is False:
+                        msg = ''.join((f'Feature {feature} is predefined type ',
+                                      'but there are no constraints that assign any value to this feature.'))
+                        raise Exception(msg)
+
+    def search_for_constraint_assignment(self, feature):
+        ret = False
+        for tlf in self.namespace.values():
+            for constraint in tlf['Constraints'].values():
+                if feature in constraint['FeaturesToAssign']['Value']:
+                    ret = True
+        return ret

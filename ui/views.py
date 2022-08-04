@@ -42,13 +42,16 @@ class WizardStepForm(forms.Form):
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
             originals = api.define_layer(tlf)
             self.up = {}
+            check = []
             for key, value in cd.items():
-                check = api.cardinality_solver(key, value, originals)
-                if check is not True:
-                    self.up.update({key: check})
+                res = api.cardinality_solver(key, value, originals)
+                check.append(res)
+                if res is not True:
+                    self.up.update({key: res})
             for key, error in self.up.items():
                 self.add_error(key, error)
-            api.update_namespace(cd)
+            if all(x is True for x in check):
+                api.update_namespace(cd)
         else:
             api.update_namespace(cd)
             # Validate all constraints, related to current top-level feature.
@@ -73,6 +76,12 @@ class WizardStepForm(forms.Form):
                     self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
             if self.up != []:
                 api.namespace = api.last_snap['Namespace']
+            else:
+                if self.label in cycles.keys():
+                    for element in cycles[self.label]:
+                        api.namespace[element]['Validated'] = True
+                else:
+                    api.namespace[self.label]['Validated'] = True
         return cd
 
     def validation(self, element: str):
@@ -166,7 +175,7 @@ class WizardClass(CookieWizardView):
                 return
         else:
             data = api.stage_snap[snap_name]['Fields']
-        if tlf in api.empty_stages:
+        if data is None or data == 'Empty stage':
             return
         if 'Fcard' in data.keys() and 'Gcard' in data.keys():
             self.construct_feature_cardinality_form(data['Fcard'])
@@ -218,7 +227,7 @@ class WizardClass(CookieWizardView):
         # Create fields for each gcard record.
         for gcard, value in group_cardinalities.items():
             # Create appropriate fields in form.
-            options = api.get_feature_childrens(gcard)
+            options = api.get_feature_childrens(gcard, without_mappings=True)
             choises_list = []
             for option in options:
                 choises_list.append((option, option))
@@ -228,7 +237,7 @@ class WizardClass(CookieWizardView):
             if value['Original'] == 'xor':
                 self.form.fields[f'Gcard.{gcard}'] = forms.ChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
                                                                        widget=forms.RadioSelect)
-            elif type(value['Original']) is int or value['Original'] == 'or':
+            else:
                 self.form.fields[f'Gcard.{gcard}'] = forms.MultipleChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
                                                                                widget=forms.CheckboxSelectMultiple)
             # Fix for lowercase label

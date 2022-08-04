@@ -1,3 +1,4 @@
+from asyncio import base_futures
 import copy
 import json
 import itertools
@@ -20,7 +21,7 @@ from textx.export import metamodel_export, model_export
 keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
             'if', 'in', 'lone', 'max', 'maximize', 'min',
             'minimize', 'mux', 'no', 'not', 'one', 'opt',
-            'or', 'product', 'some', 'sum', 'then', 'xor', '_', 'fcard', 'gcard', 'waffle.error']
+            'or', 'product', 'res', 'some', 'sum', 'then', 'xor', '_', 'fcard', 'gcard', 'waffle.error']
 
 # Logging configuration.
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -50,14 +51,20 @@ class ExpressionElement(object):
         if len(self.op) == 1:
             ret = self.op[0].parse()
         else:
-            if self.api.exception_flag is False:
-                self.api.exception_flag = True
-                self.exception = True
+            if self.api.mode != 'Validate':
+                if self.api.exception_flag is False:
+                    self.api.exception_flag = True
+                    self.exception = True
+                else:
+                    self.exception = False
+                ret = self.value
+                if self.exception is True:
+                    self.api.exception_flag = False
             else:
-                self.exception = False
-            ret = self.value
-            if self.exception is True:
-                self.api.exception_flag = False
+                if self.__class__.__name__ in self.api.boolean:
+                    ret = self.value
+                else:
+                    ret = True
         return ret
 
     def update(self):
@@ -72,17 +79,15 @@ class ExpressionElement(object):
         self.api = api
         self.constraint_expression = api.constraint_expression
         if len(self.op) > 1:
+            self.api.obj_id = self.__class__.__name__
             self.api.constraint['Operations'].append(self.__class__.__name__)
             if self.api.constraint['HigherOperation'] is None:
-                self.api.constraint.update({'HigherOperation': self.__class__.__name__})
+                upd = self.__class__.__name__
+                if upd != 'prec23':
+                    self.api.constraint.update({'HigherOperation': upd})
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.cross_tree_check(reverse, api)
-
-    def get_required_cardinalities(self):
-        for part in self.op:
-            if isinstance(part, ExpressionElement):
-                part.get_required_cardinalities()
 
     def get_mappings(self):
         result = {}
@@ -123,6 +128,15 @@ class ExpressionElement(object):
         else:
             return feature
 
+    def define_truth(self):
+        if len(self.op) > 1:
+            self.exception = False
+            if self.__class__.__name__ == self.api.constraint['HigherOperation']:
+                self.api.constraint['TruthTable'].update({'Result': self.value})
+        for part in self.op:
+            if isinstance(part, ExpressionElement):
+                part.define_truth()
+
 class prec24(ExpressionElement):
     @property
     def value(self):
@@ -139,7 +153,7 @@ class prec24(ExpressionElement):
             try:
                 self.api.replace_feature = item
                 if condition.parse() is True:
-                    res.append(item)
+                    res.append(item['Value'])
             except KeyError:
                 pass
         self.api.keyword = ''
@@ -164,7 +178,7 @@ class prec23(ExpressionElement):
         logging.debug("Level 23 IF THEN ELSE statement.")
 
         # Perform IF expression check.
-        statement = self.op[1].parse()
+        statement = self.boolify(self.op[1].parse())
         print(f'Statement: {statement}')
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
@@ -215,7 +229,7 @@ class prec21(ExpressionElement):
         logging.debug("Level 21 boolean IMPLIES operation")
 
         left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
-        ret = not(left) or right
+        ret = not left or right
 
         self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
@@ -236,10 +250,12 @@ class prec20(ExpressionElement):
         """
         logging.debug("Level 20 boolean OR operation")
 
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
-        ret = left or right
-
-        self.check_exception(ret, f'Expression ({left} {operation} {right})')
+        left = self.boolify(self.op[0].parse())
+        for op, r in zip(self.op[1::2], self.op[2::2]):
+            operation, right = op, self.boolify(r.parse())
+            ret = left or right
+            left = ret
+            self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
 
 class prec19(ExpressionElement):
@@ -258,10 +274,12 @@ class prec19(ExpressionElement):
         """
         logging.debug("Level 19 boolean XOR operation")
 
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
-        ret = bool(left) ^ bool(right)
-
-        self.check_exception(ret, f'Expression ({left} {operation} {right})')
+        left = self.boolify(self.op[0].parse())
+        for op, r in zip(self.op[1::2], self.op[2::2]):
+            operation, right = op, self.boolify(r.parse())
+            ret = bool(left) ^ bool(right)
+            left = ret
+            self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
 
 class prec18(ExpressionElement):
@@ -280,10 +298,13 @@ class prec18(ExpressionElement):
         """
         logging.debug("Level 18 boolean AND operation")
 
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
-        ret = left and right
-
-        self.check_exception(ret, f'Expression ({left} {operation} {right})')
+        left = self.boolify(self.op[0].parse())
+        for op, r in zip(self.op[1::2], self.op[2::2]):
+            operation, right = op, self.boolify(r.parse())
+            logging.info(f"Level 18 boolean {left} {operation} {right} operation")
+            ret = left and right
+            left = ret
+            self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
 
 class prec17(ExpressionElement):
@@ -429,27 +450,27 @@ class prec12(ExpressionElement):
         ret (variable type): previous level object if no prec12 operations are not presented in constraint
                             operation result in opposite case.
         """
-
-        left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
-        left, right = [self.parse_feature(feature) for feature in [left, right]]
-        logging.info(f'Level 12 comparison {left} {operation} {right} operation')
-        if operation == '<':
-            ret = left < right
-        elif operation == '>':
-            ret = left > right
-        elif operation == '==':
-            ret = left == right
-        elif operation == '>=':
-            ret = left >= right
-        elif operation == '<=':
-            ret = left <= right
-        elif operation == '!=':
-            ret = left != right
-        elif operation == 'in':
-            ret = left in right
-        elif operation == 'not in':
-            ret = left not in right
-        self.check_exception(ret, f'Expression ({left} {operation} {right})')
+        for l, op, r in zip(self.op[0::2], self.op[1::2], self.op[2::2]):
+            left, operation, right = l.parse(), op, r.parse()
+            left, right = [self.parse_feature(feature) for feature in [left, right]]
+            #logging.info(f'Level 12 comparison {left} {operation} {right} operation')
+            if operation == '<':
+                ret = left < right
+            elif operation == '>':
+                ret = left > right
+            elif operation == '==':
+                ret = left == right
+            elif operation == '>=':
+                ret = left >= right
+            elif operation == '<=':
+                ret = left <= right
+            elif operation == '!=':
+                ret = left != right
+            elif operation == 'in':
+                ret = left in right
+            elif operation == 'not in':
+                ret = left not in right
+            self.check_exception(ret, f'Expression ({left} {operation} {right})')
         return ret
 
     def check_cardinalities(self):
@@ -467,13 +488,12 @@ class prec11(ExpressionElement):
         ret (variable type): previous level object if no prec11 operations are not presented in constraint
                             operation result in opposite case.
         """
-        left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
-        absent_feature = {'Original': None}
+        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
         if operation == 'requires':
-            ret = not (left != absent_feature and right == absent_feature)
+            ret = not left or (left and right)
             self.check_exception(ret, 'Required feature does not exist')
         elif operation == 'excludes':
-            ret = not (left != absent_feature and right != absent_feature)
+            ret = not (left and right)
             self.check_exception(ret, 'One of the features under excludes constraint should not exist')
         return ret
 
@@ -521,13 +541,15 @@ class prec9(ExpressionElement):
         ret (variable type): previous level object if no prec9 operations are not presented in constraint
                             operation result in opposite case.
         """
-        left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
-        left, right = [self.parse_feature(feature) for feature in [left, right]]
-        logging.debug(f'Level 9 Math operation {operation} ')
-        if operation == '+':
-            ret = left + right
-        elif operation == '-':
-            ret = left - right
+        ret = self.parse_feature(self.op[0].parse())
+        for op, r in zip(self.op[1::2], self.op[2::2]):
+            operation, right = op, r.parse()
+            right = self.parse_feature(right)
+            logging.info(f'Level 9 Math operation {ret} {operation} {right} ')
+            if operation == '+':
+                ret += right
+            elif operation == '-':
+                ret -= right
         return ret
 
 
@@ -541,15 +563,17 @@ class prec8(ExpressionElement):
         ret (variable type): previous level object if no prec8 operations are not presented in constraint
                             operation result in opposite case.
         """
-        left, operation, right = self.op[0].parse(), self.op[1], self.op[2].parse()
-        left, right = [self.parse_feature(feature) for feature in [left, right]]
-        logging.debug(f'Level 8 Math operation {operation} ')
-        if operation == '*':
-            ret = left * right
-        elif operation == '/':
-            ret = left / right
-        elif operation == '%':
-            ret = left % right
+        ret = self.parse_feature(self.op[0].parse())
+        for op, r in zip(self.op[1::2], self.op[2::2]):
+            operation, right = op, r.parse()
+            right = self.parse_feature(right)
+            logging.info(f'Level 8 Math operation {ret} {operation} {right} ')
+            if operation == '*':
+                ret *= right
+            elif operation == '/':
+                ret /= right
+            elif operation == '%':
+                ret %= right
         return ret
 
 
@@ -623,8 +647,10 @@ class prec50(ExpressionElement):
         for feature, namespace in input.items():
             if feature.split('.')[-1] == key and namespace['Type'] is not None:
                 for subfeature, value in namespace['Value'].items():
-                    if subfeature != 'Original' and value not in res:
+                    if subfeature != 'Original' and value not in res and not isinstance(value, dict):
                         res.append(value)
+                    elif isinstance(value, dict) and 'Value' in value.keys() and value['Value'] not in res:
+                        res.append(value['Value'])
         return res
 
 
@@ -763,24 +789,25 @@ class term(ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
             return op.parse()
         elif isinstance(op, str) and op not in keywords and self.src is False:
+            op = self.parse_string()
             if self.api.keyword == 'Update' and self.is_feature is True:
-                op = self.op
+                pass
             elif self.api.keyword == 'AllFeatures':
-                op = self.api.get_feature_childrens(self.op, own_childrens_only=False)
+                op = self.api.get_feature_childrens(op, own_childrens_only=False)
             elif self.is_feature is True:
-                op = self.api.get_feature(self.op, tmp=self.tmp, mappings=self.mappings)
+                op = self.api.get_feature(op, tmp=self.tmp, mappings=self.mappings)
                 value = op['Value']
                 op['Value'] = self.autoconvert(value) if isinstance(value, str) else value
-            else:
-                op = self.op
+            elif self.is_childs is True:
+                op = self.api.get_feature_childrens(op)
         return op
 
     def parse_string(self, for_mapping=False):
         op = self.op
         check = False
+        self.is_childs = False
         if '"' in op or "'" in op:
             op = op.replace("'", '').replace('"', '')
-            self.op = op
             self.is_feature = False
         else:
             if self.api.keyword == 'ReplaceFeature':
@@ -804,7 +831,8 @@ class term(ExpressionElement):
                     split[split.index('tlf')] = self.api.rf.split('.')[0]
                 op_type = split[0] if split[0] in ['fname', 'childs'] else None
                 if op_type == 'childs':
-                    op = self.api.get_feature_childrens('.'.join(split[1:]))
+                    self.is_childs = True
+                    op = '.'.join(split[1:])
                 elif op_type == 'fname':
                     op = '.'.join(split[1:])
                 else:
@@ -817,12 +845,20 @@ class term(ExpressionElement):
                     check = True
             else:
                 op = self.autoconvert(op)
-            self.op = op
             self.is_feature = check
+        return op
 
     def parse(self):
-        self.tmp = True
-        return self.value
+        if self.api.mode != 'Validate':
+            self.tmp = True
+            ret = self.value
+        else:
+            if self.is_feature is True:
+                op = self.parse_string()
+                ret = self.api.truth_table[op]
+            else:
+                ret = True
+        return ret
 
     def check_cardinalities(self):
         pass
@@ -833,32 +869,21 @@ class term(ExpressionElement):
     def get_mappings(self):
         result = {}
         self.tmp = True
-        if type(self.op) is str and self.op not in keywords:
-            if self.is_feature is True:
-                res = self.api.get_feature(self.op, for_mapping=True)
-                for feature in res:
-                    constructor_original = []
-                    constructor = []
-                    for subfeature in feature.split('.'):
-                        constructor_original.append(re.sub(r'_\d+', '', subfeature))
-                        constructor.append(subfeature)
-                        original = '.'.join(constructor_original)
-                        if original not in result.keys():
-                            result.update({original: []})
-                        if subfeature not in result[original]:
-                            result[original].append('.'.join(constructor))
+        if self.is_feature is True:
+            op = self.parse_string(for_mapping=True)
+            res = self.api.get_feature(op, for_mapping=True)
+            for feature in res:
+                constructor_original = []
+                constructor = []
+                for subfeature in feature.split('.'):
+                    constructor_original.append(re.sub(r'_\d+', '', subfeature))
+                    constructor.append(subfeature)
+                    original = '.'.join(constructor_original)
+                    if original not in result.keys():
+                        result.update({original: []})
+                    if '.'.join(constructor) not in result[original]:
+                        result[original].append('.'.join(constructor))
         return result
-
-    def get_required_cardinalities(self):
-        op = self.op
-        if type(op) is str and op not in keywords and self.src is False:
-            fname, check = self.parse_string()
-            if fname not in self.api.req_card.keys():
-                self.api.req_card.update({fname: [1]})
-            else:
-                new_list = self.api.req_card[fname]
-                new_list.append(1)
-                self.api.req_card.update({fname: new_list})
 
     def cross_tree_check(self, reverse: bool = False, api=None):
         self.src = False
@@ -871,6 +896,9 @@ class term(ExpressionElement):
             self.api.constraint.update({'HigherOperation': self.__class__.__name__})
         if type(op) is str and op not in keywords:
             self.constraint_sequence_check(reverse)
+        else:
+            self.is_feature = False
+            self.is_childs = False
         if isinstance(op, ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
             return op.cross_tree_check(reverse, api)
@@ -898,16 +926,23 @@ class term(ExpressionElement):
                 raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
 
     def constraint_sequence_check(self, reverse):
-        self.parse_string()
+        op = self.parse_string()
         if self.is_feature is True:
             try:
-                self.api.get_feature(self.op)
+                self.api.get_feature(op)
+                field_type = op.split('.', 1)[0] if op.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+                feature = op.split('.', 1)[1] if op.split('.', 1)[0] in ('Fcard', 'Gcard') else op
                 if reverse is True:
-                    self.api.constraint['FeaturesToAssign'].append(self.op)
+                    self.api.constraint['FeaturesToAssign'][field_type].append(feature)
                 else:
-                    self.api.constraint['Features'].append(self.op)
+                    self.api.constraint['Features'][field_type].append(feature)
+                if self.api.obj_id in [None, 'prec23']:
+                    self.api.obj_id = self.__class__.__name__
+                if self.api.obj_id not in self.api.constraint['Pattern'].keys():
+                    self.api.constraint['Pattern'].update({self.api.obj_id: []})
+                self.api.constraint['Pattern'][self.api.obj_id].append(feature)
             except KeyError:
-                raise Exception(f'No such feature {self.op}')
+                raise Exception(f'No such feature {op}')
 
     def boolify(self, string):
         if string == 'True':
@@ -924,6 +959,10 @@ class term(ExpressionElement):
                 pass
         return string
 
+    def define_truth(self):
+        op = self.parse_string()
+        if self.is_feature is True:
+            return self.api.truth_table[op]
 
 class Waffle():
 
@@ -975,12 +1014,14 @@ class Waffle():
     def reset(self):
         self.namespace, self.cycles, self.stage_snap, self.last_snap, self.req_card = {}, {}, {}, {}, {}
         self.description, self.model, self.tlf, self.rf, self.keyword, self.replace_feature = '', '', '', '', '', ''
-        self.cross_tree_dependencies, self.empty_stages = [], []
+        self.cross_tree_dependencies, self.empty_stages, self.requirements = [], [], {}
         self.exception_flag = False
         self.constraint = None
         self.tmp = False
+        self.obj_id = None
         self.feature_analyzer = FeatureAnalyzer(self)
         self.feature_initializer = FeatureInitializer(self)
+        self.boolean = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'prec11', 'term']
 
         self.stages = {
             "Generated": [],
@@ -1023,19 +1064,23 @@ class Waffle():
             features_data[original_feature]['Active'].update({feature: True})
             if field_type == 'Fcard':
                 for subfeature in features_data.keys():
-                    for mapping in features_data[subfeature]['Active'].keys():
+                    for index, mapping in enumerate(list(features_data[subfeature]['Active'].keys())):
                         if value == 0 and f'{feature}.' in mapping:
                             features_data[subfeature]['Active'][mapping] = False
+                        elif tmp is True and f'{feature}.' in mapping and value < len(list(features_data[subfeature]['Active'].keys())):
+                            if index > value:
+                                features_data[subfeature]['Active'][mapping] = False
             elif field_type == 'Gcard':
                 for subfeature in features_data.keys():
                     value = [value] if not isinstance(value, list) else value
                     for card in value:
-                        if card not in ['xor', 'or']:
+                        if card not in ['xor', 'or'] and not isinstance(card, int):
                             if tmp is True:
                                 raise Exception('Only -xor and -or group cardinalities are allowed to set via constraints.')
                             for mapping in features_data[subfeature]['Active'].keys():
                                 if f'{feature}.' in mapping:
-                                    if f'{feature}.{card.split(".")[-1]}.' not in mapping:
+                                    if f'{feature}.{card.split(".")[-1]}.' not in mapping \
+                                            and f'{feature}.{card.split(".")[-1]}_' not in mapping:
                                         features_data[subfeature]['Active'][mapping] = False
 
     def get_feature(self, data, tmp=False, field_type=None, for_mapping=False, mappings=None):
@@ -1050,9 +1095,8 @@ class Waffle():
             field_type = data.split('.', 1)[0] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
         if for_mapping is True:
             return self.name_builder(feature, features_data)
-        values = features_data[feature][field_type]
         value, mapping = None, None
-        if mappings is not None:
+        if mappings is not None and mappings != ():
             feature_mapped = []
             constructor = []
             for part in feature.split('.'):
@@ -1062,10 +1106,12 @@ class Waffle():
                     if original == re.sub(r'_\d+', '', mapping):
                         feature_mapped.append(mapping.split('.')[-1])
             mapping = '.'.join(feature_mapped)
-            value = features_data[feature][field_type][mapping]
+        else:
+            mapping = 'Original'
+        value = features_data[feature][field_type][mapping]
         return {'Feature': feature,
                 'Value': value.split('.')[-1] if isinstance(value, str) and field_type == 'Gcard' else value,
-                'Active': features_data[feature]['Active'][mapping] if mappings is not None else features_data[feature]['Active']['Original'],
+                'Active': features_data[feature]['Active'][mapping] if mappings is not None and mappings != () else features_data[feature]['Active']['Original'],
                 'Mapping': mapping}
 
     def update_feature(self, feature, new_value, top_level_features):
@@ -1073,7 +1119,7 @@ class Waffle():
         top_level_features[feature][update_type] = new_value[update_type]
         return top_level_features
 
-    def get_feature_childrens(self, feature, own_childrens_only=True):
+    def get_feature_childrens(self, feature, own_childrens_only=True, without_mappings=False):
         split = feature.split('.')
         tlf = self.get_original_name(split[0])
         childrens = {}
@@ -1089,7 +1135,13 @@ class Waffle():
                 elif own_childrens_only is False and (len(fname.split('.')) >= len(split) + 1
                                                 and f'{self.get_original_name(feature)}.' in self.get_original_name(fname)):
                     childrens.update({fname: subfeature})
-        return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else list(childrens.keys())
+        if without_mappings is False:
+            mapped_names = []
+            for key in childrens.keys():
+                mapped_names = mapped_names + self.name_builder(key, features_data)
+        else:
+            mapped_names = list(childrens.keys())
+        return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else mapped_names
 
     def validate_feature(self, tlf):
         if self.debug_mode is True:
@@ -1106,7 +1158,7 @@ class Waffle():
         for feature_to_validate in self.namespace[tlf]['ConstraintsValidationOrder']:
             constraint = self.namespace[tlf]['Constraints'][feature_to_validate]
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
-            if isinstance(check, list) and len(check) > 0:
+            if isinstance(check, list) and len(check) > 0 and self.are_cardinalities_specified(constraint['RelatedFeature']) is True and constraint['Validated'] is False:
                 self.tlf = tlf
                 self.rf = constraint['RelatedFeature']
                 self.exception_flag = False
@@ -1120,11 +1172,23 @@ class Waffle():
                 if constraint['HigherOperation'] == 'term':
                     self.keyword = 'CheckFeaturePresence'
                 self.map_and_parse(mappings, constraint['Constraint'].name)
+                constraint['Validated'] = True
 
     def map_and_parse(self, mappings, constraint):
         done = False
         combinations = itertools.product(*mappings.values())
-        for iter, comb in enumerate(combinations):
+        filtered_combinations = []
+
+        for comb in combinations:
+            rm = False
+            for part in comb:
+                if not any((len(part.split('.')) - len(x.split('.')) == 1) and x in part for x in comb) \
+                        and len(part.split('.')) > 1:
+                    rm = True
+                    break
+            if rm is False:
+                filtered_combinations.append(comb)
+        for comb in filtered_combinations:
             done = True
             self.iterable['UnvalidatedFeatures'] = comb
             constraint.set_mappings(comb)
@@ -1147,12 +1211,16 @@ class Waffle():
         if len(feature_split) == 1:
             features = []
             fcard = namespace[feature]['Fcard']
-            if isinstance(fcard['Original'], str):
-                features.append(feature)
+            if len(fcard.keys()) == 1:
+                key = 'Original'
             else:
-                for i in range(0, int(fcard['Original'])):
-                    features.append(f'{feature}_{i}' if int(fcard['Original']) > 1 else feature)
-            feature_list.update({feature: features})
+                key = feature
+            try:
+                if int(fcard[key]) > 0:
+                    for i in range(0, int(fcard[key])):
+                        features.append(f'{feature}_{i}' if int(fcard[key]) > 1 else feature)
+            except Exception:
+                features.append(feature)
             return features
         for index, part in enumerate(feature_split):
             parent_feature = feature_name
@@ -1206,7 +1274,7 @@ class Waffle():
         gcard_features = []
 
         for key, value in gcard.items():
-            if key != 'Original':
+            if key != 'Original' and value not in ['xor', 'or'] and not isinstance(value, int):
                 for raw_feature in features:
                     if len(raw_feature.split('.')[-1].split('_')) > 1:
                         feature = raw_feature.rsplit("_", 1)[0]
@@ -1220,9 +1288,23 @@ class Waffle():
                         subvalue = value
                         if feature == f'{key}.{subvalue.split(".")[-1]}':
                             gcard_features.append(raw_feature)
+        for feature in features:
+            if all(x not in feature for x in gcard.keys()):
+                gcard_features.append(feature)
         if len(gcard.keys()) > 1:
             features = gcard_features
         return features
+
+    def are_cardinalities_specified(self, feature):
+        res = True
+        for tlf in self.namespace.keys():
+            for constraint in self.namespace[tlf]['Constraints'].values():
+                split = feature.split('.')
+                for part in range(0, len(split)):
+                    check = '.'.join(split[:part])
+                    if (check in constraint['FeaturesToAssign']['Fcard'] or check in constraint['FeaturesToAssign']['Gcard']) and constraint['Validated'] is False:
+                        res = False
+        return res
 
     def get_unresolved_cardinalities(self, feature, namespace):
         fcards, non_initial_fcards = [], []
@@ -1230,7 +1312,7 @@ class Waffle():
         for key, value in namespace.items():
             fcard = value['Fcard']['Original']
             gcard = value['Gcard']['Original']
-            if key.split('.')[0] == feature:
+            if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
                 if len(value['Gcard'].keys()) == 1:
                     if gcard in ['or', 'mux', 'xor']\
                             or isinstance(gcard, int)\
@@ -1263,7 +1345,7 @@ class Waffle():
     def get_unresolved_features(self, feature, namespace):
         result = {}
         for key, value in namespace.items():
-            if key.split('.')[0] == feature:
+            if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
                 if value['Type'] is not None and \
                         value['Value']['Original'] is None and \
                         len((value['Value'].keys())) == 1:
@@ -1276,7 +1358,7 @@ class Waffle():
                 if isinstance(names, list) and len(names) >= 1:
                     for name in names:
                         result.update({name: result[key]})
-                    if len(names) > 1:
+                    if len(names) > 1 or (len(names) == 1 and names[0] != key):
                         result.pop(key, None)
                 elif isinstance(names, list) and len(names) == 0:
                     result.pop(key, None)
@@ -1338,10 +1420,8 @@ class Waffle():
         if sublayer is None:
             sublayer = self.get_unresolved_features(top_level_feature, namespace)
             logging.info(f'Top-level feature {top_level_feature} features to configure: {sublayer}')
-            if sublayer is None and top_level_feature not in self.empty_stages:
-                self.empty_stages.append(top_level_feature)
-                #sublayer = 'Empty stage'
-
+            if sublayer is None and self.namespace[top_level_feature]['Validated'] is False:
+                sublayer = 'Empty stage'
         return sublayer
 
     def cross_tree_dependencies_handler(self):
@@ -1351,6 +1431,7 @@ class Waffle():
         for tlf, tlf_value in self.namespace.items():
             if tlf_value['Features'][tlf]['Abstract'] is None:
                 for constraint in tlf_value['Constraints'].values():
+                    self.obj_id = None
                     self.constraint = constraint
                     self.constraint_expression = \
                         f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
@@ -1358,11 +1439,47 @@ class Waffle():
                     self.tlf = tlf
                     self.rf = constraint['RelatedFeature']
                     constraint['Constraint'].name.cross_tree_check(api=self)
+                    self.define_conditions_set(constraint)
         logging.info('Processing cross-tree dependencies: Starting')
         self.cross_tree_dependencies.sort()
         self.cross_tree = list(k for k, _ in itertools.groupby(self.cross_tree_dependencies))
         self.tmp = True
         logging.info('Processing cross-tree dependencies: Done')
+
+    def define_conditions_set(self, constraint):
+        base = []
+        self.requirements.update({constraint['Expression']: []})
+        for feature_type in ['Features', 'FeaturesToAssign']:
+            for value in constraint[feature_type].values():
+                base = [*base, *value]
+        base_filtered = []
+        for feature in base:
+            for prec, values in constraint['Pattern'].items():
+                if feature in values and prec not in self.boolean:
+                    base_filtered.append(feature)
+        base_conditions = list(itertools.product([False, True],
+                                                    repeat=len(base)))
+        base = [fruit for fruit in base if fruit not in base_filtered]
+        for conditions_set in base_conditions:
+            combination = {}
+            for index, var in enumerate(base):
+                if constraint['HigherOperation'] in self.boolean:
+                    combination.update({var: conditions_set[index]})
+                else:
+                    combination.update({var: True})
+            for feature in base_filtered:
+                if feature not in combination.keys():
+                    combination.update({feature: True})
+            if combination not in constraint['TruthTable']:
+                self.truth_table = combination
+                self.mode = 'Validate'
+                res = constraint['Constraint'].name.parse()
+                if res is True:
+                    constraint['TruthTable'].append(combination)
+                    self.requirements[constraint['Expression']].append(combination)
+                self.mode = None
+        unique = [dict(t) for t in {tuple(d.items()) for d in constraint['TruthTable']}]
+        constraint['TruthTable'] = unique
 
     def define_sequence_for_deps(self, dependencies):
         # Create networkx graph object
@@ -1553,7 +1670,11 @@ class Waffle():
         self.feature_analyzer.analyze_feature_model(stages)
         for a, feature in self.namespace.items():
             for sequence_number in feature['ConstraintsValidationOrder']:
+                print('_______________')
                 print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
+                print(feature['Constraints'][sequence_number]['FeaturesToAssign'])
+                print(feature['Constraints'][sequence_number]['Features'])
+                print(feature['Constraints'][sequence_number]['Pattern'])
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
         # metamodel_export(mm, join(this_folder, 'output/metamodel.dot'))

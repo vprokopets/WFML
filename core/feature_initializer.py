@@ -22,15 +22,27 @@ class FeatureInitializer:
             'Constraint': None,
             'HigherOperation': None,
             'Operations': [],
-            'Features': [],
-            'FeaturesToAssign': [],
-            'Expression': ''
+            'Features': {
+                'Fcard': [],
+                'Gcard': [],
+                'Value': []
+            },
+            'FeaturesToAssign': {
+                'Fcard': [],
+                'Gcard': [],
+                'Value': []
+            },
+            'Expression': '',
+            'Pattern': {},
+            'TruthTable': [],
+            'Validated': False
         }
 
         self.top_level_pattern = {
             'Features': {},
             'Constraints': {},
-            'ConstraintsValidationOrder': []
+            'ConstraintsValidationOrder': [],
+            'Validated': False
         }
 
         self.namespace = {}
@@ -192,7 +204,6 @@ class FeatureInitializer:
                 self.define_feature(element)
                 self.namespace.update({str(element.name): copy.copy(self.top_level_feature)})
         logging.info('Feature definition: Finished.')
-        print(f'Dependencies: {self.dependencies}')
         cyckes, sequence = self.api.define_sequence_for_deps(self.dependencies)
         if cyckes != {}:
             raise Exception(f'There are cycled super relations: {cyckes}')
@@ -202,7 +213,6 @@ class FeatureInitializer:
         for feature in copy.copy(sequence):
             if feature not in right_parts:
                 del sequence[sequence.index(feature)]
-        print(f'Sequence: {sequence}')
         logging.info('Feature super relation filling: Starting')
         for tlf in sequence:
             for feature, feature_value in self.namespace[tlf]['Features'].copy().items():
