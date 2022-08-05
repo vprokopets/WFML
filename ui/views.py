@@ -211,14 +211,14 @@ class WizardClass(CookieWizardView):
     def construct_feature_cardinality_form(self, feature_cardinalities):
         for fcard, value in feature_cardinalities.items():
             allowed = None
-            if value['Original'] == '*':
+            if value == '*':
                 allowed = '0..inf'
-            elif value['Original'] == '+':
+            elif value == '+':
                 allowed = '1..inf'
-            elif value['Original'] == '?':
+            elif value == '?':
                 allowed = '0 or 1'
             else:
-                allowed = value['Original']
+                allowed = value
             self.form.fields[f'Fcard.{fcard}'] = forms.IntegerField(
                 label=f'Feature Cardinality for Feature {fcard}. Allowed values: {allowed}'
             )
@@ -234,7 +234,7 @@ class WizardClass(CookieWizardView):
             # Ignore fields are used to ensure correctness of form.
             # CookieWizardView validates each form twice: right after their filling and in the end.
 
-            if value['Original'] == 'xor':
+            if value == 'xor':
                 self.form.fields[f'Gcard.{gcard}'] = forms.ChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
                                                                        widget=forms.RadioSelect)
             else:

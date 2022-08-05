@@ -180,6 +180,7 @@ class prec23(ExpressionElement):
         # Perform IF expression check.
         statement = self.boolify(self.op[1].parse())
         print(f'Statement: {statement}')
+        self.api.exception_flag = False
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
             self.op[2].parse()
@@ -453,7 +454,7 @@ class prec12(ExpressionElement):
         for l, op, r in zip(self.op[0::2], self.op[1::2], self.op[2::2]):
             left, operation, right = l.parse(), op, r.parse()
             left, right = [self.parse_feature(feature) for feature in [left, right]]
-            #logging.info(f'Level 12 comparison {left} {operation} {right} operation')
+            logging.info(f'Level 12 comparison {left} {operation} {right} operation')
             if operation == '<':
                 ret = left < right
             elif operation == '>':
@@ -794,12 +795,13 @@ class term(ExpressionElement):
                 pass
             elif self.api.keyword == 'AllFeatures':
                 op = self.api.get_feature_childrens(op, own_childrens_only=False)
-            elif self.is_feature is True:
+            elif self.is_feature is True and self.is_childs is False:
                 op = self.api.get_feature(op, tmp=self.tmp, mappings=self.mappings)
                 value = op['Value']
                 op['Value'] = self.autoconvert(value) if isinstance(value, str) else value
+                op = op['Value']
             elif self.is_childs is True:
-                op = self.api.get_feature_childrens(op)
+                op = self.api.get_feature_childrens(op, mappings=self.mappings)
         return op
 
     def parse_string(self, for_mapping=False):
@@ -833,6 +835,7 @@ class term(ExpressionElement):
                 if op_type == 'childs':
                     self.is_childs = True
                     op = '.'.join(split[1:])
+                    check = True
                 elif op_type == 'fname':
                     op = '.'.join(split[1:])
                 else:
@@ -1119,7 +1122,7 @@ class Waffle():
         top_level_features[feature][update_type] = new_value[update_type]
         return top_level_features
 
-    def get_feature_childrens(self, feature, own_childrens_only=True, without_mappings=False):
+    def get_feature_childrens(self, feature, own_childrens_only=True, without_mappings=False, mappings=None):
         split = feature.split('.')
         tlf = self.get_original_name(split[0])
         childrens = {}
@@ -1139,9 +1142,26 @@ class Waffle():
             mapped_names = []
             for key in childrens.keys():
                 mapped_names = mapped_names + self.name_builder(key, features_data)
+            filtered_names = []
+            if mappings is not None and mappings != ():
+                feature_mapped = []
+                constructor = []
+                for part in feature.split('.'):
+                    constructor.append(part)
+                    original = '.'.join(constructor)
+                    for mapping in mappings:
+                        if original == re.sub(r'_\d+', '', mapping):
+                            feature_mapped.append(mapping.split('.')[-1])
+                mapping = '.'.join(feature_mapped)
+            else:
+                mapping = feature
+            for name in mapped_names:
+                if mapping in name:
+                    filtered_names.append(name)
         else:
             mapped_names = list(childrens.keys())
-        return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else mapped_names
+            filtered_names = mapped_names
+        return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else filtered_names
 
     def validate_feature(self, tlf):
         if self.debug_mode is True:
@@ -1301,46 +1321,69 @@ class Waffle():
             for constraint in self.namespace[tlf]['Constraints'].values():
                 split = feature.split('.')
                 for part in range(0, len(split)):
-                    check = '.'.join(split[:part])
+                    check = '.'.join(split[:part + 1])
                     if (check in constraint['FeaturesToAssign']['Fcard'] or check in constraint['FeaturesToAssign']['Gcard']) and constraint['Validated'] is False:
                         res = False
         return res
 
     def get_unresolved_cardinalities(self, feature, namespace):
-        fcards, non_initial_fcards = [], []
-        gcards, non_initial_gcards = [], []
+        result = {'Fcard': {}, 'Gcard': {}}
         for key, value in namespace.items():
-            fcard = value['Fcard']['Original']
-            gcard = value['Gcard']['Original']
             if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
-                if len(value['Gcard'].keys()) == 1:
-                    if gcard in ['or', 'mux', 'xor']\
-                            or isinstance(gcard, int)\
-                            or re.match(r'^\d+$', str(gcard)):
-                        gcards.append(key)
-                    elif isinstance(gcard, str):
-                        gcards.append(key)
-                        strspl = gcard.split(',')
-                        for lexem in strspl:
-                            if not (re.match(r'(\d+\.\.)+\d+', lexem) or re.match(r'^\d+$', lexem)):
-                                gcards.remove(key)
-                else:
-                    for card in value['Gcard'].keys():
-                        card_value = value['Gcard'][card]
-                        if card != 'Original' and (card_value in ['or', 'mux', 'xor']
-                                                   or isinstance(card_value, int)
-                                                   or re.match(r'^\d+$', str(card_value))):
-                            non_initial_gcards.append(card)
-                if len(value['Fcard'].keys()) == 1:
-                    if not isinstance(fcard, int) and not isinstance(fcard, list):
-                        fcards.append(key)
-                else:
-                    for card in value['Fcard'].keys():
-                        card_value = value['Fcard'][card]
-                        if card != 'Original' and (not isinstance(card_value, int) and not isinstance(card_value, list)):
-                            non_initial_fcards.append(card)
-        sublayer = self.define_next_sublayer(fcards, gcards, non_initial_fcards, non_initial_gcards, namespace)
-        return sublayer
+                mappings_f = self.name_builder(key, namespace, "Fcard")
+                mappings_g = self.name_builder(key, namespace, "Gcard")
+                for mapping in mappings_f:
+                    fcard, fcard_to_define = self.parse_fcard(mapping, value)
+                    if fcard_to_define is True:
+                        result['Fcard'].update({mapping: fcard})
+                for mapping in mappings_g:
+                    gcard, gcard_to_define = self.parse_gcard(mapping, value)
+                    if gcard_to_define is True and mapping not in result['Fcard'].keys():
+                        result['Gcard'].update({mapping: gcard})
+        if result == {'Fcard': {}, 'Gcard': {}}:
+            result_filtered = None
+        else:
+            result_filtered = {'Fcard': {}, 'Gcard': {}}
+            for card_type in ['Fcard', 'Gcard']:
+                for key, value in result[card_type].items():
+                    other_keys = list(result['Fcard'].keys()) + list(result['Gcard'].keys())
+                    other_keys.remove(key)
+                    if all(x not in key for x in other_keys):
+                        result_filtered[card_type].update({key: value})
+        return result_filtered
+
+    def parse_fcard(self, feature, cards):
+        card_to_define = False
+        if feature in cards['Fcard'].keys():
+            card_value = cards['Fcard'][feature]
+        elif feature not in cards['Fcard'].keys() and feature.split('_')[0] in cards['Fcard'].keys():
+            return None, False
+        else:
+            card_value = cards['Fcard']['Original']
+        try:
+            int(card_value)
+        except Exception:
+            if (not isinstance(card_value, int) and not isinstance(card_value, list)):
+                card_to_define = True
+        return card_value, card_to_define
+
+    def parse_gcard(self, feature, cards):
+        card_to_define = False
+        if feature in cards['Gcard'].keys():
+            card_value = cards['Gcard'][feature]
+        else:
+            card_value = cards['Gcard']['Original']
+        if card_value in ['or', 'mux', 'xor']\
+                or isinstance(card_value, int)\
+                or re.match(r'^\d+$', str(card_value)):
+            card_to_define = True
+        elif isinstance(card_value, str):
+            card_to_define = True
+            strspl = card_value.split(',')
+            for lexem in strspl:
+                if not (re.match(r'(\d+\.\.)+\d+', lexem) or re.match(r'^\d+$', lexem)):
+                    card_to_define = False
+        return card_value, card_to_define
 
     def get_unresolved_features(self, feature, namespace):
         result = {}
@@ -1364,50 +1407,6 @@ class Waffle():
                     result.pop(key, None)
         if result is not None:
             if result == {}:
-                result = None
-        return result
-
-    def define_next_sublayer(self, fcards, gcards, non_initial_fcards, non_initial_gcards, namespace):
-        result = {'Fcard': {}, 'Gcard': {}, 'FcardNI': {}, 'GcardNI': {}}
-        cardinalities = np.unique(fcards + gcards + non_initial_fcards + non_initial_gcards)
-        for card in cardinalities:
-            card_split = card.split('.')
-            find = ''
-            for part in card_split:
-                find = f'{find}.{part}' if find != '' else part
-                if find in fcards:
-                    result['Fcard'].update({find: namespace[find]['Fcard']})
-                    break
-                elif find in gcards:
-                    result['Gcard'].update({find: namespace[find]['Gcard']})
-                    break
-                elif find in non_initial_fcards:
-                    replace = re.sub(r'_\d+', '', find)
-                    result['FcardNI'].update({find: {'Original': namespace[replace]['Fcard'][find]}})
-                    break
-                elif find in non_initial_gcards:
-                    replace = re.sub(r'_\d+', '', find)
-                    result['GcardNI'].update({find: {'Original': namespace[replace]['Gcard'][find]}})
-                    break
-        if result['Fcard'] == {} and result['Gcard'] == {} and result['FcardNI'] == {} and result['GcardNI'] == {}:
-            result = None
-        else:
-            for cardinality_type in ['Fcard', 'Gcard']:
-                for key in list(result[cardinality_type].keys()):
-                    names = self.name_builder(key, namespace, cardinality_type)
-                    if isinstance(names, list) and len(names) >= 1:
-                        for name in names:
-                            result[cardinality_type].update({name: result[cardinality_type][key]})
-                        if (len(names) == 1 and names[0] != key) or len(names) > 1:
-                            result[cardinality_type].pop(key, None)
-                    elif isinstance(names, list) and len(names) == 0:
-                        result[cardinality_type].pop(key, None)
-        if result is not None:
-            if result['FcardNI'] is not None:
-                result['Fcard'].update(result['FcardNI'])
-            if result['GcardNI'] is not None:
-                result['Gcard'].update(result['GcardNI'])
-            if result['Fcard'] == {} and result['Gcard'] == {}:
                 result = None
         return result
 
@@ -1589,7 +1588,7 @@ class Waffle():
         """
         card_type = feature.split('.')[0]
         original_name = feature.split('.', 1)[1]
-        original_card = originals[card_type][original_name]['Original']
+        original_card = originals[card_type][original_name]
         if card_type == 'Fcard':
             x = card_value
         elif card_type == 'Gcard' and isinstance(card_value, str):
