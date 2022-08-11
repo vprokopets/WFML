@@ -36,9 +36,9 @@ class FeatureAnalyzer:
         for assign_constraint in assign_constraints:
             for constraint, value in constraints.items():
                 for assign_feature in constraints[assign_constraint]['FeaturesToAssign']['Value']:
-                    if assign_feature in value['Features']['Value'] and [assign_constraint, constraint] not in dependencies:
+                    if assign_feature in value['Features']['Value'] and [assign_constraint, constraint] not in dependencies \
+                            and assign_constraint != constraint:
                         dependencies.append([assign_constraint, constraint])
-
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()
         if cycles != {}:
@@ -55,7 +55,7 @@ class FeatureAnalyzer:
         for constraint in constraints.keys():
             if constraint not in dependent_constraints:
                 independent_constraints.append(constraint)
-        res = dependent_constraints + independent_constraints
+        res = independent_constraints + dependent_constraints
         if cycle is None:
             self.namespace[tlf]['ConstraintsValidationOrder'] = res
         else:

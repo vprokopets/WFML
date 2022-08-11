@@ -149,13 +149,14 @@ class prec24(ExpressionElement):
     def filter(self, condition, key):
         res = []
         self.api.keyword = 'ReplaceFeature'
-        for item in key:
-            try:
-                self.api.replace_feature = item
+        keys = list(key.keys())
+        for item in keys:
+            mappings = self.api.name_builder(item, self.api.namespace[item.split('.')[0]]["Features"])
+            for feature in mappings:
+                self.api.replace_feature = [re.sub(r'_\d+', '', feature).rsplit('.', 1)[0], feature]
                 if condition.parse() is True:
-                    res.append(item['Value'])
-            except KeyError:
-                pass
+                    res.append(feature)
+
         self.api.keyword = ''
         logging.debug(f'filter Result: {res}')
         return res
@@ -654,6 +655,27 @@ class prec50(ExpressionElement):
                         res.append(value['Value'])
         return res
 
+    def cross_tree_check(self, reverse: bool = False, api=None):
+        self.src = False
+        self.api = api
+        self.constraint_expression = api.constraint_expression
+        if len(self.op) > 1:
+            self.api.obj_id = self.__class__.__name__
+            self.api.constraint['Operations'].append(self.__class__.__name__)
+            if self.api.constraint['HigherOperation'] is None:
+                upd = self.__class__.__name__
+                self.api.constraint.update({'HigherOperation': upd})
+            self.op[1].cross_tree_check(reverse, api)
+            self.api.unique_key = self.op[1].parse()
+            self.api.keyword = 'AllFeatures'
+            self.op[2].cross_tree_check(reverse, api)
+            self.api.keyword = ''
+            self.api.unique_key = ''
+        else:
+            for part in self.op:
+                if isinstance(part, ExpressionElement):
+                    part.cross_tree_check(reverse, api)
+
 
 class prec5(ExpressionElement):
     @property
@@ -795,11 +817,25 @@ class term(ExpressionElement):
                 pass
             elif self.api.keyword == 'AllFeatures':
                 op = self.api.get_feature_childrens(op, own_childrens_only=False)
+            elif self.api.keyword == 'ChildNamespace':
+                op = self.api.get_feature_childrens(op)
             elif self.is_feature is True and self.is_childs is False:
-                op = self.api.get_feature(op, tmp=self.tmp, mappings=self.mappings)
-                value = op['Value']
-                op['Value'] = self.autoconvert(value) if isinstance(value, str) else value
-                op = op['Value']
+                if self.api.keyword == 'ReplaceFeature':
+                    mappings = ['.'.join(op.split('.')[:x]) for x in range(1, len(op.split('.')) + 1)]
+                else:
+                    mappings = self.mappings
+                try:
+                    op = self.api.get_feature(op, tmp=self.tmp, mappings=mappings)
+                    value = op['Value']
+                    op['Value'] = self.autoconvert(value) if isinstance(value, str) else value
+                    op = op['Value']
+                except KeyError:
+                    if self.api.keyword == 'ReplaceFeature':
+                        op = None
+                    else:
+                        msg = f'No such feature {op}'
+                        raise Exception(self.get_error_message(msg))
+
             elif self.is_childs is True:
                 op = self.api.get_feature_childrens(op, mappings=self.mappings)
         return op
@@ -813,7 +849,7 @@ class term(ExpressionElement):
             self.is_feature = False
         else:
             if self.api.keyword == 'ReplaceFeature':
-                op = f'{self.api.replace_feature}.{op}'
+                op = f'{self.api.replace_feature[1]}.{op}'
             elif f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
                 op = f'{self.api.rf}.{op}'
             if re.match(r'\{.+\}', op):
@@ -847,7 +883,10 @@ class term(ExpressionElement):
                     op = '.'.join(split)
                     check = True
             else:
-                op = self.autoconvert(op)
+                if op == 'self':
+                    op = self.api.rf
+                else:
+                    op = self.autoconvert(op)
             self.is_feature = check
         return op
 
@@ -905,7 +944,7 @@ class term(ExpressionElement):
         if isinstance(op, ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
             return op.cross_tree_check(reverse, api)
-        elif type(op) is str and op not in keywords and re.match(r'(\w+\.)+\w+', op):
+        elif type(op) is str and op not in keywords and (re.match(r'(\w+\.)+\w+', op) or op in self.api.namespace.keys()):
             if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2):
                 return
             forbidden_flag = False
@@ -932,18 +971,30 @@ class term(ExpressionElement):
         op = self.parse_string()
         if self.is_feature is True:
             try:
-                self.api.get_feature(op)
-                field_type = op.split('.', 1)[0] if op.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-                feature = op.split('.', 1)[1] if op.split('.', 1)[0] in ('Fcard', 'Gcard') else op
-                if reverse is True:
-                    self.api.constraint['FeaturesToAssign'][field_type].append(feature)
+                if self.api.keyword == 'AllFeatures':
+                    res = []
+                    op = self.api.get_feature_childrens(op, own_childrens_only=False).keys()
+                    for key in op:
+                        if key.split('.')[-1] == self.api.unique_key:
+                            res.append(key)
+                    op = res
                 else:
-                    self.api.constraint['Features'][field_type].append(feature)
-                if self.api.obj_id in [None, 'prec23']:
-                    self.api.obj_id = self.__class__.__name__
-                if self.api.obj_id not in self.api.constraint['Pattern'].keys():
-                    self.api.constraint['Pattern'].update({self.api.obj_id: []})
-                self.api.constraint['Pattern'][self.api.obj_id].append(feature)
+                    op = [op]
+                print('_________________---')
+                print(op)
+                for feature in op:
+                    self.api.get_feature(feature)
+                    field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+                    feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
+                    if reverse is True:
+                        self.api.constraint['FeaturesToAssign'][field_type].append(feature)
+                    else:
+                        self.api.constraint['Features'][field_type].append(feature)
+                    if self.api.obj_id in [None, 'prec23']:
+                        self.api.obj_id = self.__class__.__name__
+                    if self.api.obj_id not in self.api.constraint['Pattern'].keys():
+                        self.api.constraint['Pattern'].update({self.api.obj_id: []})
+                    self.api.constraint['Pattern'][self.api.obj_id].append(feature)
             except KeyError:
                 raise Exception(f'No such feature {op}')
 
@@ -1022,6 +1073,7 @@ class Waffle():
         self.constraint = None
         self.tmp = False
         self.obj_id = None
+        self.unique_key = ''
         self.feature_analyzer = FeatureAnalyzer(self)
         self.feature_initializer = FeatureInitializer(self)
         self.boolean = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'prec11', 'term']
@@ -1089,6 +1141,7 @@ class Waffle():
     def get_feature(self, data, tmp=False, field_type=None, for_mapping=False, mappings=None):
 
         feature = data.split('.', 1)[1] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else data
+        feature = re.sub(r'_\d+', '', feature)
         tlf = feature.split('.', 1)[0]
         if tmp is True:
             features_data = self.last_snap['Namespace'][tlf]['Features']
