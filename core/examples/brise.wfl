@@ -1,41 +1,133 @@
+SamplingStrategy {
+    Region -> string
+    Strategy {
+        Sobol
+        MersenneTwister
+    }
+   [Region in Context.ExperimentRegions.Regions]
+   [size Context.ExperimentRegions.Regions == size unique 'Region' at self]
+}
+
 // -------------------------Parameters---------------------------
 abstract Hyperparameter {
     Type -> predefined
     Region -> predefined
     [Region = TopLevel]
-    [if parent.Type == "Category" then Region = parent else Region = parent.Region]
+    [if parent.Type == "Category" then Region = fname.parent else Region = parent.Region]
+}
+
+abstract Category {
+    Type -> predefined
+    Region -> predefined
+    [Type = "Category"]
+    [Region = parent.Region]
+}
+
+abstract ParentCategoricalHyperparameter : Hyperparameter {
+	Categories -> predefined
+    Default -> string    
+    [Default in Categories]
+	[Type = "ParentCategoricalHyperparameter"]
+    [Categories = (filter childs.self where Type == "Category")]    
 }
 
 abstract CategoricalHyperparameter : Hyperparameter {
     Categories -> predefined
-    Default -> predefined
-    [Default in Categories]
+    Default -> string 
+    [Default in Categories] 
+}
+
+abstract NominalHyperparameter: CategoricalHyperparameter {
+    [Type = "NominalHyperparameter"]
 }
 
 abstract OrdinalHyperparameter: CategoricalHyperparameter {
     [Type = "OrdinalHyperparameter"]
 }
 
+abstract NumericHyperparameter: Hyperparameter
+
+abstract FloatHyperparameter: NumericHyperparameter {
+    Lower -> float
+    Upper -> float
+    Default -> float
+    [Default >= Lower]
+    [Default <= Upper]
+    [Type = "FloatHyperparameter"]
+}
+
+abstract IntegerHyperparameter: NumericHyperparameter {
+    Lower -> integer
+    Upper -> integer
+    Default -> integer
+    [Default >= Lower]
+    [Default <= Upper]
+    [Type = "IntegerHyperparameter"]
+}
+abstract Objective{
+    Name -> predefined
+    DataType -> predefined
+    Minimization -> predefined
+    MinExpectedValue -> predefined
+    MaxExpectedValue -> predefined
+}
+
 Context {
     Experiment {
+        Title -> predefined
+        [Title = 'EnergyConsumption']
+        TaskConfiguration {
+            TaskName -> predefined
+            [TaskName = 'energy_consumption']
+            MaxTimeToRunTask -> predefined
+            [MaxTimeToRunTask = 10]
+
+            Scenario {
+                FromFile {
+                    WsFile -> predefined
+                    [WsFile = 'search_space_96/Radix-500mio_full.csv']
+                }
+            }
+            Objectives {
+                Energy : Objective {
+                    [Name = "energy"]
+                    [DataType = float]
+                    [Minimization = true]
+                    [MinExpectedValue = 0]
+                    [MaxExpectedValue = 150000.0]
+                }
+                Time : Objective {
+                    [Name = "time"]
+                    [DataType = float]
+                    [Minimization = true]
+                    [MinExpectedValue = 0]
+                    [MaxExpectedValue = 150000.0]
+                }
+            }
+        }
+
         SearchSpace {
             Type -> predefined
             Region -> predefined
-            [Type = 'SearchSpace']
-            [Region = TopLevel]
+            [Type = "SearchSpace"]
+            [Region = "TopLevel"]
 
-            frequency: OrdinalHyperparameter {
-                [Categories = {1200.0, 1300.0, 1400.0, 1600.0, 1700.0, 1800.0, 1900.0, 2000.0, 2200.0, 2300.0, 2400.0, 2500.0, 2700.0, 2800.0, 2900.0, 2901.0}]
-                [Default = 2900.0]
-            }
-            threads: OrdinalHyperparameter {
-                [Categories = {1, 2, 4, 8, 16, 32}]
-                [Default = 32]
-            }
+            LLH: ParentCategoricalHyperparameter {
+				jMetalPy_SA: Category {
+					parameter: IntegerHyperparameter
+				}
+				jMetal_ES: Category {
+					parameter: IntegerHyperparameter
+				}
+				jMetalPy_ES: Category {
+					parameter: IntegerHyperparameter
+				}
+			}
         }
     }
-    ExperimentRegions{
+    ExperimentRegions {
         Regions -> predefined
-        [Regions = unique Region at Context]
+        [Regions = unique Region at Context.Experiment.SearchSpace]
+        [fcard.SamplingStrategy = size Regions]
     }
 }

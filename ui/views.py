@@ -14,7 +14,8 @@ from collections import OrderedDict
 
 factory_forms = None
 generated_steps = []
-model_steps = []
+model_stages = []
+init_factory_forms = {}
 tlf = None
 api = Waffle()
 
@@ -134,7 +135,7 @@ class WizardClass(CookieWizardView):
         """
 
         # Create form object.
-        global model_steps, generated_steps, step_current, tlf
+        global model_stages, generated_steps, step_current, tlf, init_factory_forms
         if step is None:
             step = self.steps.current
         step_current = step
@@ -147,10 +148,20 @@ class WizardClass(CookieWizardView):
             for g_s in generated_steps:
                 if int(step) >= int(g_s):
                     extra_step_counter += 1
-            self.current_step = model_steps[int(step) - extra_step_counter]
+            self.current_step = model_stages[int(step) - extra_step_counter]
             tlf = self.current_step
         else:
             self.current_step = tlf
+
+        self.form.stages_number = len(init_factory_forms)
+        init_factory_forms[self.current_step] = int(step_current) + 1
+        prev = list(init_factory_forms.keys()).index(self.current_step) - 1
+        if prev < 0:
+            gap = 0
+        else:
+            gap = int(init_factory_forms[list(init_factory_forms.keys())[prev]])
+        self.form.stage = list(init_factory_forms.keys()).index(self.current_step) + 1
+        self.form.stage_step = int(step_current) - gap + 1
 
         # Fill form label and head.
         self.form.label = self.current_step
@@ -335,13 +346,16 @@ def initial_page(request, *args, **kwargs):
         # Create a form instance and populate it with data from the request (binding):
         form = ModelInputForm(request.POST)
         if form.is_valid():
-            global model_steps, generated_steps, step_current, factory_forms, tlf
+            global model_stages, generated_steps, step_current, factory_forms, tlf, init_factory_forms
             factory_forms, step_current, tlf = None, None, None
-            generated_steps, model_steps = [], []
+            generated_steps, model_stages = [], []
+            init_factory_forms = {}
             model = form.cleaned_data['model_field']
             logging.info(f'Model: {model}')
-            model_steps = api.initialize_product(model)
-            factory_forms = [WizardStepForm for _ in range(len(model_steps))]
+            model_stages = api.initialize_product(model)
+            factory_forms = [WizardStepForm for _ in range(len(model_stages))]
+            for stage in model_stages:
+                init_factory_forms.update({stage: 0})
             return HttpResponseRedirect(reverse('factory_wizard'))
 
     elif request.method == 'GET':

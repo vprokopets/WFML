@@ -14,7 +14,7 @@
 
 {% block content %}
 <main style="margin-left: 1.5%; margin-top: 10px; margin-right: 1.5%;">
-<p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
+<p>Stage {{ wizard.form.stage }} of {{ wizard.form.stages_number }}; Step {{wizard.form.stage_step}}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
 <table>
@@ -63,8 +63,12 @@
 <hr style="margin-top: 40px;">
 </table>
 {% if wizard.steps.prev %}
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.first }}" disabled>{% trans "first step" %}</button>
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}" disabled>{% trans "prev step" %}</button>
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.first }}">
+        first step
+    </button>
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.prev }}">
+        prev step
+    </button> 
 {% endif %}
 <input type="submit" value="{% trans "Next step" %}"/>
 </form>
@@ -99,7 +103,7 @@
       width: 50px;
       height: 20px;
     }
-    input[type=submit], button[type=submit] {
+    input[type=submit], button[type=submit], button[formnovalidate=formnovalidate] {
       margin-top: 20px;
       text-align: center;
       width: 150px;
