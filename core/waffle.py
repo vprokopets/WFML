@@ -1,13 +1,9 @@
-from asyncio import base_futures
 import copy
 import json
 import itertools
 import logging
-import numexpr as ne
 import pandas as pd
 import re
-import pprint
-import numpy as np
 from core.feature_analyzer import FeatureAnalyzer
 from core.feature_initializer import FeatureInitializer
 from collections import defaultdict
@@ -40,6 +36,15 @@ class ExpressionElement(object):
         super(ExpressionElement, self).__init__()
 
     def get_error_message(self, message):
+        """
+        Function to create a formatted error message.
+
+        INPUTS
+        message (type = string): unformatted error message.
+
+        RETURN
+        msg (type = string): formatted error message.
+        """
         ol = self._tx_position_end - self._tx_position
         msg = ''.join((f'{message}.\n',
                        f'Constraint expression: {self.constraint_expression}\n'
@@ -48,6 +53,12 @@ class ExpressionElement(object):
         return msg
 
     def parse(self):
+        """
+        Function to parse an expression string in self object.
+
+        RETURN
+        ret (variable type): result of parsing.
+        """
         if len(self.op) == 1:
             ret = self.op[0].parse()
         else:
@@ -67,14 +78,29 @@ class ExpressionElement(object):
                     ret = True
         return ret
 
-    def update(self):
-        return self.op[0].update()
-
     def check_exception(self, res: bool, err_msg: str):
+        """
+        Function to check should an exception be triggered.
+        It depends on self.exception attribute.
+        It prevents the triggering of an exception for inner boolean expressions while they are a part of another expression.
+
+        INPUTS
+        res (type = bool): check results.
+        err_msg (type = string): an error message that can be displayed
+        """
         if res is False and self.exception is True:
             raise Exception(self.get_error_message(err_msg))
 
     def cross_tree_check(self, reverse: bool = False, api=None):
+        """
+        Function to initialize constraint object attributes.
+        Also, it detects any features that are present in other tree branches.
+        As a result, a connection (own feature - another branch feature) is assigned.
+
+        INPUTS
+        reverse (type = bool): the flag that reverses the connection direction.
+        api (type = Waffle() object): Waffle API object.
+        """
         self.src = False
         self.api = api
         self.constraint_expression = api.constraint_expression
@@ -90,6 +116,12 @@ class ExpressionElement(object):
                 part.cross_tree_check(reverse, api)
 
     def get_mappings(self):
+        """
+        Function to get a mapped feature clone according to the mapping table.
+
+        RETURN
+        result (type = string): mapped feature clone.
+        """
         result = {}
         for part in self.op:
             if isinstance(part, ExpressionElement):
@@ -99,12 +131,21 @@ class ExpressionElement(object):
         return result
 
     def set_mappings(self, mappings):
+        """
+        Function to set the mapping table.
+
+        INPUTS
+        mappings (type = dict): features mapping table.
+        """
         self.mappings = mappings
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.set_mappings(mappings)
 
     def check_cardinalities(self):
+        """
+        Function to check whether current cardinalities are applicable.
+        """
         # TODO: Update cardinality rules for each prec. class (currently active for prec12 only)
         if len(self.op) > 1:
             res = self.get_mappings()
@@ -117,18 +158,41 @@ class ExpressionElement(object):
                 part.check_cardinalities()
 
     def boolify(self, feature):
+        """
+        Function to transform feature to boolean type.
+        If the input feature is not boolean, then we show the presence of this feature.
+
+        INPUTS
+        feature (type = any): feature to check
+
+        RETURN
+        result (type = bool): the result of transformation.
+        """
         if not isinstance(feature, bool):
             return feature != {'Original': None}
         else:
             return feature
 
     def parse_feature(self, feature, type='Value'):
+        """
+        Function to get the value of some type from the feature's metadata.
+
+        INPUTS
+        feature (type = any): feature to check.
+        type (type = any): feature's metadata type.
+
+        RETURN
+        result (variable type): the result of the check.
+        """
         if isinstance(feature, dict) and list(feature.keys()) == ['Feature', 'Value', 'Active', 'Mapping']:
             return feature[type]
         else:
             return feature
 
     def define_truth(self):
+        """
+        Function to define the truth table for boolean expression.
+        """
         if len(self.op) > 1:
             self.exception = False
             if self.__class__.__name__ == self.api.constraint['HigherOperation']:
@@ -140,6 +204,13 @@ class ExpressionElement(object):
 class prec24(ExpressionElement):
     @property
     def value(self):
+        """
+        prec24 class performs filter operation.
+
+        RETURN
+        ret (variable type): previous level object if no prec24 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         logging.info(f'Level 24 Operation filter x where y.')
         self.api.keyword = 'ChildNamespace'
         key, condition = self.op[1].parse(), self.op[2]
@@ -147,6 +218,16 @@ class prec24(ExpressionElement):
         return self.filter(condition, key)
 
     def filter(self, condition, key):
+        """
+        Function to filter features by constraint.
+
+        INPUTS
+        condition (type = ExpressionElement): constraint to check.
+        key (type = dict): feature's namespace.
+
+        RETURN
+        res (type = list): list of filtered features.
+        """
         res = []
         self.api.keyword = 'ReplaceFeature'
         keys = list(key.keys())
@@ -634,6 +715,13 @@ class prec6(ExpressionElement):
 class prec50(ExpressionElement):
     @property
     def value(self):
+        """
+        prec50 class performs unique x in y operation.
+
+        RETURN
+        ret (variable type): previous level object if no prec50 operations are not presented in constraint
+                            operation result in opposite case.
+        """
         self.api.keyword = 'AllFeatures'
         right = self.op[2].parse()
         self.api.keyword = ''
@@ -644,6 +732,16 @@ class prec50(ExpressionElement):
         return ret
 
     def find_unique(self, input, key, res=None):
+        """
+        Function to find all unique elements in list (no repeats).
+
+        INPUTS
+        input (type = dict): feature's namespace.
+        key (type = dict): keyword to filter.
+
+        RETURN
+        res (type = list): list of filtered features.
+        """
         if res is None:
             res = []
         for feature, namespace in input.items():
@@ -841,6 +939,15 @@ class term(ExpressionElement):
         return op
 
     def parse_string(self, for_mapping=False):
+        """
+        Function to parse the string for some keywords and do appropriate replacements.
+
+        INPUTS
+        for_mapping (type = bool): keyword to capitalize world.
+
+        RETURN
+        op (type = str): modified string.
+        """
         op = self.op
         check = False
         self.is_childs = False
@@ -889,6 +996,43 @@ class term(ExpressionElement):
                     op = self.autoconvert(op)
             self.is_feature = check
         return op
+
+    def constraint_sequence_check(self, reverse):
+        """
+        Function to define constraint validation sequence depending on cross-tree features.
+
+        INPUTS
+        reverse (type = bool): the flag that defines features to write value instead of default read.
+        """
+        op = self.parse_string()
+        if self.is_feature is True:
+            try:
+                if self.api.keyword == 'AllFeatures':
+                    res = []
+                    op = self.api.get_feature_childrens(op, own_childrens_only=False).keys()
+                    for key in op:
+                        if key.split('.')[-1] == self.api.unique_key:
+                            res.append(key)
+                    op = res
+                else:
+                    op = [op]
+                print('_________________---')
+                print(op)
+                for feature in op:
+                    self.api.get_feature(feature)
+                    field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+                    feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
+                    if reverse is True:
+                        self.api.constraint['FeaturesToAssign'][field_type].append(feature)
+                    else:
+                        self.api.constraint['Features'][field_type].append(feature)
+                    if self.api.obj_id in [None, 'prec23']:
+                        self.api.obj_id = self.__class__.__name__
+                    if self.api.obj_id not in self.api.constraint['Pattern'].keys():
+                        self.api.constraint['Pattern'].update({self.api.obj_id: []})
+                    self.api.constraint['Pattern'][self.api.obj_id].append(feature)
+            except KeyError:
+                raise Exception(f'No such feature {op}')
 
     def parse(self):
         if self.api.mode != 'Validate':
@@ -967,37 +1111,6 @@ class term(ExpressionElement):
             except Exception:
                 raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
 
-    def constraint_sequence_check(self, reverse):
-        op = self.parse_string()
-        if self.is_feature is True:
-            try:
-                if self.api.keyword == 'AllFeatures':
-                    res = []
-                    op = self.api.get_feature_childrens(op, own_childrens_only=False).keys()
-                    for key in op:
-                        if key.split('.')[-1] == self.api.unique_key:
-                            res.append(key)
-                    op = res
-                else:
-                    op = [op]
-                print('_________________---')
-                print(op)
-                for feature in op:
-                    self.api.get_feature(feature)
-                    field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-                    feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
-                    if reverse is True:
-                        self.api.constraint['FeaturesToAssign'][field_type].append(feature)
-                    else:
-                        self.api.constraint['Features'][field_type].append(feature)
-                    if self.api.obj_id in [None, 'prec23']:
-                        self.api.obj_id = self.__class__.__name__
-                    if self.api.obj_id not in self.api.constraint['Pattern'].keys():
-                        self.api.constraint['Pattern'].update({self.api.obj_id: []})
-                    self.api.constraint['Pattern'][self.api.obj_id].append(feature)
-            except KeyError:
-                raise Exception(f'No such feature {op}')
-
     def boolify(self, string):
         if string == 'True':
             return True
@@ -1021,9 +1134,25 @@ class term(ExpressionElement):
 class Waffle():
 
     def get_stage_snap(self, step):
+        """
+        Function to read stage snapshot by keyword.
+
+        INPUTS
+        step (type = str): step's keyword.
+
+        RETURN
+        Stage snapshot.
+        """
         return self.stage_snap[step]
 
     def save_stage_snap(self, step, data):
+        """
+        Function to read stage snapshot by keyword.
+
+        INPUTS
+        step (type = str): step's keyword.
+        data (type = dict): fields for this step
+        """
         self.last_snap = {
             'Namespace': copy.copy(self.namespace),
             'Fields': data
@@ -1054,6 +1183,12 @@ class Waffle():
         return open('./core/output/configuration.json', 'r')
 
     def dot_to_json(self):
+        """
+        Function to transform dot-split name to JSON tree-like structure.
+
+        RETURN
+        output (type = dict): dict object that represents JSON string.
+        """
         output = {}
 
         for tlf in self.namespace.keys():
@@ -1066,6 +1201,9 @@ class Waffle():
         return output
 
     def reset(self):
+        """
+        Function to reset all attributes of Waffle class object.
+        """
         self.namespace, self.cycles, self.stage_snap, self.last_snap, self.req_card = {}, {}, {}, {}, {}
         self.description, self.model, self.tlf, self.rf, self.keyword, self.replace_feature = '', '', '', '', '', ''
         self.cross_tree_dependencies, self.empty_stages, self.requirements = [], [], {}
@@ -1088,6 +1226,15 @@ class Waffle():
         }
 
     def get_original_name(self, name):
+        """
+        Function to clear feature's name from suffixes.
+
+        INPUTS
+        name (type = str): feature's name.
+
+        RETURN
+        transformed name.
+        """
         split = name.split('.')
         split = split[1:] if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard'] else split
         construct = []
@@ -1096,6 +1243,14 @@ class Waffle():
         return '.'.join(construct)
 
     def update_namespace(self, data, mappings=None, tmp=False):
+        """
+        Function to update namespace with new data.
+
+        INPUTS
+        data (type = dict): data updated.
+        mappings (type = list): current mappings list.
+        tmp (type = bool): the flag that defines the source to update.
+        """
         for key, value in data.items():
             field_type = key.split('.', 1)[0] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
             feature = key.split('.', 1)[1] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else key
@@ -1139,7 +1294,19 @@ class Waffle():
                                         features_data[subfeature]['Active'][mapping] = False
 
     def get_feature(self, data, tmp=False, field_type=None, for_mapping=False, mappings=None):
+        """
+        Function to update namespace with new data.
 
+        INPUTS
+        data (type = dict): feature name.
+        tmp (type = bool): the flag that defines the source to read from.
+        field_type (type = str): field to read from (metadata: value, fcard, etc.).
+        for_mapping (type = bool): the flag that defines that we must return all mappings for a feature.
+        mappings (type = list): current mappings list.
+
+        RETURN
+        dict with the feature's data or all mapping names for this feature
+        """
         feature = data.split('.', 1)[1] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else data
         feature = re.sub(r'_\d+', '', feature)
         tlf = feature.split('.', 1)[0]
@@ -1170,12 +1337,19 @@ class Waffle():
                 'Active': features_data[feature]['Active'][mapping] if mappings is not None and mappings != () else features_data[feature]['Active']['Original'],
                 'Mapping': mapping}
 
-    def update_feature(self, feature, new_value, top_level_features):
-        update_type = new_value.keys()[0]
-        top_level_features[feature][update_type] = new_value[update_type]
-        return top_level_features
-
     def get_feature_childrens(self, feature, own_childrens_only=True, without_mappings=False, mappings=None):
+        """
+        Function to update namespace with new data.
+
+        INPUTS
+        feature (type = dict): feature name.
+        own_childrens_only (type = bool): the flag that forbids getting children of children
+        without_mappings (type = str): the flag that forbids getting mapped features
+        mappings (type = list): current mappings list.
+
+        RETURN
+        dict/list with features children
+        """
         split = feature.split('.')
         tlf = self.get_original_name(split[0])
         childrens = {}
@@ -1217,6 +1391,15 @@ class Waffle():
         return childrens if self.keyword in ['ChildNamespace', 'AllFeatures'] else filtered_names
 
     def validate_feature(self, tlf):
+        """
+        Function to validate all feature's constraints.
+
+        INPUTS
+        tlf (type = str): the name of top-level feature to validate.
+
+        RETURN
+        True if all constraints are valid
+        """
         if self.debug_mode is True:
             self.validation_pipeline(tlf)
         else:
@@ -1228,6 +1411,12 @@ class Waffle():
         return True
 
     def validation_pipeline(self, tlf):
+        """
+        Function to validate all feature's constraints.
+
+        INPUTS
+        tlf (type = str): the name of top-level feature to validate.
+        """
         for feature_to_validate in self.namespace[tlf]['ConstraintsValidationOrder']:
             constraint = self.namespace[tlf]['Constraints'][feature_to_validate]
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
@@ -1248,6 +1437,14 @@ class Waffle():
                 constraint['Validated'] = True
 
     def map_and_parse(self, mappings, constraint):
+        """
+        Function to validate all feature constraints.
+        It maps every constraint accordingly to mappings of all the constraints' features.
+
+        INPUTS
+        mappings (type = dict): dict of all mappings.
+        constraint (type = ExpressionElement): constraint object.
+        """
         done = False
         combinations = itertools.product(*mappings.values())
         filtered_combinations = []
@@ -1271,6 +1468,15 @@ class Waffle():
             constraint.parse()
 
     def get_error_message(self, message):
+        """
+        Function to create a formatted error message.
+
+        INPUTS
+        message (type = string): unformatted error message.
+
+        RETURN
+        msg (type = string): formatted error message.
+        """
         ol = self._tx_position_end - self._tx_position
         msg = ''.join((f'{message}.\n',
                        f'Error position: Line {get_location(self)["line"]},',
@@ -1278,6 +1484,17 @@ class Waffle():
         return msg
 
     def name_builder(self, feature, namespace, cardinality_type=None):
+        """
+        Function to construct full feature name according to all cardinalities in the path.
+
+        INPUTS
+        feature (type = str): feature's name.
+        namespace (type = dict): entire namespace.
+        cardinality_type (type = str): specify field type.
+
+        RETURN
+        Feature's transformed name
+        """
         feature_name = ''
         feature_list = {}
         feature_split = feature.split('.')
@@ -1344,6 +1561,16 @@ class Waffle():
         return feature_list[feature_split[-1]]
 
     def filter_gcards(self, gcard, features):
+        """
+        Function to filter features according to group cardinalities.
+
+        INPUTS
+        gcard (type = dict): dict with all group cardinalities.
+        features (type = dict): entire namespace.
+
+        RETURN
+        List of filtered features
+        """
         gcard_features = []
 
         for key, value in gcard.items():
@@ -1369,6 +1596,15 @@ class Waffle():
         return features
 
     def are_cardinalities_specified(self, feature):
+        """
+        Function to check whether cardinalities are specified.
+
+        INPUTS
+        feature (type = str): feature to check.
+
+        RETURN
+        res (type = bool): boolean that represents result
+        """
         res = True
         for tlf in self.namespace.keys():
             for constraint in self.namespace[tlf]['Constraints'].values():
@@ -1380,6 +1616,16 @@ class Waffle():
         return res
 
     def get_unresolved_cardinalities(self, feature, namespace):
+        """
+        Function to get a list of cardinalities that are not specified yet.
+
+        INPUTS
+        feature (type = dict): top-level feature to get cardinalities.
+        namespace (type = dict): entire namespace.
+
+        RETURN
+        List of not specified cardinalities
+        """
         result = {'Fcard': {}, 'Gcard': {}}
         for key, value in namespace.items():
             if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
@@ -1406,6 +1652,16 @@ class Waffle():
         return result_filtered
 
     def parse_fcard(self, feature, cards):
+        """
+        Function to get a list of cardinalities that are not specified yet.
+
+        INPUTS
+        feature (type = dict): top-level feature to get cardinalities.
+        namespace (type = dict): entire namespace.
+
+        RETURN
+        List of not specified cardinalities
+        """
         card_to_define = False
         if feature in cards['Fcard'].keys():
             card_value = cards['Fcard'][feature]
@@ -1421,6 +1677,17 @@ class Waffle():
         return card_value, card_to_define
 
     def parse_gcard(self, feature, cards):
+        """
+        Function to parse an initial group cardinality value.
+
+        INPUTS
+        feature (type = dict): top-level feature to get cardinalities.
+        cards (type = dict): cardinalities of a feature.
+
+        RETURN
+        card_value (type = dict): transformed cardinality value.
+        card_to_define (type = dict): flag defines that the cardinality value was transformed successfully.
+        """
         card_to_define = False
         if feature in cards['Gcard'].keys():
             card_value = cards['Gcard'][feature]
@@ -1439,6 +1706,16 @@ class Waffle():
         return card_value, card_to_define
 
     def get_unresolved_features(self, feature, namespace):
+        """
+        Function to get a list of features that are not specified yet.
+
+        INPUTS
+        feature (type = dict): top-level feature to get features.
+        namespace (type = dict): entire namespace.
+
+        RETURN
+        List of not specified features
+        """
         result = {}
         for key, value in namespace.items():
             if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
@@ -1464,6 +1741,15 @@ class Waffle():
         return result
 
     def define_layer(self, top_level_feature):
+        """
+        Function to define a sub-step for top level feature.
+
+        INPUTS
+        top_level_feature (type = str): top-level feature to define a sub-step.
+
+        RETURN
+        sublayer (type = dict/str): sub-step.
+        """
         namespace = self.namespace[top_level_feature]['Features']
 
         sublayer = self.get_unresolved_cardinalities(top_level_feature, namespace)
@@ -1477,6 +1763,9 @@ class Waffle():
         return sublayer
 
     def cross_tree_dependencies_handler(self):
+        """
+        Function to define all cross-tree dependencies.
+        """
         logging.info('Detecting cross-tree constraints.')
         self.cross_tree_dependencies = []
 
@@ -1499,6 +1788,12 @@ class Waffle():
         logging.info('Processing cross-tree dependencies: Done')
 
     def define_conditions_set(self, constraint):
+        """
+        Function to define a truth table for specified constraint.
+
+        INPUTS
+        constraint (type = ExpressionElement): constraint object.
+        """
         base = []
         self.requirements.update({constraint['Expression']: []})
         for feature_type in ['Features', 'FeaturesToAssign']:
@@ -1534,6 +1829,16 @@ class Waffle():
         constraint['TruthTable'] = unique
 
     def define_sequence_for_deps(self, dependencies):
+        """
+        Function to define a sequence of execution by topological sorting.
+
+        INPUTS
+        dependencies (type = list): list of dependencies.
+
+        RETURN
+        cycles (type = dict): dict of cycles and elements it contains.
+        res (type = list): sequence of dependencies elements to execute.
+        """
         # Create networkx graph object
         G = nx.DiGraph(dependencies)
         index = 0

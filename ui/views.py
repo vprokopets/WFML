@@ -178,6 +178,12 @@ class WizardClass(CookieWizardView):
         return self.form
 
     def construct_step_form(self, tlf):
+        """
+        Function to define a fields a wizard form.
+
+        INPUTS
+        tlf (type = string): name of top-level feature.
+        """
         snap_name = f'{tlf}_{step_current}' if step_current in generated_steps else tlf
         if snap_name not in api.stage_snap.keys():
             data = api.define_layer(tlf)
@@ -220,6 +226,12 @@ class WizardClass(CookieWizardView):
                 self.form.fields = OrderedDict(sorted(self.form.fields.items()))
 
     def construct_feature_cardinality_form(self, feature_cardinalities):
+        """
+        Function to define a feature cardinality fields a wizard form.
+
+        INPUTS
+        feature_cardinalities (type = dict): dict with all feature cardinalities.
+        """
         for fcard, value in feature_cardinalities.items():
             allowed = None
             if value == '*':
@@ -235,6 +247,12 @@ class WizardClass(CookieWizardView):
             )
 
     def construct_group_cardinality_form(self, group_cardinalities):
+        """
+        Function to define a group cardinality fields a wizard form.
+
+        INPUTS
+        group_cardinalities (type = dict): dict with all group cardinalities.
+        """
         # Create fields for each gcard record.
         for gcard, value in group_cardinalities.items():
             # Create appropriate fields in form.

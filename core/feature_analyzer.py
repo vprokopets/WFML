@@ -7,6 +7,13 @@ class FeatureAnalyzer:
         self.api = api
 
     def analyze_feature_model(self, stages):
+        """
+        The function contains calls to perform several analyses of the feature model.
+
+        INPUTS
+        stages (type = list): list of top-level features for analysis.
+
+        """
         self.namespace = self.api.namespace
         self.cardinalities_analysis()
         self.type_analysis()
@@ -18,6 +25,15 @@ class FeatureAnalyzer:
                 self.analyze_feature(tlf=stage)
 
     def analyze_feature(self, tlf=None, cycle=None):
+        """
+        Preprocessing function for constraints sequence definition of some top-level feature
+
+        INPUTS
+        ! Please note that only one of the inputs can be used.
+        tlf (type = string): name of the top-level feature.
+        cycle (type = list): list of all top-level features in the cycle.
+
+        """
         temp = {}
         if cycle is not None:
             for feature in cycle:
@@ -26,9 +42,18 @@ class FeatureAnalyzer:
         else:
             temp = self.namespace[tlf]['Constraints']
         self.constraints_sequence_definition(constraints=temp, tlf=tlf, cycle=cycle)
-        # self.define_conditions_set(constraints=temp, tlf=tlf, cycle=cycle)
 
     def constraints_sequence_definition(self, constraints, tlf=None, cycle=None):
+        """
+        Function to define the sequence of top-level feature constraints validation.
+
+        INPUTS
+        ! Please note that only one of the inputs can be used.
+        constraints (type = dict): dict that contains constraint objects.
+        tlf (type = string): name of the top-level feature.
+        cycle (type = list): list of all top-level features in the cycle.
+
+        """
         assign_constraints, dependencies = [], []
         for constraint, value in constraints.items():
             if 'prec10' in value['Operations']:
@@ -67,6 +92,10 @@ class FeatureAnalyzer:
                 self.namespace[sub_tlf]['ConstraintsValidationOrder'] = subres
 
     def cardinalities_analysis(self):
+        """
+        Function to check the consistency of feature cardinalities.
+
+        """
         self.validity = {}
         self.inconsistencies = {}
         expressions = list(self.api.requirements.keys())
@@ -99,6 +128,10 @@ class FeatureAnalyzer:
             raise Exception(msg)
 
     def type_analysis(self):
+        """
+        Function to check the consistency of feature types.
+
+        """
         for tlf in self.namespace.keys():
             for feature, value in self.namespace[tlf]['Features'].items():
                 if value['Type'] == 'predefined' and self.namespace[tlf]['Features'][tlf]['Abstract'] is None:
@@ -109,6 +142,15 @@ class FeatureAnalyzer:
                         raise Exception(msg)
 
     def search_for_constraint_assignment(self, feature):
+        """
+        Function to check the presence of some feature in any assignment constraint.
+
+        INPUTS
+        feature (type = string): feature name.
+
+        RETURN
+        ret (type = bool): the result of the check
+        """
         ret = False
         for tlf in self.namespace.values():
             for constraint in tlf['Constraints'].values():

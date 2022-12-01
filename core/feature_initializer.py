@@ -60,6 +60,16 @@ class FeatureInitializer:
         return obj.__class__.__name__
 
     def initial_type_reference_check(self, reference):
+        """
+        Function to check reference value for validity.
+
+        INPUTS
+        reference (type = string): reference to check for validity.
+
+        RETURN
+        reference (type = string): if the reference value is valid.
+        Exception - if not
+        """
         allowed_types = ['integer', 'float', 'string', 'predefined', 'array', 'integerArray', 'floatArray', 'boolean']
         if reference in allowed_types:
             return reference
@@ -69,6 +79,16 @@ class FeatureInitializer:
             raise Exception(msg)
 
     def generate_feature_tmpl(self, feature, full_name):
+        """
+        Function to generate a dict template for a feature and fill it with default values.
+
+        INPUTS
+        feature (type = textX generated class): feature's object.
+        full_name (type = string): full name of the feature that represents the tree hierarchy.
+
+        RETURN
+        feature_tmpl (type = dict): feature's dict template
+        """
         feature_tmpl = copy.deepcopy(self.feature_pattern)
         feature_tmpl['Type'] = self.initial_type_reference_check(
             feature.type.rsplit("->")[-1]) if feature.type is not None else None
@@ -87,6 +107,18 @@ class FeatureInitializer:
         return feature_tmpl
 
     def analyze_super_reference_relations(self, feature, full_name):
+        """
+        Function to analyse parents and reference relations of the feature.
+
+        INPUTS
+        feature (type = textX generated class): feature's object.
+        full_name (type = string): full name of the feature that represents the tree hierarchy.
+
+        RETURN
+        super (type = string): feature's parent relation
+        reference (type = string): feature's reference relation
+        deep (type = bool): flag that feature has deep reference
+        """
         super, reference, deep = None, None, None
         if feature.super is not None:
             super = feature.super.replace(':', '')
@@ -136,6 +168,14 @@ class FeatureInitializer:
         logging.info(f'{"Top-level " if parent_name is None else ""}Feature {feature_name} was defined.')
 
     def define_constraint(self, constraint, related_feature):
+        """
+        Function to define constraints in dict format.
+
+        INPUTS
+        constraint (type = textX generated class): constraint's object.
+        related_feature (type = string): full name of the feature to which this constraint belongs.
+
+        """
         self.constraints_counter += 1
         pattern = copy.deepcopy(self.constraint_pattern)
         pattern.update({
@@ -147,6 +187,14 @@ class FeatureInitializer:
         })
 
     def define_super_relations(self, top_level_feature, feature_name, super_feature_name):
+        """
+        Function to inherit all apropriate parent's subfeatures and constraints for some feature.
+
+        INPUTS
+        top_level_feature (type = string): the name of the top level feature.
+        feature_name (type = string): full name of the feature to inherit it's parent subfeatures and constraints.
+        super_feature_name (type = string): the name of parent's feature
+        """
         try:
             tlf_value = self.namespace[super_feature_name]
             if tlf_value['Features'][super_feature_name]['Abstract'] is None:
@@ -170,6 +218,14 @@ class FeatureInitializer:
             self.namespace[top_level_feature]['Constraints'].update({constraints_count + constraint: inh_constraint})
 
     def define_references(self, top_level_feature, feature_name, reference_features):
+        """
+        Function to inherit all apropriate referenced feature subfeatures and constraints for some feature.
+
+        INPUTS
+        top_level_feature (type = string): the name of the top level feature.
+        feature_name (type = string): full name of the feature to inherit it's parent subfeatures and constraints.
+        super_feature_name (type = string): the name of referenced feature
+        """
         for tlf, tlf_value in self.namespace.items():
             if tlf_value['Features'][tlf]['Abstract'] is not None and \
                     tlf_value['Features'][tlf]['SuperFeature'] in reference_features:
@@ -192,6 +248,10 @@ class FeatureInitializer:
     def initialize_namespace(self, model):
         """
         Calls feature definition function for all features in the model.
+
+        INPUTS
+        model (type = textX generated class): model's object.
+
         """
         logging.info('Feature definition: Starting.')
         self.namespace = {}
