@@ -169,7 +169,7 @@ class ExpressionElement(object):
         result (type = bool): the result of transformation.
         """
         if not isinstance(feature, bool):
-            return feature != {'Original': None}
+            return feature != {'Original': None} and feature is not None
         else:
             return feature
 
@@ -572,6 +572,10 @@ class prec11(ExpressionElement):
                             operation result in opposite case.
         """
         left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
+        print('________________')
+        print(left)
+        print(right)
+        print(self.op[2].parse())
         if operation == 'requires':
             ret = not left or (left and right)
             self.check_exception(ret, 'Required feature does not exist')
