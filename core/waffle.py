@@ -1429,7 +1429,7 @@ class Waffle():
         for feature_to_validate in self.namespace[tlf]['ConstraintsValidationOrder']:
             constraint = self.namespace[tlf]['Constraints'][feature_to_validate]
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
-            if isinstance(check, list) and len(check) > 0 and self.are_cardinalities_specified(constraint['RelatedFeature']) is True and constraint['Validated'] is False:
+            if isinstance(check, list) and len(check) > 0 and self.are_cardinalities_specified_in_constraints(constraint['RelatedFeature']) is True and constraint['Validated'] is False and self.are_cardinalities_specified(constraint['RelatedFeature']):
                 self.tlf = tlf
                 self.rf = constraint['RelatedFeature']
                 self.exception_flag = False
@@ -1604,7 +1604,7 @@ class Waffle():
             features = gcard_features
         return features
 
-    def are_cardinalities_specified(self, feature):
+    def are_cardinalities_specified_in_constraints(self, feature):
         """
         Function to check whether cardinalities are specified.
 
@@ -1624,6 +1624,29 @@ class Waffle():
                         res = False
         return res
 
+    def are_cardinalities_specified(self, feature):
+        """
+        Function to check whether cardinalities are specified.
+
+        INPUTS
+        feature (type = str): feature to check.
+
+        RETURN
+        res (type = bool): boolean that represents result
+        """
+        res = True
+        namespace = self.namespace[feature.split('.')[0]]['Features']
+        sublayer = self.get_unresolved_cardinalities(feature.split('.')[0], namespace)
+        for tlf in self.namespace.keys():
+            for constraint in self.namespace[tlf]['Constraints'].values():
+                split = feature.split('.')
+                for part in range(0, len(split)):
+                    check = '.'.join(split[:part + 1])
+                    if sublayer is not None:
+                        if check in sublayer['Fcard'].keys() or check in sublayer['Gcard'].keys():
+                            res = False
+        return res
+
     def get_unresolved_cardinalities(self, feature, namespace):
         """
         Function to get a list of cardinalities that are not specified yet.
@@ -1637,7 +1660,7 @@ class Waffle():
         """
         result = {'Fcard': {}, 'Gcard': {}}
         for key, value in namespace.items():
-            if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
+            if key.split('.')[0] == feature and self.are_cardinalities_specified_in_constraints(key) is True:
                 mappings_f = self.name_builder(key, namespace, "Fcard")
                 mappings_g = self.name_builder(key, namespace, "Gcard")
                 for mapping in mappings_f:
@@ -1727,7 +1750,7 @@ class Waffle():
         """
         result = {}
         for key, value in namespace.items():
-            if key.split('.')[0] == feature and self.are_cardinalities_specified(key) is True:
+            if key.split('.')[0] == feature and self.are_cardinalities_specified_in_constraints(key) is True:
                 if value['Type'] is not None and \
                         value['Value']['Original'] is None and \
                         len((value['Value'].keys())) == 1:
