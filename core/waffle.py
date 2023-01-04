@@ -1291,11 +1291,16 @@ class Waffle():
                         if card not in ['xor', 'or'] and not isinstance(card, int):
                             if tmp is True:
                                 raise Exception('Only -xor and -or group cardinalities are allowed to set via constraints.')
-                            for mapping in features_data[subfeature]['Active'].keys():
-                                if f'{feature}.' in mapping:
-                                    if f'{feature}.{card.split(".")[-1]}.' not in mapping \
-                                            and f'{feature}.{card.split(".")[-1]}_' not in mapping:
-                                        features_data[subfeature]['Active'][mapping] = False
+
+                    for mapping in features_data[subfeature]['Active'].keys():
+                        if f'{feature}.' in mapping:
+                            or_flag = False
+                            for card in value:
+                                if f'{feature}.{card.split(".")[-1]}.' in mapping \
+                                        or f'{feature}.{card.split(".")[-1]}_' in mapping:
+                                    or_flag = True
+                            if or_flag is False:
+                                features_data[subfeature]['Active'][mapping] = False
 
     def get_feature(self, data, tmp=False, field_type=None, for_mapping=False, mappings=None):
         """

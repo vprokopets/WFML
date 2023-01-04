@@ -219,11 +219,11 @@ class FeatureInitializer:
 
     def define_references(self, top_level_feature, feature_name, reference_features):
         """
-        Function to inherit all apropriate referenced feature subfeatures and constraints for some feature.
+        Function to inherit all appropriate referenced feature subfeatures and constraints for some feature.
 
         INPUTS
-        top_level_feature (type = string): the name of the top level feature.
-        feature_name (type = string): full name of the feature to inherit it's parent subfeatures and constraints.
+        top_level_feature (type = textX generated class): the name of the top-level feature.
+        feature_name (type = string): full name of the feature to inherit its parent subfeatures and constraints.
         super_feature_name (type = string): the name of referenced feature
         """
         for tlf, tlf_value in self.namespace.items():
