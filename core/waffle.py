@@ -169,7 +169,11 @@ class ExpressionElement(object):
         result (type = bool): the result of transformation.
         """
         if not isinstance(feature, bool):
-            return feature != {'Original': None} and feature is not None
+            try:
+                feature_metadata = self.api.get_feature(feature)
+                return feature_metadata['Active']
+            except Exception:
+                return feature != {'Original': None} and feature is not None
         else:
             return feature
 
@@ -928,7 +932,7 @@ class term(ExpressionElement):
                     mappings = self.mappings
                 try:
                     op = self.api.get_feature(op, tmp=self.tmp, mappings=mappings)
-                    value = op['Value']
+                    value = op['Value'] if op['Mapping'] != 'Original' else op['Feature']
                     op['Value'] = self.autoconvert(value) if isinstance(value, str) else value
                     op = op['Value']
                 except KeyError:
@@ -1291,13 +1295,16 @@ class Waffle():
                         if card not in ['xor', 'or'] and not isinstance(card, int):
                             if tmp is True:
                                 raise Exception('Only -xor and -or group cardinalities are allowed to set via constraints.')
-
                     for mapping in features_data[subfeature]['Active'].keys():
-                        if f'{feature}.' in mapping:
+                        if len(features_data[subfeature]['Active'].keys()) == 1 and 'Original' in features_data[subfeature]['Active'].keys():
+                            key = subfeature
+                        else:
+                            key = mapping
+                        if f'{feature}.' in key:
                             or_flag = False
                             for card in value:
-                                if f'{feature}.{card.split(".")[-1]}.' in mapping \
-                                        or f'{feature}.{card.split(".")[-1]}_' in mapping:
+                                if f'{feature}.{card.split(".")[-1]}' in key \
+                                        or f'{feature}.{card.split(".")[-1]}_' in key:
                                     or_flag = True
                             if or_flag is False:
                                 features_data[subfeature]['Active'][mapping] = False
@@ -1339,6 +1346,8 @@ class Waffle():
                         feature_mapped.append(mapping.split('.')[-1])
             mapping = '.'.join(feature_mapped)
         else:
+            mapping = 'Original'
+        if mapping not in features_data[feature][field_type].keys():
             mapping = 'Original'
         value = features_data[feature][field_type][mapping]
         return {'Feature': feature,
@@ -2037,7 +2046,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = False
+        self.debug_mode = True
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
