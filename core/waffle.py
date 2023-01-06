@@ -1200,6 +1200,7 @@ class Waffle():
         for tlf in self.namespace.keys():
             for name, feature in self.namespace[tlf]['Features'].items():
                 for mapping, value in feature['Value'].items():
+                    print(feature['Active'])
                     if feature['Active'][mapping] is True:
                         path = ''
                         if (mapping != 'Original' and len(feature['Value'].items()) > 1):
@@ -1295,11 +1296,13 @@ class Waffle():
             if field_type == 'Fcard':
                 for subfeature in features_data.keys():
                     for index, mapping in enumerate(list(features_data[subfeature]['Active'].keys())):
-                        if value == 0 and f'{feature}.' in mapping:
+                        if value == 0 and f'{feature}' in mapping and f'{feature}_' not in mapping:
                             features_data[subfeature]['Active'][mapping] = False
-                        elif tmp is True and f'{feature}.' in mapping and value < len(list(features_data[subfeature]['Active'].keys())):
+                            features_data[subfeature]['Active']['Original'] = False
+                        elif tmp is True and f'{feature}' in mapping and f'{feature}_' not in mapping and value < len(list(features_data[subfeature]['Active'].keys())):
                             if index > value:
                                 features_data[subfeature]['Active'][mapping] = False
+                                features_data[subfeature]['Active']['Original'] = False
             elif field_type == 'Gcard':
                 for subfeature in features_data.keys():
                     value = [value] if not isinstance(value, list) else value
