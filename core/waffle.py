@@ -1667,14 +1667,44 @@ class Waffle():
         for feature in features:
             split = feature.split('.')
             tlf = split[0]
+            cards = self.get_unresolved_cardinalities1(tlf, self.namespace[tlf]['Features'])
+            cards_filtered = {'Fcard': [], 'Gcard': []}
+            if isinstance(cards, dict):
+                for type in cards.keys():
+                    for card in cards[type].keys():
+                        original = self.get_original_name(card)
+                        if original not in cards_filtered:
+                            cards_filtered[type].append(self.get_original_name(card))
             for part in range(0, len(split)):
                 check = '.'.join(split[:part + 1])
-                cards = self.namespace[tlf]['Features'][check]
-                a, b = self.parse_fcard(check, cards)
-                c, d = self.parse_gcard(check, cards)
-                if b is True or (d is True and part != len(split) - 1):
+                if check in cards_filtered['Fcard'] or (check in cards_filtered['Gcard'] and part != len(split) - 1):
                     res = False
         return res
+
+    def get_unresolved_cardinalities1(self, feature, namespace):
+        """
+        Function to get a list of cardinalities that are not specified yet.
+
+        INPUTS
+        feature (type = dict): top-level feature to get cardinalities.
+        namespace (type = dict): entire namespace.
+
+        RETURN
+        List of not specified cardinalities
+        """
+        result = {'Fcard': {}, 'Gcard': {}}
+        for key, value in namespace.items():
+            if key.split('.')[0] == feature:
+                mappings_f = self.name_builder(key, namespace)
+                for mapping in mappings_f:
+                    fcard, fcard_to_define = self.parse_fcard(mapping, value)
+                    if fcard_to_define is True:
+                        result['Fcard'].update({mapping: fcard})
+                for mapping in mappings_f:
+                    gcard, gcard_to_define = self.parse_gcard(mapping, value)
+                    if gcard_to_define is True and mapping not in result['Fcard'].keys():
+                        result['Gcard'].update({mapping: gcard})
+        return result
 
     def get_unresolved_cardinalities(self, feature, namespace):
         """
