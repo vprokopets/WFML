@@ -1024,8 +1024,6 @@ class term(ExpressionElement):
                     op = res
                 else:
                     op = [op]
-                print('_________________---')
-                print(op)
                 for feature in op:
                     self.api.get_feature(feature)
                     field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
@@ -1200,12 +1198,26 @@ class Waffle():
         output = {}
 
         for tlf in self.namespace.keys():
-            for feature in self.namespace[tlf]['Features'].values():
+            for name, feature in self.namespace[tlf]['Features'].items():
                 for mapping, value in feature['Value'].items():
-                    if mapping != 'Original' and feature['Active'][mapping] is True:
-                        path = mapping.split('.')
-                        target = reduce(lambda d, k: d.setdefault(k, {}), path[:-1], output)
-                        target[path[-1]] = value
+                    if feature['Active'][mapping] is True:
+                        path = ''
+                        if (mapping != 'Original' and len(feature['Value'].items()) > 1):
+                            path = mapping.split('.')
+                        if len(feature['Value'].items()) == 1:
+                            path = name.split('.')
+                        if path != '':
+                            flag = False
+                            for fname in self.namespace[tlf]['Features'].keys():
+                                if name in fname and name != fname:
+                                    flag = True
+                            if flag is False:
+                                if value is None:
+                                    res = {}
+                                else:
+                                    res = value
+                                target = reduce(lambda d, k: d.setdefault(k, {}), path[:-1], output)
+                                target[path[-1]] = res
         return output
 
     def reset(self):
@@ -1438,7 +1450,7 @@ class Waffle():
         for feature_to_validate in self.namespace[tlf]['ConstraintsValidationOrder']:
             constraint = self.namespace[tlf]['Constraints'][feature_to_validate]
             check = self.name_builder(constraint['RelatedFeature'], self.namespace[tlf]['Features'])
-            if isinstance(check, list) and len(check) > 0 and self.are_cardinalities_specified_in_constraints(constraint['RelatedFeature']) is True and constraint['Validated'] is False and self.are_cardinalities_specified(constraint['RelatedFeature']):
+            if isinstance(check, list) and len(check) > 0 and self.are_cardinalities_specified_in_constraints(constraint['RelatedFeature']) is True and constraint['Validated'] is False and self.are_cardinalities_specified(constraint) is True:
                 self.tlf = tlf
                 self.rf = constraint['RelatedFeature']
                 self.exception_flag = False
@@ -1633,7 +1645,7 @@ class Waffle():
                         res = False
         return res
 
-    def are_cardinalities_specified(self, feature):
+    def are_cardinalities_specified(self, constraint):
         """
         Function to check whether cardinalities are specified.
 
@@ -1644,16 +1656,24 @@ class Waffle():
         res (type = bool): boolean that represents result
         """
         res = True
-        namespace = self.namespace[feature.split('.')[0]]['Features']
-        sublayer = self.get_unresolved_cardinalities(feature.split('.')[0], namespace)
-        for tlf in self.namespace.keys():
-            for constraint in self.namespace[tlf]['Constraints'].values():
-                split = feature.split('.')
-                for part in range(0, len(split)):
-                    check = '.'.join(split[:part + 1])
-                    if sublayer is not None:
-                        if check in sublayer['Fcard'].keys() or check in sublayer['Gcard'].keys():
-                            res = False
+        features = []
+        features.append(constraint['RelatedFeature'])
+        features = features + constraint['Features']['Fcard']
+        features = features + constraint['Features']['Gcard']
+        features = features + constraint['Features']['Value']
+        constraint_expression = f' \
+                    {self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
+        logging.info(f'Constraint validation for feature {self.rf}: {constraint_expression}')
+        for feature in features:
+            split = feature.split('.')
+            tlf = split[0]
+            for part in range(0, len(split)):
+                check = '.'.join(split[:part + 1])
+                cards = self.namespace[tlf]['Features'][check]
+                a, b = self.parse_fcard(check, cards)
+                c, d = self.parse_gcard(check, cards)
+                if b is True or (d is True and part != len(split) - 1):
+                    res = False
         return res
 
     def get_unresolved_cardinalities(self, feature, namespace):
@@ -2046,7 +2066,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = True
+        self.debug_mode = False
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
