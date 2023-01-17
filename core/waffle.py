@@ -171,6 +171,8 @@ class ExpressionElement(object):
         if not isinstance(feature, bool):
             try:
                 feature_metadata = self.api.get_feature(feature)
+                print(feature)
+                print(feature_metadata)
                 return feature_metadata['Active']
             except Exception:
                 return feature != {'Original': None} and feature is not None
@@ -341,8 +343,8 @@ class prec20(ExpressionElement):
         for op, r in zip(self.op[1::2], self.op[2::2]):
             operation, right = op, self.boolify(r.parse())
             ret = left or right
-            left = ret
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
+            left = ret
         return ret
 
 class prec19(ExpressionElement):
@@ -365,8 +367,8 @@ class prec19(ExpressionElement):
         for op, r in zip(self.op[1::2], self.op[2::2]):
             operation, right = op, self.boolify(r.parse())
             ret = bool(left) ^ bool(right)
-            left = ret
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
+            left = ret
         return ret
 
 class prec18(ExpressionElement):
@@ -390,8 +392,8 @@ class prec18(ExpressionElement):
             operation, right = op, self.boolify(r.parse())
             logging.info(f"Level 18 boolean {left} {operation} {right} operation")
             ret = left and right
-            left = ret
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
+            left = ret
         return ret
 
 class prec17(ExpressionElement):
@@ -1022,6 +1024,8 @@ class term(ExpressionElement):
                         if key.split('.')[-1] == self.api.unique_key:
                             res.append(key)
                     op = res
+                elif self.is_childs is True:
+                    op = self.api.get_feature_childrens(op, mappings=self.mappings)
                 else:
                     op = [op]
                 for feature in op:
@@ -1095,7 +1099,7 @@ class term(ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
             return op.cross_tree_check(reverse, api)
         elif type(op) is str and op not in keywords and (re.match(r'(\w+\.)+\w+', op) or op in self.api.namespace.keys()):
-            if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2):
+            if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2) or 'tlf' in op.split('.', 2):
                 return
             forbidden_flag = False
             path = op.split('.', 1)
@@ -1363,7 +1367,9 @@ class Waffle():
         else:
             mapping = 'Original'
         if mapping not in features_data[feature][field_type].keys():
-            mapping = 'Original'
+            mapping = mapping.rsplit('_', 1)[0]
+            if mapping not in features_data[feature][field_type].keys():
+                mapping = 'Original'
         value = features_data[feature][field_type][mapping]
         return {'Feature': feature,
                 'Value': value.split('.')[-1] if isinstance(value, str) and field_type == 'Gcard' else value,

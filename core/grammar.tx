@@ -67,7 +67,7 @@ prec3:   op=prec2  (op=op3   op=prec2)?;
 prec2:   op=prec1  (op=op2   op=prec1)?;
 prec1:   op=prec0  (op=op1   op=prec0)?;
 prec0:   op=term   (op=op0   op=term)?;
-term:    op=NUMBER | op = BOOL | op=ComplexName | op = Quote | op = List | ('(' op=prec24 ')') | op = ID;
+term:    op=NUMBER | op = BOOL | op=ComplexName | op = List | ('(' op=prec24 ')') | op = ID | op = Quote;
 
 
 op22: '<=>' | 'iff'                                             ;
@@ -94,7 +94,7 @@ op2:  '--'                                                      ;
 op1:  '**'                                                      ;
 op0:  '..' | '&'                                                ;
 
-Quote: /'.+'/ | /".+"/;
+Quote: /((?<![\\])['"])((?:.(?!(?<![\\])\1))*.?)\1/;
 List: /\{.+\}/;
 ComplexName: /(\w+\.)+\w+/;
 
