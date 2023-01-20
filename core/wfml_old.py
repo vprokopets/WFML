@@ -1913,6 +1913,82 @@ class textX_API():
         else:
             return 'Group feature'
 
+    def name_builder_old(self, feature, namespace, cardinality_type=None):
+        """
+        Function to construct full feature name according to all cardinalities in the path.
+
+        INPUTS
+        feature (type = str): feature's name.
+        namespace (type = dict): entire namespace.
+        cardinality_type (type = str): specify field type.
+
+        RETURN
+        Feature's transformed name
+        """
+        feature_name = ''
+        feature_list = {}
+        feature_split = feature.split('.')
+        if len(feature_split) == 1:
+            features = []
+            fcard = namespace[feature]['Fcard']
+            if len(fcard.keys()) == 1:
+                key = 'Original'
+            else:
+                key = feature
+            try:
+                if int(fcard[key]) > 0:
+                    for i in range(0, int(fcard[key])):
+                        features.append(f'{feature}_{i}' if int(fcard[key]) > 1 else feature)
+            except Exception:
+                features.append(feature)
+            return features
+        for index, part in enumerate(feature_split):
+            parent_feature = feature_name
+            if cardinality_type == 'Fcard' and index == len(feature_split) - 1:
+                if feature_list == {}:
+                    features = [part]
+                else:
+                    features = []
+                    for feature in feature_list[feature_split[index - 1]]:
+                        features.append(f'{feature}.{part}')
+                gcard = namespace[parent_feature]['Gcard']
+                features = self.filter_gcards(gcard, features)
+                feature_list.update({part: features})
+                break
+            features = []
+            feature_name = f'{feature_name}.{part}' if feature_name != '' else part
+            fcard = namespace[feature_name]['Fcard']
+            if feature_list == {}:
+                if isinstance(fcard['Original'], str) and len(fcard) == 1:
+                    features.append(feature)
+                elif isinstance(fcard['Original'], int) and len(fcard) == 1:
+                    for i in range(0, int(fcard['Original'])):
+                        features.append(f'{part}_{i}' if int(fcard['Original']) > 1 else part)
+                else:
+                    for key in fcard.keys():
+                        if key != 'Original':
+                            for i in range(0, int(fcard[key])):
+                                features.append(f'{part}_{i}' if int(fcard[key]) > 1 else part)
+            else:
+                for key in fcard.keys():
+                    if key != 'Original':
+                        for feature in feature_list[feature_split[index - 1]]:
+                            if key.rsplit('.', 1)[0] == feature:
+                                for i in range(0, int(fcard[key])):
+                                    features.append(f'{feature}.{part}_{i}' if int(fcard[key]) > 1 else f'{feature}.{part}')
+                    elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], int):
+                        for feature in feature_list[feature_split[index - 1]]:
+                            for i in range(0, int(fcard['Original'])):
+                                features.append(f'{feature}.{part}_{i}' if int(fcard[key]) > 1 else f'{feature}.{part}')
+                    elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], str):
+                        for feature in feature_list[feature_split[index - 1]]:
+                            features.append(f'{feature}.{part}')
+                gcard = namespace[parent_feature]['Gcard']
+                features = self.filter_gcards(gcard, features)
+
+            feature_list.update({part: features})
+        return feature_list[feature_split[-1]]
+
     def topological_sort(self, dependency_pairs):
         """
         Subfunction to define sequence of features to validate. The analogue of directed graph path.

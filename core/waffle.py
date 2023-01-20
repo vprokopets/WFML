@@ -171,8 +171,6 @@ class ExpressionElement(object):
         if not isinstance(feature, bool):
             try:
                 feature_metadata = self.api.get_feature(feature)
-                print(feature)
-                print(feature_metadata)
                 return feature_metadata['Active']
             except Exception:
                 return feature != {'Original': None} and feature is not None
@@ -961,6 +959,7 @@ class term(ExpressionElement):
         op = self.op
         check = False
         self.is_childs = False
+        self.ftype = 'Value'
         if '"' in op or "'" in op:
             op = op.replace("'", '').replace('"', '')
             self.is_feature = False
@@ -993,8 +992,9 @@ class term(ExpressionElement):
                     op = '.'.join(split[1:])
                 else:
                     if split[0] in ['fcard', 'gcard']:
+                        self.ftype = split[0].capitalize()
                         if for_mapping is False:
-                            split[0] = split[0].capitalize()
+                            split[0] = self.ftype
                         else:
                             split = split[1:]
                     op = '.'.join(split)
@@ -1067,7 +1067,7 @@ class term(ExpressionElement):
         self.tmp = True
         if self.is_feature is True:
             op = self.parse_string(for_mapping=True)
-            res = self.api.get_feature(op, for_mapping=True)
+            res = self.api.get_feature(op, field_type=self.ftype, for_mapping=True)
             for feature in res:
                 constructor_original = []
                 constructor = []
@@ -1203,13 +1203,14 @@ class Waffle():
 
         for tlf in self.namespace.keys():
             for name, feature in self.namespace[tlf]['Features'].items():
-                for mapping, value in feature['Value'].items():
-                    print(feature['Active'])
+                for mapping in feature['Active'].keys():
+                    value = feature['Value'][mapping] if mapping in feature['Value'].keys() else feature['Value']['Original']
+
                     if feature['Active'][mapping] is True:
                         path = ''
-                        if (mapping != 'Original' and len(feature['Value'].items()) > 1):
+                        if (mapping != 'Original' and len(feature['Active'].items()) > 1):
                             path = mapping.split('.')
-                        if len(feature['Value'].items()) == 1:
+                        if len(feature['Active'].items()) == 1:
                             path = name.split('.')
                         if path != '':
                             flag = False
@@ -1352,7 +1353,7 @@ class Waffle():
         if field_type is None:
             field_type = data.split('.', 1)[0] if data.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
         if for_mapping is True:
-            return self.name_builder(feature, features_data)
+            return self.name_builder(feature, features_data, field_type)
         value, mapping = None, None
         if mappings is not None and mappings != ():
             feature_mapped = []
@@ -1567,7 +1568,6 @@ class Waffle():
             features = []
             feature_name = f'{feature_name}.{part}' if feature_name != '' else part
             fcard = namespace[feature_name]['Fcard']
-
             if feature_list == {}:
                 if isinstance(fcard['Original'], str) and len(fcard) == 1:
                     features.append(feature)
@@ -1593,6 +1593,11 @@ class Waffle():
                     elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], str):
                         for feature in feature_list[feature_split[index - 1]]:
                             features.append(f'{feature}.{part}')
+                    elif (key == 'Original' and len(fcard.keys()) > 1):
+                        for feature in feature_list[feature_split[index - 1]]:
+                            if f'{feature}.{part}' not in fcard.keys():
+                                for i in range(0, int(fcard[key])):
+                                    features.append(f'{feature}.{part}_{i}' if int(fcard[key]) > 1 else f'{feature}.{part}')
                 gcard = namespace[parent_feature]['Gcard']
                 features = self.filter_gcards(gcard, features)
 
@@ -1672,10 +1677,10 @@ class Waffle():
         features = features + constraint['Features']['Value']
         constraint_expression = f' \
                     {self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
-        logging.info(f'Constraint validation for feature {self.rf}: {constraint_expression}')
+        logging.info(f'Cardinalities check for feature {self.rf}: {constraint_expression}')
         for feature in features:
             split = feature.split('.')
-            tlf = split[0]
+            tlf = split[0].split('_')[0]
             cards = self.get_unresolved_cardinalities1(tlf, self.namespace[tlf]['Features'])
             cards_filtered = {'Fcard': [], 'Gcard': []}
             if isinstance(cards, dict):
@@ -2105,7 +2110,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = False
+        self.debug_mode = True
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
