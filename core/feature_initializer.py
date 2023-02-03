@@ -223,6 +223,10 @@ class FeatureInitializer:
         for feature, feature_value in tlf_value['Features'].items():
             inherited_fname = f'{feature_name}.{feature.split(".", 1)[-1]}'
             inh_value = copy.deepcopy(feature_value)
+            inh_value['MappingsC'].update({inherited_fname: inh_value['MappingsC'][feature]})
+            del inh_value['MappingsC'][feature]
+            inh_value['MappingsV'].update({inherited_fname: inh_value['MappingsV'][feature]})
+            del inh_value['MappingsV'][feature]
             if inherited_fname not in self.namespace[top_level_feature]['Features'].keys():
                 self.namespace[top_level_feature]['Features'].update({inherited_fname: inh_value})
         constraints_count = len(list(self.namespace[top_level_feature]['Constraints'].keys()))
@@ -251,6 +255,10 @@ class FeatureInitializer:
                 for feature, feature_value in tlf_value['Features'].items():
                     inherited_fname = f'{feature_name}.{feature}'
                     inh_value = copy.deepcopy(feature_value)
+                    inh_value['MappingsC'].update({inherited_fname: inh_value['MappingsC'][feature]})
+                    del inh_value['MappingsC'][feature]
+                    inh_value['MappingsV'].update({inherited_fname: inh_value['MappingsV'][feature]})
+                    del inh_value['MappingsV'][feature]
                     if feature == tlf:
                         inh_value.update({'Abstract': None})
                     if inherited_fname not in self.namespace[top_level_feature]['Features'].keys():

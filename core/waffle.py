@@ -1213,22 +1213,29 @@ class Waffle():
 
         for tlf in self.namespace.keys():
             for name, feature in self.namespace[tlf]['Features'].items():
-                for mapping, mvalue in feature['MappingsV'].items():
-                    value = mvalue['Value']
+                abstract = False
+                split = name.split('.')
+                for index in range(1, len(split) + 1):
+                    subname = self.get_original_name('.'.join(split[:index]))
+                    if self.namespace[tlf]['Features'][subname]['Abstract'] is not None:
+                        abstract = True
+                if abstract is False:
+                    for mapping, mvalue in feature['MappingsV'].items():
+                        value = mvalue['Value']
 
-                    if mvalue['ActiveF'] is True and mvalue['ActiveG'] is True:
-                        path = mapping.split('.')
-                        flag = False
-                        for fname in self.namespace[tlf]['Features'].keys():
-                            if name in fname and name != fname:
-                                flag = True
-                        if flag is False:
-                            if value is None:
-                                res = {}
-                            else:
-                                res = value
-                            target = reduce(lambda d, k: d.setdefault(k, {}), path[:-1], output)
-                            target[path[-1]] = res
+                        if mvalue['ActiveF'] is True and mvalue['ActiveG'] is True:
+                            path = mapping.split('.')
+                            flag = False
+                            for fname in self.namespace[tlf]['Features'].keys():
+                                if name in fname and name != fname:
+                                    flag = True
+                            if flag is False:
+                                if value is None:
+                                    res = {}
+                                else:
+                                    res = value
+                                target = reduce(lambda d, k: d.setdefault(k, {}), path[:-1], output)
+                                target[path[-1]] = res
         return output
 
     def reset(self):
