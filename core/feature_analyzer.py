@@ -60,8 +60,8 @@ class FeatureAnalyzer:
                 assign_constraints.append(constraint)
         for assign_constraint in assign_constraints:
             for constraint, value in constraints.items():
-                for assign_feature in constraints[assign_constraint]['FeaturesToAssign']['Value']:
-                    if assign_feature in value['Features']['Value'] and [assign_constraint, constraint] not in dependencies \
+                for assign_feature in constraints[assign_constraint]['Assign']['Value']:
+                    if assign_feature in value['Read']['Value'] and [assign_constraint, constraint] not in dependencies \
                             and assign_constraint != constraint:
                         dependencies.append([assign_constraint, constraint])
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
@@ -80,16 +80,20 @@ class FeatureAnalyzer:
         for constraint in constraints.keys():
             if constraint not in dependent_constraints:
                 independent_constraints.append(constraint)
-        res = independent_constraints + dependent_constraints
         if cycle is None:
-            self.namespace[tlf]['ConstraintsValidationOrder'] = res
+            self.namespace[tlf]['ConstraintsValidationOrder'] = dependent_constraints
+            self.namespace[tlf]['IndependentConstraints'] = independent_constraints
         else:
             for sub_tlf in cycle:
                 subres = []
-                for feature in res:
+                for feature in dependent_constraints:
                     if sub_tlf in feature:
                         subres.append(int(feature.replace(f'{sub_tlf}_', '')))
                 self.namespace[sub_tlf]['ConstraintsValidationOrder'] = subres
+                for feature in independent_constraints:
+                    if sub_tlf in feature:
+                        subres.append(int(feature.replace(f'{sub_tlf}_', '')))
+                self.namespace[sub_tlf]['IndependentConstraints'] = subres
 
     def cardinalities_analysis(self):
         """
@@ -154,6 +158,6 @@ class FeatureAnalyzer:
         ret = False
         for tlf in self.namespace.values():
             for constraint in tlf['Constraints'].values():
-                if feature in constraint['FeaturesToAssign']['Value']:
+                if feature in constraint['Assign']['Value']:
                     ret = True
         return ret

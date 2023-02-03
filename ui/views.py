@@ -39,13 +39,13 @@ class WizardStepForm(forms.Form):
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
         # Write data from form fields to global namespace.
-
+        print(tlf)
+        print(api.preprocess_step(tlf))
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
-            originals = api.define_layer(tlf)
             self.up = {}
             check = []
             for key, value in cd.items():
-                res = api.cardinality_solver(key, value, originals)
+                res = api.cardinality_solver(key, value)
                 check.append(res)
                 if res is not True:
                     self.up.update({key: res})
@@ -55,34 +55,35 @@ class WizardStepForm(forms.Form):
                 api.update_namespace(cd)
         else:
             api.update_namespace(cd)
-            # Validate all constraints, related to current top-level feature.
-            self.up = []
-            cycles = api.cycles
+        # Validate all constraints, related to current top-level feature.
+        self.up = []
+        cycles = api.cycles
+        if self.label in cycles.keys():
+            for element in cycles[self.label]:
+                self.validation(element)
+        else:
+            self.validation(self.label)
+        # Assign unvalidated parameters error to appropriate fields.
+        for param in self.up:
+            element = param['element']
+            field_flag = False
+            for subparam in param['params']:
+                original = api.get_original_name(subparam)
+                param_type = api.namespace[original.split('.')[0]]['Features'][original]['Type']
+                for field in self.fields.keys():
+                    if param_type != 'predefined' and (subparam == field or f'Fcard.{subparam}' == field or f'Gcard.{subparam}' == field):
+                        self.add_error(field, f'This field returned error: {param["error"]}')
+                        field_flag = True
+            if param['params'] == () or param['params'] == [] or field_flag is False:
+                self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
+        if self.up != []:
+            api.restore_stage_snap()
+        elif self.up == [] and not (cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']):
             if self.label in cycles.keys():
                 for element in cycles[self.label]:
-                    self.validation(element)
+                    api.namespace[element]['Validated'] = True
             else:
-                self.validation(self.label)
-            # Assign unvalidated parameters error to appropriate fields.
-            for param in self.up:
-                element = param['element']
-                for subparam in param['params']:
-                    original = api.get_original_name(subparam)
-                    param_type = api.namespace[original.split('.')[0]]['Features'][original]['Type']
-                    if param_type != 'predefined' and subparam in self.fields:
-                        self.add_error(subparam, f'This field returned error: {param["error"]}')
-                    else:
-                        self.add_error(None, f'Feature`s {param["element"]} parameter {subparam} returned error: {param["error"]}')
-                if param['params'] == () or param['params'] == []:
-                    self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
-            if self.up != []:
-                api.namespace = api.last_snap['Namespace']
-            else:
-                if self.label in cycles.keys():
-                    for element in cycles[self.label]:
-                        api.namespace[element]['Validated'] = True
-                else:
-                    api.namespace[self.label]['Validated'] = True
+                api.namespace[self.label]['Validated'] = True
         return cd
 
     def validation(self, element: str):
@@ -186,7 +187,7 @@ class WizardClass(CookieWizardView):
         """
         snap_name = f'{tlf}_{step_current}' if step_current in generated_steps else tlf
         if snap_name not in api.stage_snap.keys():
-            data = api.define_layer(tlf)
+            data = api.preprocess_step(tlf)
             api.save_stage_snap(snap_name, data)
             if data == 'Empty stage':
                 return
@@ -200,28 +201,27 @@ class WizardClass(CookieWizardView):
             self.form.head = 'Cardinalities'
         else:
             self.form.head = 'Features'
-            for key, value in data.items():
+            for feature in data['Value']:
                 # Generated list is used to prevent field multiplication during form revalidation.
                 # During form initialization if fcard of field > 1, then copies of this field are generated.
                 # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
                 # multiplication of generated fields.
-
-                logging.debug(f'Key: {key}, Value: {value}')
+                feature_type = api.get_feature_input_type(feature)
                 # Check if this field is allowed by chosen group cardinality.
-                if value == 'integer':
-                    self.form.fields[key] = forms.IntegerField(label=key)
-                elif value == 'float':
-                    self.form.fields[key] = forms.FloatField(label=key)
-                elif value == 'string' or \
-                        value == 'array' or \
-                        value == 'integerArray' or \
-                        value == 'floatArray':
-                    self.form.fields[key] = forms.CharField(label=key)
-                elif value == 'boolean':
+                if feature_type == 'integer':
+                    self.form.fields[feature] = forms.IntegerField(label=feature)
+                elif feature_type == 'float':
+                    self.form.fields[feature] = forms.FloatField(label=feature)
+                elif feature_type == 'string' or \
+                        feature_type == 'array' or \
+                        feature_type == 'integerArray' or \
+                        feature_type == 'floatArray':
+                    self.form.fields[feature] = forms.CharField(label=feature)
+                elif feature_type == 'boolean':
                     choises_list = []
                     for v in [True, False]:
                         choises_list.append((v, v))
-                    self.form.fields[key] = forms.ChoiceField(label=key, choices=choises_list, widget=forms.RadioSelect)
+                    self.form.fields[feature] = forms.ChoiceField(label=feature, choices=choises_list, widget=forms.RadioSelect)
                 # Sort fields by names. This will group generated fields.
                 self.form.fields = OrderedDict(sorted(self.form.fields.items()))
 
@@ -232,7 +232,8 @@ class WizardClass(CookieWizardView):
         INPUTS
         feature_cardinalities (type = dict): dict with all feature cardinalities.
         """
-        for fcard, value in feature_cardinalities.items():
+        for fcard in feature_cardinalities:
+            value = api.get_feature(f'Fcard.{fcard}')['Fcard']
             allowed = None
             if value == '*':
                 allowed = '0..inf'
@@ -254,9 +255,10 @@ class WizardClass(CookieWizardView):
         group_cardinalities (type = dict): dict with all group cardinalities.
         """
         # Create fields for each gcard record.
-        for gcard, value in group_cardinalities.items():
+        for gcard in group_cardinalities:
             # Create appropriate fields in form.
-            options = api.get_feature_childrens(gcard, without_mappings=True)
+            value = api.get_feature(f'Gcard.{gcard}')['Gcard']
+            options = api.get_feature_childrens(gcard)
             choises_list = []
             for option in options:
                 choises_list.append((option, option))
@@ -283,14 +285,14 @@ class WizardClass(CookieWizardView):
         """
         step = self.steps.current
         self.check = None
-        api.namespace = copy.copy(api.last_snap['Namespace'])
+        # api.restore_stage_snap()
         logging.info(f'STEP {step} FINISHED.')
         cycles = api.cycles
         if self.current_step in cycles.keys():
             for element in cycles[self.current_step]:
-                self.check = api.define_layer(element) if self.check is None else True
+                self.check = api.preprocess_step(element) if self.check is None else True
         else:
-            self.check = api.define_layer(tlf)
+            self.check = api.preprocess_step(tlf)
         global factory_forms
         if self.check is not None:
             factory_forms.append(None)

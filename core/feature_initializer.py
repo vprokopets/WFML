@@ -4,17 +4,30 @@ import logging
 class FeatureInitializer:
     def __init__(self, api) -> None:
         self.api = api
-        self.feature_pattern = {
-            'Active': None,
-            'Value': None,
-            'Type': None,
-            'Fcard': None,
+        self.initial_cdata_pattern = {
+            'ActiveF': True,
+            'ActiveG': True,
+            'Fcard': None
+        }
+
+        self.initial_vdata_pattern = {
+            'ActiveF': True,
+            'ActiveG': True,
             'Gcard': None,
+            'Value': None,
+        }
+
+        self.feature_pattern = {
+            'Type': None,
             'Abstract': None,
             'SuperFeature': None,
             'Reference': None,
             'DeepReference': None,
-            'RequiredFcard': None
+            'RequiredFcard': None,
+            'InitialC': copy.deepcopy(self.initial_cdata_pattern),
+            'InitialV': copy.deepcopy(self.initial_vdata_pattern),
+            'MappingsC': {},
+            'MappingsV': {}
         }
 
         self.constraint_pattern = {
@@ -22,12 +35,12 @@ class FeatureInitializer:
             'Constraint': None,
             'HigherOperation': None,
             'Operations': [],
-            'Features': {
+            'Read': {
                 'Fcard': [],
                 'Gcard': [],
                 'Value': []
             },
-            'FeaturesToAssign': {
+            'Assign': {
                 'Fcard': [],
                 'Gcard': [],
                 'Value': []
@@ -42,10 +55,12 @@ class FeatureInitializer:
             'Features': {},
             'Constraints': {},
             'ConstraintsValidationOrder': [],
+            'IndependentConstraints': [],
             'Validated': False
         }
 
-        self.namespace = {}
+        self.namespace_pattern = {}
+        self.namespace_pattern_fw = {'TopLevelConstraints': {}}
 
     def cname(self, obj):
         """
@@ -92,11 +107,15 @@ class FeatureInitializer:
         feature_tmpl = copy.deepcopy(self.feature_pattern)
         feature_tmpl['Type'] = self.initial_type_reference_check(
             feature.type.rsplit("->")[-1]) if feature.type is not None else None
-        feature_tmpl['Fcard'] = {'Original': feature.fcard} if feature.fcard is not None else {'Original': 1}
-        feature_tmpl['Gcard'] = {'Original': feature.gcard} if feature.gcard is not None else {'Original': None}
-        feature_tmpl['Value'] = {'Original': feature.init} if feature.init is not None else {'Original': None}
+
+        feature_tmpl['InitialC']['Fcard'] = feature.fcard if feature.fcard is not None else 1
+        feature_tmpl['InitialV']['Gcard'] = feature.gcard if feature.gcard is not None else None
+        feature_tmpl['InitialV']['Value'] = feature.init if feature.init is not None else None
+
+        feature_tmpl['MappingsC'].update({full_name: copy.deepcopy(feature_tmpl['InitialC'])})
+        feature_tmpl['MappingsV'].update({full_name: copy.deepcopy(feature_tmpl['InitialV'])})
+
         feature_tmpl['Abstract'] = feature.abstract
-        feature_tmpl['Active'] = {'Original': True}
 
         super_feature, reference_feature, deepness = self.analyze_super_reference_relations(feature, full_name)
         feature_tmpl['SuperFeature'] = super_feature
@@ -254,7 +273,7 @@ class FeatureInitializer:
 
         """
         logging.info('Feature definition: Starting.')
-        self.namespace = {}
+        self.namespace = copy.deepcopy(self.namespace_pattern)
         self.dependencies = []
         self.super_dependencies = []
         for element in model.elements:
