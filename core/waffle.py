@@ -1257,6 +1257,8 @@ class Waffle():
         self.tmp = False
         self.obj_id = None
         self.mode = None
+        self.cache = {}
+        self.cache_f = None
         self.unique_key = ''
         self.feature_analyzer = FeatureAnalyzer(self)
         self.feature_initializer = FeatureInitializer(self)
@@ -1283,12 +1285,17 @@ class Waffle():
         RETURN
         transformed name.
         """
-        split = name.split('.')
-        split = split[1:] if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard'] else split
-        construct = []
-        for part in split:
-            construct.append(re.sub(r'_[0-9]+', '', part))
-        return '.'.join(construct)
+        if name not in self.cache.keys():
+            split = name.split('.')
+            split = split[1:] if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard'] else split
+            construct = []
+            for part in split:
+                construct.append(re.sub(r'_[0-9]+', '', part))
+            original = '.'.join(construct)
+            self.cache.update({name: original})
+        else:
+            original = self.cache[name]
+        return original
 
     def validate_feature(self, tlf):
         """
@@ -1345,8 +1352,8 @@ class Waffle():
                 namespace = self.namespace[tlf]['Features'][fname][f'Mappings{suffix}'][mapping]
             namespace[field] = value
 
-            self.check_integrities(tlf)
             if field in ['Fcard', 'Gcard'] and key != 'Initial':
+                self.check_integrities(tlf)
                 self.activation_flag_update(self.namespace[tlf]['Features'], field, value, mapping)
 
             defined_features = self.defined_features[field]
@@ -1415,12 +1422,11 @@ class Waffle():
         constraint_ready, deactivated = True, False
         tlf = self.get_original_name(constraint_data['RelatedFeature'].split('.')[0])
         namespace = self.namespace[tlf]['Features']
-        rfmappings = self.get_filtered_values(self.map_feature(constraint_data['RelatedFeature'], False), namespace, False)
-        f = self.get_features_ready()
+        rfmappings = self.get_filtered_values(self.map_feature_cache(constraint_data['RelatedFeature'], False), namespace, False)
         filtered_mappings = []
         if rfmappings is not None:
             for mapping in rfmappings['Value']:
-                if mapping in f:
+                if mapping in self.cache_f:
                     filtered_mappings.append(mapping)
         if len(filtered_mappings) > 0:
             for assign_type in ['Assign', 'Read']:
@@ -1431,13 +1437,13 @@ class Waffle():
                         namespace = self.namespace[tlf]['Features']
                         try:
                             fmappings = {'Mappings': {}, 'MappingsFull': {}}
-                            fmappings.update({'Mappings': self.get_filtered_values(self.map_feature(feature, card_flag), namespace, False)})
-                            fmappings.update({'MappingsFull': {'Value': self.map_feature(feature, card_flag)}})
+                            fmappings.update({'Mappings': self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, False)})
+                            fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
                             for type in fmappings.keys():
                                 filtered_mappings = []
                                 if type == 'Mappings':
                                     for mapping in fmappings[type]['Value']:
-                                        if mapping in f:
+                                        if mapping in self.cache_f:
                                             filtered_mappings.append(mapping)
                                 else:
                                     filtered_mappings = fmappings[type]['Value']
@@ -1485,10 +1491,9 @@ class Waffle():
 
     def validate_constraint(self, constraint, value):
         constraint_ready, mappings, deactivated = self.get_mappings_for_constraint(value)
-        features = self.get_features_ready()
         mtype = 'Mappings'
         if value['HigherOperation'] in self.boolean and all(x in self.boolean for x in value['Operations']) and deactivated is False:
-            if all(x in features for x in value['Read']['Value']):
+            if all(x in self.cache_f for x in value['Read']['Value']):
                 constraint_ready = True
                 mtype = 'MappingsFull'
             else:
@@ -1535,6 +1540,7 @@ class Waffle():
         return constraint_ready
 
     def validate_constraints(self, tlf):
+        self.cache_f = self.get_features_ready(tlf)
         constraints = {}
         constraints.update({'Dependent': self.namespace[tlf]['ConstraintsValidationOrder']})
         constraints.update({'Independent': self.namespace[tlf]['IndependentConstraints']})
@@ -1555,6 +1561,16 @@ class Waffle():
                 if constraint in validation_codes:
                     constraint_metadata = self.namespace[tlf]['Constraints'][constraint]
                     constraint_metadata['Validated'] = True
+
+    def map_feature_cache(self, fname, cardinalities=True):
+        split = fname.split('.')
+        tlf = split[0]
+        original = self.get_original_name(fname)
+        suffix = 'C' if cardinalities is True else 'V'
+        res = list(self.namespace[tlf]['Features'][original][f'Mappings{suffix}'].keys())
+        if len(res) > 1:
+            res.pop(original)
+        return res
 
     def map_feature(self, fname, cardinalities=True):
         split = fname.split('.')
@@ -1589,7 +1605,6 @@ class Waffle():
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
         if undefined_cards is None:
             undefined_values = self.get_filtered_values(values, self.namespace[tlf]['Features'])
-        print({'Cards': undefined_cards, 'Values': undefined_values})
         self.step_to_define.update({'Cards': undefined_cards, 'Values': undefined_values})
         return undefined_cards if undefined_cards is not None else undefined_values
 
@@ -1614,26 +1629,25 @@ class Waffle():
         # print(f'Feature {tlf}. {"Cardinality" if cardinality is True else "Value"}: {result}')
         return result
 
-    def get_features_ready(self):
+    def get_features_ready(self, tlf):
         res = []
-        for tlf in self.namespace.keys():
-            fcards, values = self.check_integrities(tlf)
-            undefined_cards = self.get_undefined_cards(fcards, values, tlf)
-            if undefined_cards is not None:
-                fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
-            else:
-                fcards, gcards = [], []
-            for feature, value in self.namespace[tlf]['Features'].items():
-                for mapping in value['MappingsV'].keys():
-                    flag = True
-                    for card in fcards:
-                        if card in mapping:
-                            flag = False
-                    for card in gcards:
-                        if card in mapping and card != mapping:
-                            flag = False
-                    if flag is True and mapping not in res:
-                        res.append(mapping)
+        fcards, values = self.check_integrities(tlf)
+        undefined_cards = self.get_undefined_cards(fcards, values, tlf)
+        if undefined_cards is not None:
+            fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
+        else:
+            fcards, gcards = [], []
+        for feature, value in self.namespace[tlf]['Features'].items():
+            for mapping in value['MappingsV'].keys():
+                flag = True
+                for card in fcards:
+                    if card in mapping:
+                        flag = False
+                for card in gcards:
+                    if card in mapping and card != mapping:
+                        flag = False
+                if flag is True and mapping not in res:
+                    res.append(mapping)
         return res
 
     def get_undefined_cards(self, listc, listv, tlf, filter=True):
@@ -1697,7 +1711,6 @@ class Waffle():
 
     def get_filtered_values(self, list, namespace, undefined=True):
         result = {'Value': []}
-        print(list)
         for feature in list:
             original = self.get_original_name(feature)
             feature_active_flag = (namespace[original]['MappingsV'][feature]['ActiveF'] and namespace[original]['MappingsV'][feature]['ActiveG'])

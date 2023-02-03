@@ -11,7 +11,12 @@ from formtools.wizard.views import CookieWizardView
 from django import forms
 from collections import OrderedDict
 
-
+# profiling library
+import cProfile
+import pstats
+import io
+from pstats import SortKey
+profiling = False
 factory_forms = None
 generated_steps = []
 model_stages = []
@@ -34,7 +39,10 @@ class WizardStepForm(forms.Form):
         RETURN
         cd (type = dict): cleaned data, that was printed to form fields.
         """
-        cd = copy.copy(self.cleaned_data)
+        if profiling is True:
+            ob = cProfile.Profile()
+            ob.enable()
+            cd = copy.copy(self.cleaned_data)
 
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
@@ -84,6 +92,14 @@ class WizardStepForm(forms.Form):
                     api.namespace[element]['Validated'] = True
             else:
                 api.namespace[self.label]['Validated'] = True
+        if profiling is True:
+            ob.disable()
+            sec = io.StringIO()
+            sortby = SortKey.CUMULATIVE
+            ps = pstats.Stats(ob, stream=sec).sort_stats(sortby)
+            ps.print_stats()
+
+            print(sec.getvalue())
         return cd
 
     def validation(self, element: str):
