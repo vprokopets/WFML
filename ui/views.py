@@ -42,7 +42,8 @@ class WizardStepForm(forms.Form):
         if profiling is True:
             ob = cProfile.Profile()
             ob.enable()
-            cd = copy.copy(self.cleaned_data)
+
+        cd = copy.copy(self.cleaned_data)
 
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
