@@ -753,12 +753,9 @@ class prec50(ExpressionElement):
         if res is None:
             res = []
         for feature, namespace in input.items():
-            if feature.split('.')[-1] == key and namespace['Type'] is not None:
-                for subfeature, value in namespace['Value'].items():
-                    if subfeature != 'Original' and value not in res and not isinstance(value, dict):
-                        res.append(value)
-                    elif isinstance(value, dict) and 'Value' in value.keys() and value['Value'] not in res:
-                        res.append(value['Value'])
+            if feature.split('.')[-1] == key:
+                if namespace['Value'] is not None and namespace['Value'] not in res:
+                    res.append(namespace['Value'])
         return res
 
     def cross_tree_check(self, reverse: bool = False, api=None):
@@ -1297,7 +1294,7 @@ class Waffle():
             original = self.cache[name]
         return original
 
-    def validate_feature(self, tlf):
+    def validate_feature(self, tlf, cards):
         """
         Function to validate all feature's constraints.
 
@@ -1308,10 +1305,10 @@ class Waffle():
         True if all constraints are valid
         """
         if self.debug_mode is True:
-            self.validate_constraints(tlf)
+            self.validate_constraints(tlf, cards)
         else:
             try:
-                self.validate_constraints(tlf)
+                self.validate_constraints(tlf, cards)
             except Exception as e:
                 logging.info(f'! Exception happened during constraint validation: {e}.')
                 return e
@@ -1539,7 +1536,7 @@ class Waffle():
             print(f'Constraint {constraint} is not ready to validate')
         return constraint_ready
 
-    def validate_constraints(self, tlf):
+    def validate_constraints(self, tlf, cards):
         self.cache_f = self.get_features_ready(tlf)
         constraints = {}
         constraints.update({'Dependent': self.namespace[tlf]['ConstraintsValidationOrder']})
@@ -1550,7 +1547,12 @@ class Waffle():
         for constraints_type, constraints_set in constraints.items():
             for constraint in constraints_set:
                 constraint_metadata = self.namespace[tlf]['Constraints'][constraint]
-                if constraint_metadata['Validated'] is False:
+                complex_constraint = False
+                for assign_type in ['Assign', 'Read']:
+                    for type in constraint_metadata[assign_type].keys():
+                        if 'prec50' in constraint_metadata[assign_type][type]:
+                            complex_constraint = True
+                if constraint_metadata['Validated'] is False and not(cards is True and complex_constraint is True):
                     validation_code = self.validate_constraint(constraint, constraint_metadata)
                     if validation_code is False and constraints_type == 'Dependent':
                         break

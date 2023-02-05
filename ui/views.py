@@ -62,16 +62,18 @@ class WizardStepForm(forms.Form):
                 self.add_error(key, error)
             if all(x is True for x in check):
                 api.update_namespace(cd)
+                cards_step = True
         else:
             api.update_namespace(cd)
+            cards_step = False
         # Validate all constraints, related to current top-level feature.
         self.up = []
         cycles = api.cycles
         if self.label in cycles.keys():
             for element in cycles[self.label]:
-                self.validation(element)
+                self.validation(element, cards_step)
         else:
-            self.validation(self.label)
+            self.validation(self.label, cards_step)
         # Assign unvalidated parameters error to appropriate fields.
         for param in self.up:
             element = param['element']
@@ -103,14 +105,14 @@ class WizardStepForm(forms.Form):
             print(sec.getvalue())
         return cd
 
-    def validation(self, element: str):
+    def validation(self, element: str, cards: bool):
         """
         Subfunction to validate wizard step form.
 
         INPUTS
         element (type = str): feature to define.
         """
-        res = api.validate_feature(element)
+        res = api.validate_feature(element, cards)
         if res is not True:
             logging.debug(f'Result: {res}')
             up = api.iterable['UnvalidatedFeatures']
