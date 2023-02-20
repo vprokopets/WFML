@@ -236,16 +236,39 @@ class prec24(ExpressionElement):
         res = []
         self.api.keyword = 'ReplaceFeature'
         keys = list(key.keys())
+        tmp = []
         for item in keys:
-            mappings = self.api.name_builder(item, self.api.namespace[item.split('.')[0]]["Features"])
-            for feature in mappings:
-                self.api.replace_feature = [re.sub(r'_\d+', '', feature).rsplit('.', 1)[0], feature]
-                if self.get_value(condition.parse()) is True:
-                    res.append(feature)
+            data = self.api.namespace[self.api.tlf]['Features'][self.api.get_original_name(item)]['MappingsV'][item]
+            if data['ActiveF'] is True and data['ActiveG'] is True:
+                tmp.append(item)
+        for item in keys:
+            self.api.replace_feature = item
+            if self.get_value(condition.parse()) is True:
+                res.append(item)
 
         self.api.keyword = ''
         logging.debug(f'filter Result: {res}')
         return res
+
+    def cross_tree_check(self, reverse: bool = False, api=None):
+        self.src = False
+        self.api = api
+        self.constraint_expression = api.constraint_expression
+        if len(self.op) > 1:
+            self.api.obj_id = self.__class__.__name__
+            self.api.constraint['Operations'].append(self.__class__.__name__)
+            if self.api.constraint['HigherOperation'] is None:
+                upd = self.__class__.__name__
+                self.api.constraint.update({'HigherOperation': upd})
+            self.api.keyword = 'ReplaceFeature1'
+            self.op[1].cross_tree_check(reverse, api)
+            self.api.keyword = 'ReplaceFeature'
+            self.op[2].cross_tree_check(reverse, api)
+            self.api.keyword = ''
+        else:
+            for part in self.op:
+                if isinstance(part, ExpressionElement):
+                    part.cross_tree_check(reverse, api)
 
 class prec23(ExpressionElement):
     @property
@@ -916,18 +939,23 @@ class term(ExpressionElement):
             return self.get_value(op.parse())
         elif isinstance(op, str) and op not in keywords and self.src is False:
             op = self.parse_string()
-            if self.api.keyword == 'Update' and self.is_feature is True:
+            if (self.api.keyword == 'Update' and self.is_feature is True) or self.is_fname is True:
                 for mapping in self.mappings:
                     if op == self.api.get_original_name(mapping):
                         op = mapping
                         break
             elif self.api.keyword == 'AllFeatures':
                 op = self.api.get_feature_childrens(op, own_only_flag=False)
-            elif self.api.keyword == 'ChildNamespace':
+            elif self.api.keyword == 'ChildNamespace' or self.is_childs is True:
+                for mapping in self.mappings:
+                    if op == self.api.get_original_name(mapping):
+                        op = mapping
+                        break
                 op = self.api.get_feature_childrens(op)
+
             elif self.is_feature is True and self.is_childs is False:
-                if self.api.keyword == 'ReplaceFeature':
-                    mappings = ['.'.join(op.split('.')[:x]) for x in range(1, len(op.split('.')) + 1)]
+                if 'ReplaceFeature' in self.api.keyword:
+                    mappings = [op]
                 else:
                     mappings = self.mappings
                 try:
@@ -938,14 +966,11 @@ class term(ExpressionElement):
                     op = self.api.get_feature(op)
                     op['Value'] = self.autoconvert(op[self.ftype]) if isinstance(op[self.ftype], str) else op[self.ftype]
                 except KeyError:
-                    if self.api.keyword == 'ReplaceFeature':
+                    if 'ReplaceFeature' in self.api.keyword:
                         op = None
                     else:
                         msg = f'No such feature {op}'
                         raise Exception(self.get_error_message(msg))
-
-            elif self.is_childs is True:
-                op = self.api.get_feature_childrens(op)
         return op
 
     def parse_string(self, for_mapping=False):
@@ -961,13 +986,14 @@ class term(ExpressionElement):
         op = self.op
         check = False
         self.is_childs = False
+        self.is_fname = False
         self.ftype = 'Value'
         if '"' in op or "'" in op:
             op = op.replace("'", '').replace('"', '')
             self.is_feature = False
         else:
             if self.api.keyword == 'ReplaceFeature':
-                op = f'{self.api.replace_feature[1]}.{op}'
+                op = f'{self.api.replace_feature}.{op}'
             elif f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
                 op = f'{self.api.rf}.{op}'
             if re.match(r'\{.+\}', op):
@@ -991,6 +1017,7 @@ class term(ExpressionElement):
                     op = '.'.join(split[1:])
                     check = True
                 elif op_type == 'fname':
+                    self.is_fname = True
                     op = '.'.join(split[1:])
                 else:
                     if split[0] in ['fcard', 'gcard']:
@@ -1017,32 +1044,56 @@ class term(ExpressionElement):
         INPUTS
         reverse (type = bool): the flag that defines features to write value instead of default read.
         """
-        op = self.parse_string()
-        if self.is_feature is True:
-
-            if self.api.keyword == 'AllFeatures':
-                res = []
-                op = self.api.get_feature_childrens(op, own_only_flag=False).keys()
-                for key in op:
-                    if key.split('.')[-1] == self.api.unique_key:
-                        res.append(key)
-                op = res
-            elif self.is_childs is True:
-                op = self.api.get_feature_childrens(op)
+        if self.api.keyword == 'ReplaceFeature':
+            if reverse is True:
+                data = self.api.constraint['Assign']
+                repl = self.api.assign
             else:
-                op = [op]
-            for feature in op:
-                field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-                feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
-                if reverse is True:
-                    self.api.constraint['Assign'][field_type].append(feature)
+                data = self.api.constraint['Read']
+                repl = self.api.read
+            for field_type in data.keys():
+                rm = []
+                for index, feature in enumerate(data[field_type]):
+                    if feature in repl:
+                        if f'{feature}.{self.op}' in self.api.namespace[self.api.tlf]['Features'].keys():
+                            data[field_type][index] = f'{feature}.{self.op}'
+                        else:
+                            rm.append(index)
+                for index in sorted(rm, reverse=True):
+                    del data[field_type][index]
+        else:
+            op = self.parse_string()
+            if self.is_feature is True:
+
+                if self.api.keyword == 'AllFeatures':
+                    res = []
+                    op = self.api.get_feature_childrens(op, own_only_flag=False).keys()
+                    for key in op:
+                        if key.split('.')[-1] == self.api.unique_key:
+                            res.append(key)
+                    op = res
+                elif self.is_childs is True:
+                    op = self.api.get_feature_childrens(op)
                 else:
-                    self.api.constraint['Read'][field_type].append(feature)
-                if self.api.obj_id in [None, 'prec23']:
-                    self.api.obj_id = self.__class__.__name__
-                if self.api.obj_id not in self.api.constraint['Pattern'].keys():
-                    self.api.constraint['Pattern'].update({self.api.obj_id: []})
-                self.api.constraint['Pattern'][self.api.obj_id].append(feature)
+                    op = [op]
+                self.api.assign = []
+                self.api.read = []
+                for feature in op:
+                    field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
+                    feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
+                    if reverse is True:
+                        if self.api.keyword == 'ReplaceFeature1':
+                            self.api.assign.append(feature)
+                        self.api.constraint['Assign'][field_type].append(feature)
+                    else:
+                        if self.api.keyword == 'ReplaceFeature1':
+                            self.api.read.append(feature)
+                        self.api.constraint['Read'][field_type].append(feature)
+                    if self.api.obj_id in [None, 'prec23']:
+                        self.api.obj_id = self.__class__.__name__
+                    if self.api.obj_id not in self.api.constraint['Pattern'].keys():
+                        self.api.constraint['Pattern'].update({self.api.obj_id: []})
+                    self.api.constraint['Pattern'][self.api.obj_id].append(feature)
 
     def parse(self):
         if self.api.mode != 'Validate':
@@ -1061,6 +1112,8 @@ class term(ExpressionElement):
 
     def set_mappings(self, mappings):
         self.mappings = mappings
+        if isinstance(self.op, ExpressionElement):
+            self.op.set_mappings(mappings)
 
     def get_mappings(self):
         result = {}
@@ -1506,10 +1559,13 @@ class Waffle():
             res = self.filter_mappings_for_constraint(constraint, mappings[mtype])
             filtered_combinations = []
             if len(res['Assign']) > 0:
-                if len(res['Assign']) != len(res['Read']) and res['Read'] != []:
-                    print(f'Len of assign mappings ({len(res["Assign"])}) is not equal to len read mappings ({len(res["Read"])})')
+                if len(res['Assign']) != len(res['Read']) and len(res['Read']) > 1:
+                    raise Exception(f'Len of assign mappings ({len(res["Assign"])}) is not equal to len read mappings ({len(res["Read"])})')
                 elif len(res['Assign']) != len(res['Read']) and res['Read'] == []:
                     filtered_combinations = res['Assign']
+                elif len(res['Assign']) != len(res['Read']) and len(res['Read']) == 1:
+                    for index in range(0, len(res['Assign'])):
+                        filtered_combinations.append(res['Assign'][index] + res['Read'][0])
                 else:
                     for index in range(0, len(res['Assign'])):
                         filtered_combinations.append(res['Assign'][index] + res['Read'][index])
@@ -1550,7 +1606,7 @@ class Waffle():
                 complex_constraint = False
                 for assign_type in ['Assign', 'Read']:
                     for type in constraint_metadata[assign_type].keys():
-                        if 'prec50' in constraint_metadata[assign_type][type]:
+                        if any(x in constraint_metadata[assign_type][type] for x in ['prec50', 'prec24']):
                             complex_constraint = True
                 if constraint_metadata['Validated'] is False and not(cards is True and complex_constraint is True):
                     validation_code = self.validate_constraint(constraint, constraint_metadata)
@@ -1571,7 +1627,7 @@ class Waffle():
         suffix = 'C' if cardinalities is True else 'V'
         res = list(self.namespace[tlf]['Features'][original][f'Mappings{suffix}'].keys())
         if len(res) > 1:
-            res.pop(original)
+            res.remove(original)
         return res
 
     def map_feature(self, fname, cardinalities=True):
@@ -1991,6 +2047,12 @@ class Waffle():
         for a, feature in self.namespace.items():
             for sequence_number in feature['ConstraintsValidationOrder']:
                 print('_______________')
+                print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
+                print(feature['Constraints'][sequence_number]['Assign'])
+                print(feature['Constraints'][sequence_number]['Read'])
+                print(feature['Constraints'][sequence_number]['Pattern'])
+            for sequence_number in feature['IndependentConstraints']:
+                print('------------------')
                 print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
                 print(feature['Constraints'][sequence_number]['Assign'])
                 print(feature['Constraints'][sequence_number]['Read'])

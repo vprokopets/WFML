@@ -64,6 +64,8 @@ class FeatureAnalyzer:
                     if assign_feature in value['Read']['Value'] and [assign_constraint, constraint] not in dependencies \
                             and assign_constraint != constraint:
                         dependencies.append([assign_constraint, constraint])
+        print('adsapodapodsakpodsakdposakdpoadpoaskdposad')
+        print(f'Dependencies: {dependencies}')
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()
         if cycles != {}:
