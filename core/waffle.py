@@ -191,6 +191,12 @@ class ExpressionElement(object):
                 else:
                     return feature_metadata
             return res
+        elif isinstance(feature_metadata, dict) and 'Value' not in feature_metadata.keys():
+            filtered = {}
+            for k, v in feature_metadata.items():
+                if v['ActiveF'] is True and v['ActiveG'] is True:
+                    filtered.update({k: v})
+            return filtered
         else:
             return feature_metadata
 
@@ -581,7 +587,7 @@ class prec12(ExpressionElement):
                 ret = left in right
             elif operation == 'not in':
                 ret = left not in right
-            self.check_exception(ret, f'Expression ({left} {operation} {right})')
+            self.check_exception(ret, f'Expression ({left} {operation} {list(right.keys()) if isinstance(right, dict) else right})')
         return ret
 
     def check_cardinalities(self):
@@ -939,16 +945,17 @@ class term(ExpressionElement):
             return self.get_value(op.parse())
         elif isinstance(op, str) and op not in keywords and self.src is False:
             op = self.parse_string()
+            fop = op.replace('Fcard.', '').replace('Gcard.', '').replace('fcard.', '').replace('gcard.', '')
             if (self.api.keyword == 'Update' and self.is_feature is True) or self.is_fname is True:
                 for mapping in self.mappings:
-                    if op == self.api.get_original_name(mapping):
-                        op = mapping
+                    if fop == self.api.get_original_name(mapping):
+                        op = f'{self.ftype}.{mapping}' if self.ftype in ('Fcard', 'Gcard') else mapping
                         break
             elif self.api.keyword == 'AllFeatures':
                 op = self.api.get_feature_childrens(op, own_only_flag=False)
             elif self.api.keyword == 'ChildNamespace' or self.is_childs is True:
                 for mapping in self.mappings:
-                    if op == self.api.get_original_name(mapping):
+                    if fop == self.api.get_original_name(mapping):
                         op = mapping
                         break
                 op = self.api.get_feature_childrens(op)
@@ -960,10 +967,12 @@ class term(ExpressionElement):
                     mappings = self.mappings
                 try:
                     for mapping in mappings:
-                        if op == self.api.get_original_name(mapping):
-                            op = mapping
+                        if fop == self.api.get_original_name(mapping):
+                            op = f'{self.ftype}.{mapping}' if self.ftype in ('Fcard', 'Gcard') else mapping
                             break
                     op = self.api.get_feature(op)
+                    if self.ftype == 'Gcard':
+                        op['Gcard'] = op['Gcard'].split('.')[-1]
                     op['Value'] = self.autoconvert(op[self.ftype]) if isinstance(op[self.ftype], str) else op[self.ftype]
                 except KeyError:
                     if 'ReplaceFeature' in self.api.keyword:
@@ -1020,7 +1029,7 @@ class term(ExpressionElement):
                     self.is_fname = True
                     op = '.'.join(split[1:])
                 else:
-                    if split[0] in ['fcard', 'gcard']:
+                    if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard']:
                         self.ftype = split[0].capitalize()
                         if for_mapping is False:
                             split[0] = self.ftype
@@ -1035,6 +1044,10 @@ class term(ExpressionElement):
                 else:
                     op = self.autoconvert(op)
             self.is_feature = check
+        if self.is_feature is True:
+            for part in op.split('.'):
+                if part in keywords:
+                    raise Exception(f'Feature name {op} contains forbidden keyword: {part}. Please change feature name.')
         return op
 
     def constraint_sequence_check(self, reverse):
@@ -1143,7 +1156,7 @@ class term(ExpressionElement):
         self.constraint_expression = api.constraint_expression
         if self.api.constraint['HigherOperation'] is None:
             self.api.constraint.update({'HigherOperation': self.__class__.__name__})
-        if type(op) is str and op not in keywords:
+        if type(op) is str:
             self.constraint_sequence_check(reverse)
         else:
             self.is_feature = False
@@ -1273,7 +1286,7 @@ class Waffle():
                     for mapping, mvalue in feature['MappingsV'].items():
                         value = mvalue['Value']
 
-                        if mvalue['ActiveF'] is True and mvalue['ActiveG'] is True:
+                        if self.feature_active_flag(mapping, self.namespace[tlf]['Features'], False) is True:
                             path = mapping.split('.')
                             flag = False
                             for fname in self.namespace[tlf]['Features'].keys():
@@ -1302,6 +1315,7 @@ class Waffle():
         }
         self.defined_features_backup = copy.deepcopy(self.defined_features)
         self.step_to_define = {}
+        self.original_card_from_c = {'Fcard': {}, 'Gcard': {}}
         self.exception_flag = False
         self.constraint = None
         self.tmp = False
@@ -1435,7 +1449,7 @@ class Waffle():
         for feature in namespace.values():
             for mapping, mvalue in feature['MappingsV'].items():
                 is_child = (len(mapping.split('.')) - len(fname.split('.'))) == 1 if own_only_flag is True else (len(mapping.split('.')) - len(fname.split('.'))) >= 1
-                if mapping.startswith(fname) and is_child is True:
+                if mapping.startswith(f'{fname}.') and is_child is True:
                     res.update({mapping: mvalue})
         return res
 
@@ -1447,10 +1461,14 @@ class Waffle():
             for suffix in ['C', 'V']:
                 for mapping, mvalue in fvalue[f'Mappings{suffix}'].items():
                     if field == 'Gcard':
-                        if len(mapping.split('.')) >= len(filter_field[0].split('.')) and any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
-                            mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
+                        if any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
+                            if (suffix == 'V' and len(mapping.split('.')) >= len(filter_field[0].split('.'))) or (suffix == 'C' and len(mapping.split('.')) > len(filter_field[0].split('.'))): 
+                                mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
                     else:
-                        if len(mapping.split('.')) >= len(filter_field[0].split('.')) and any(x in mapping for x in filter_field):
+                        mapping_sp = mapping.split('.')
+                        mapping_sp[-1] = self.get_original_name(mapping_sp[-1])
+                        mapping_or = '.'.join(mapping_sp)
+                        if len(mapping.split('.')) >= len(filter_field[0].split('.')) and any(mapping_or in x for x in filter_field):
                             if value == 0 or not isinstance(value, int):
                                 mvalue['ActiveF'] = False
                             elif value >= 1:
@@ -1459,7 +1477,7 @@ class Waffle():
                                 if len(fvalue[f'Mappings{suffix}'].keys()) == 1:
                                     mvalue['ActiveF'] = True
                                 for x in filter_field:
-                                    if x in mapping:
+                                    if mapping in x:
                                         y = x
                                 split = mapping.split(y)
                                 if len(split) > 1 and split[1] != '':
@@ -1472,45 +1490,53 @@ class Waffle():
         constraint_ready, deactivated = True, False
         tlf = self.get_original_name(constraint_data['RelatedFeature'].split('.')[0])
         namespace = self.namespace[tlf]['Features']
-        rfmappings = self.get_filtered_values(self.map_feature_cache(constraint_data['RelatedFeature'], False), namespace, False)
+        rfmappings = self.get_filtered_values(self.map_feature_cache(constraint_data['RelatedFeature'], False), namespace, undefined=False)
         filtered_mappings = []
         if rfmappings is not None:
             for mapping in rfmappings['Value']:
-                if mapping in self.cache_f:
+                if mapping in self.cache_f['MappingsV']:
                     filtered_mappings.append(mapping)
         if len(filtered_mappings) > 0:
             for assign_type in ['Assign', 'Read']:
                 for ftype in constraint_data[assign_type].keys():
                     card_flag = True if ftype == 'Fcard' else False
+                    mapping_type = 'MappingsC' if ftype == 'Fcard' else 'MappingsV'
                     for feature in constraint_data[assign_type][ftype]:
                         tlf = self.get_original_name(feature.split('.')[0])
                         namespace = self.namespace[tlf]['Features']
-                        try:
-                            fmappings = {'Mappings': {}, 'MappingsFull': {}}
-                            fmappings.update({'Mappings': self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, False)})
-                            fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
-                            for type in fmappings.keys():
-                                filtered_mappings = []
-                                if type == 'Mappings':
-                                    for mapping in fmappings[type]['Value']:
-                                        if mapping in self.cache_f:
-                                            filtered_mappings.append(mapping)
-                                else:
-                                    filtered_mappings = fmappings[type]['Value']
-                                for mapping in filtered_mappings:
-                                    split = mapping.split('.')
-                                    for index in range(0, len(split)):
-                                        fname = '.'.join(split[:index + 1])
-                                        original = self.get_original_name(fname)
-                                        if original not in mappings[type][assign_type].keys():
-                                            mappings[type][assign_type].update({original: []})
-                                        if fname not in mappings[type][assign_type][original]:
-                                            mappings[type][assign_type][original].append(fname)
-                                        if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                            constraint_ready = False
-                        except Exception as e:
-                            print(f'Exception {e}')
-                            constraint_ready = False
+
+                        fmappings = {'Mappings': {}, 'MappingsFull': {}}
+                        vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
+                        if vmappings is None:
+                            vmappings = {'Value': []}
+                        fmappings.update({'Mappings': vmappings})
+                        fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
+                        for type in fmappings.keys():
+                            filtered_mappings = []
+                            if type == 'Mappings':
+                                for mapping in fmappings[type]['Value']:
+                                    if mapping in self.cache_f[mapping_type]:
+                                        filtered_mappings.append(mapping)
+                            else:
+                                filtered_mappings = fmappings[type]['Value']
+                            for mapping in filtered_mappings:
+                                split = mapping.split('.')
+                                for index in range(0, len(split)):
+                                    fname = '.'.join(split[:index + 1])
+                                    original = self.get_original_name(fname)
+                                    if original not in mappings[type][assign_type].keys():
+                                        mappings[type][assign_type].update({original: []})
+                                    if fname not in mappings[type][assign_type][original]:
+                                        mappings[type][assign_type][original].append(fname)
+                                    if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
+                                        print(f'Feature {fname} is not ready (mapping: {mapping}).')
+                                        constraint_ready = False
+                                    for constraint in self.namespace[tlf]['Constraints'].values():
+                                        if constraint['Validated'] is None:
+                                            if original in constraint['Assign']['Fcard']:
+                                                constraint_ready = False
+                                                print(f'Fcard Feature {fname} will be defined in constraint')
+
         else:
             constraint_ready = False
             deactivated = True
@@ -1543,7 +1569,7 @@ class Waffle():
         constraint_ready, mappings, deactivated = self.get_mappings_for_constraint(value)
         mtype = 'Mappings'
         if value['HigherOperation'] in self.boolean and all(x in self.boolean for x in value['Operations']) and deactivated is False:
-            if all(x in self.cache_f for x in value['Read']['Value']):
+            if all(x in self.cache_f['MappingsV'] for x in value['Read']['Value']):
                 constraint_ready = True
                 mtype = 'MappingsFull'
             else:
@@ -1651,9 +1677,10 @@ class Waffle():
                     else:
                         prev_names = [key]
                     for prev_name in prev_names:
-                        for i in range(0, repeats):
-                            full_name = prev_name if names == [] else f'{prev_name}.{split[index - 1]}'
-                            names_temp.append(f'{full_name}_{i}' if repeats > 1 or (cardinalities is False and f"{full_name}_{i}" in fnamespace[f'MappingsV'].keys()) else full_name)
+                        if (prev_name in key and len(fnamespace[f'MappingsC']) > 1) or len(fnamespace[f'MappingsC']) == 1 or (cardinalities is True and index == len(split)):
+                            for i in range(0, repeats):
+                                full_name = prev_name if names == [] else f'{prev_name}.{split[index - 1]}'
+                                names_temp.append(f'{full_name}_{i}' if repeats > 1 or (cardinalities is False and f"{full_name}_{i}" in fnamespace[f'MappingsV'].keys()) else full_name)
             names = list(dict.fromkeys(names_temp))
         return names
 
@@ -1664,6 +1691,7 @@ class Waffle():
         if undefined_cards is None:
             undefined_values = self.get_filtered_values(values, self.namespace[tlf]['Features'])
         self.step_to_define.update({'Cards': undefined_cards, 'Values': undefined_values})
+        logging.info(f'Stage: {tlf}, step: {self.step_to_define}')
         return undefined_cards if undefined_cards is not None else undefined_values
 
     def check_integrities(self, tlf):
@@ -1688,25 +1716,29 @@ class Waffle():
         return result
 
     def get_features_ready(self, tlf):
-        res = []
+        ret = {}
         fcards, values = self.check_integrities(tlf)
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
         if undefined_cards is not None:
             fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
         else:
             fcards, gcards = [], []
-        for feature, value in self.namespace[tlf]['Features'].items():
-            for mapping in value['MappingsV'].keys():
-                flag = True
-                for card in fcards:
-                    if card in mapping:
-                        flag = False
-                for card in gcards:
-                    if card in mapping and card != mapping:
-                        flag = False
-                if flag is True and mapping not in res:
-                    res.append(mapping)
-        return res
+
+        for mapping_type in ['MappingsV', 'MappingsC']:
+            res = []
+            for feature, value in self.namespace[tlf]['Features'].items():
+                for mapping in value[mapping_type].keys():
+                    flag = True
+                    for card in fcards:
+                        if card in mapping:
+                            flag = False
+                    for card in gcards:
+                        if card in mapping and card != mapping:
+                            flag = False
+                    if flag is True and mapping not in res:
+                        res.append(mapping)
+                ret.update({mapping_type: res})
+        return ret
 
     def get_undefined_cards(self, listc, listv, tlf, filter=True):
         result = {'Fcard': [], 'Gcard': []}
@@ -1720,14 +1752,14 @@ class Waffle():
                 for celement in card_type_list:
                     flag = True
                     for aelement in another_type_list:
-                        if aelement in celement:
+                        if aelement in celement or self.get_original_name(aelement) in celement:
                             flag = False
                         if card_type == 'Fcard' and aelement in celement and (len(celement.split('.')) - len(aelement.split('.')) == 1):
                             result[card_type].append(celement)
                         elif card_type == 'Gcard' and celement in aelement and len(aelement.split('.')) - len(celement.split('.')) == 1:
                             flag = False
                     for aelement in card_type_list:
-                        if aelement in celement and aelement != celement:
+                        if (aelement in celement and aelement != celement) or (self.get_original_name(aelement) in celement and self.get_original_name(aelement) != celement and self.get_original_name(aelement) != self.get_original_name(celement)):
                             flag = False
                     if flag is True and celement not in result[card_type]:
                         result[card_type].append(celement)
@@ -1735,11 +1767,28 @@ class Waffle():
             result.update({'Fcard': fcards, 'Gcard': gcards})
         return result if result != {'Fcard': [], 'Gcard': []} else None
 
+    def feature_active_flag(self, fname, namespace, card):
+        suffix = 'C' if card is True else 'V'
+        #suffix = 'V'
+        shift = 0 if card is True else 0
+        split = fname.split('.')
+        feature_active_flag = True
+        for index in range(0, len(split) - shift):
+            split_c = fname.split('.')
+            if card is True:
+                split_c[index] = self.get_original_name(split_c[index])
+            name = '.'.join(split_c[:index + 1])
+            original = self.get_original_name(name)
+            feature_active_flag = (namespace[original][f'Mappings{suffix}'][name]['ActiveF'] and namespace[original][f'Mappings{suffix}'][name]['ActiveG'])
+            if feature_active_flag is False:
+                break
+        return feature_active_flag
+
     def get_undefined_fcards(self, list, namespace):
         result = []
         for feature in list:
             original = self.get_original_name(feature)
-            feature_active_flag = (namespace[original]['MappingsC'][feature]['ActiveF'] and namespace[original]['MappingsC'][feature]['ActiveG'])
+            feature_active_flag = self.feature_active_flag(feature, namespace, True)
             fcard_value = namespace[original]['MappingsC'][feature]['Fcard']
             if not isinstance(fcard_value, int) and feature_active_flag is True:
                 result.append(feature)
@@ -1750,7 +1799,7 @@ class Waffle():
         for feature in list:
             gcard_to_define = False
             original = self.get_original_name(feature)
-            feature_active_flag = (namespace[original]['MappingsV'][feature]['ActiveF'] and namespace[original]['MappingsV'][feature]['ActiveG'])
+            feature_active_flag = self.feature_active_flag(feature, namespace, False)
             gcard_value = namespace[original]['MappingsV'][feature]['Gcard']
             if feature_active_flag is True:
                 if gcard_value in ['or', 'mux', 'xor']\
@@ -1767,15 +1816,19 @@ class Waffle():
                     result.append(feature)
         return result
 
-    def get_filtered_values(self, list, namespace, undefined=True):
+    def get_filtered_values(self, list, namespace, undefined=True, card=False):
         result = {'Value': []}
         for feature in list:
             original = self.get_original_name(feature)
-            feature_active_flag = (namespace[original]['MappingsV'][feature]['ActiveF'] and namespace[original]['MappingsV'][feature]['ActiveG'])
-            feature_value = namespace[original]['MappingsV'][feature]['Value']
+            feature_active_flag = self.feature_active_flag(feature, namespace, card)
+            mappings = 'MappingsV' if card is False else 'MappingsC'
+            ftype = 'Fcard' if card is True else 'Value'
+            feature_value = namespace[original][mappings][feature][ftype]
             feature_type = namespace[original]['Type']
             if feature_active_flag is True:
-                if (feature_value is None and undefined is True and feature_type not in [None, 'predefined']) or undefined is False:
+                if card is False and ((feature_value is None and undefined is True and feature_type not in [None, 'predefined']) or undefined is False):
+                    result['Value'].append(feature)
+                elif card is True:
                     result['Value'].append(feature)
         return result if result != {'Value': []} else None
 
@@ -1938,6 +1991,7 @@ class Waffle():
         # Add independent cycles
         index = 0
         for cycle in self.cycles:
+            raise Exception(f'Cycled features are currently disabled. Pleace check cycle(s) {list(self.cycles.items())}')
             index += 1
             if f'cycle{index}' not in result:
                 result.append(f'cycle{index}')
@@ -1964,8 +2018,39 @@ class Waffle():
         card_type = feature.split('.')[0]
         suffix = 'C' if card_type == 'Fcard' else 'V'
         original_name = self.get_original_name(feature)
+
+        res_orig = []
+        # Transform special cardinality values to simple constraint. Fullfill match groups.
+        if not isinstance(card_value, list):
+            if card_value == '*':
+                res_orig.append(['x>=0'])
+            elif card_value in ['+', 'or']:
+                res_orig.append('x>=1')
+            elif card_value in ['?', 'mux']:
+                res_orig.append(['x>=0', 'x<=1'])
+            elif card_value == 'xor':
+                res_orig.append('x==1')
+            elif type(card_value) == int or re.match(r'^\d+$', card_value):
+                res_orig.append(f'x=={card_value}')
+            else:
+                strspl = card_value.split(',')
+                for lexem in strspl:
+                    if re.match(r'(\d+\.\.)+(\d+|\*)', lexem):
+                        lexspl = lexem.split('..')
+                        res_orig.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'] if lexspl[1] != '*' else [f'x>={lexspl[0]}'])
+                    else:
+                        res_orig.append(f'x=={lexem}')
+            if len(res_orig) > 0:
+                self.original_card_from_c[card_type].update({feature: card_value})
+                return True
+
         tlf = original_name.split('.')[0]
-        original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
+        if feature in self.original_card_from_c[card_type].keys():
+            original_card = self.original_card_from_c[card_type][feature]
+        else:
+            original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
+        if original_card is None:
+            return True
         if card_type == 'Fcard':
             x = card_value
         elif card_type == 'Gcard' and isinstance(card_value, str):
