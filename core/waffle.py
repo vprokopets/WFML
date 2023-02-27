@@ -1508,6 +1508,7 @@ class Waffle():
                         fmappings = {'Mappings': {}, 'MappingsFull': {}}
                         vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
                         if vmappings is None:
+                            constraint_ready = False
                             vmappings = {'Value': []}
                         fmappings.update({'Mappings': vmappings})
                         fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
@@ -1566,6 +1567,10 @@ class Waffle():
         return res
 
     def validate_constraint(self, constraint, value):
+        constraint_expression = f' \
+                {self.description.splitlines()[get_location(value["Constraint"])["line"] - 1].lstrip()}; '
+        self.rf = value['RelatedFeature']
+        logging.info(f'Constraint preprocessing for feature {self.rf}: {constraint_expression}')
         constraint_ready, mappings, deactivated = self.get_mappings_for_constraint(value)
         mtype = 'Mappings'
         if value['HigherOperation'] in self.boolean and all(x in self.boolean for x in value['Operations']) and deactivated is False:
@@ -1576,11 +1581,8 @@ class Waffle():
                 constraint_ready = False
         if constraint_ready is True:
             self.tlf = self.get_original_name(value['RelatedFeature'].split('.')[0])
-            self.rf = value['RelatedFeature']
             self.exception_flag = False
             self.keyword = ''
-            constraint_expression = f' \
-                {self.description.splitlines()[get_location(value["Constraint"])["line"] - 1].lstrip()}; '
             logging.info(f'Constraint validation for feature {self.rf}: {constraint_expression}')
             res = self.filter_mappings_for_constraint(constraint, mappings[mtype])
             filtered_combinations = []
@@ -2109,7 +2111,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = False
+        self.debug_mode = True
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
