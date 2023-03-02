@@ -3,6 +3,7 @@ import copy
 import json
 import itertools
 import logging
+from networkx.algorithms.distance_measures import eccentricity
 import pandas as pd
 import pickle
 import pprint
@@ -104,10 +105,12 @@ class ExpressionElement(object):
             if isinstance(part, ExpressionElement):
                 part.mapping_check()
 
-    def cross_tree_check(self):
+    def cross_tree_check(self, flag=None):
         for part in self.op:
-            if isinstance(part, ExpressionElement):
-                part.cross_tree_check()
+            if isinstance(part, ExpressionElement) and len(self.op) > 1:
+                part.cross_tree_check(True)
+            else:
+                part.cross_tree_check(flag)
 
     def initial_super_reference_check(self):
         return self.op[0].initial_super_reference_check()
@@ -115,10 +118,69 @@ class ExpressionElement(object):
     def initial_type_reference_check(self):
         return self.op[0].initial_type_reference_check()
 
+    def check_gcard(self, feature: str):
+        """
+        Check, whether feature is allowed according to group cardinality.
+        INPUTS
+        feature: feature to check.
+        RETURN
+        (type = bool): check result.
+        """
+        for key, value in self.get_wfml_data('Cardinalities.Feature').items():
+            if key == feature and value == 0:
+                return False
+        logging.debug(f'GcardTable: {self.get_wfml_data("Cardinalities.Group")}')
+        for key, value in self.get_wfml_data('Cardinalities.Group').items():
+            if key == feature:
+                return True
+            if type(value) is not list:
+                value = [value]
+            # This method checks all parts of feature full path to be sure, that all cardinalities are valid.
+            for item in value:
+                check = key + '.' + item
+                if check in feature:
+                    return True
+            if key in feature:
+                return False
+        return True
+
     @property
     def fcard_validation(self):
         ret = self.op[0].fcard_validation
         return ret
+
+
+class prec24(ExpressionElement):
+    @property
+    def value(self):
+        self.exception_flag = False
+        for operation, key, condition in zip(self.op[0::3], self.op[1::3], self.op[2::3]):
+            if operation == 'filter':
+                if self.get_wfml_data('Flags.Exception') is False:
+                    logging.debug("Level 23 Exception flag.")
+                    self.update_wfml_data('Flags.Exception', True)
+                    self.exception_flag = True
+                logging.debug(f'Level 24 Operation filter x where y.')
+                ret = self.filter(condition, key.value)
+        # Double check to release global exception flag.
+        if self.exception_flag is True:
+            self.update_wfml_data('Flags.Exception', False)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+    def filter(self, condition, key):
+        logging.debug(f'filter method with arguments condition: {condition}, key: {key}')
+        res = []
+        old_path = self.get_wfml_data('Path')
+        for item in key:
+            self.update_wfml_data('Path', f'{old_path}.{item}')
+            if condition.value is True:
+                res.append(item)
+        self.update_wfml_data('Path', old_path)
+        logging.debug(f'filter Result: {res}')
+        return res
+
 
 class prec23(ExpressionElement):
     @property
@@ -167,7 +229,8 @@ class prec23(ExpressionElement):
                 else:
                     if self.exception_flag is True:
                         ol = self._tx_position_end - self._tx_position
-                        msg = ''.join(('Expression operation IF returned not boolean',
+                        msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                       ' Expression operation IF returned not boolean',
                                        ' was not satisfied.\n',
                                        f'Error position: Line {get_location(self)["line"]},',
                                        f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -182,6 +245,7 @@ class prec23(ExpressionElement):
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
+
 
 class prec22(ExpressionElement):
     @property
@@ -214,7 +278,8 @@ class prec22(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation IFF ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -261,7 +326,8 @@ class prec21(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation IMPLIES ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -308,7 +374,8 @@ class prec20(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation OR ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation OR ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -355,7 +422,8 @@ class prec19(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation XOR ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -403,7 +471,8 @@ class prec18(ExpressionElement):
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if not ret and self.exception_flag is True:
                     ol = self._tx_position_end - self._tx_position
-                    msg = ''.join((f'Expression operation AND ({self.op[0].value} {operation} {operand.value})',
+                    msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                                   f' Expression operation AND ({self.op[0].value} {operation} {operand.value})',
                                    ' was not satisfied.\n',
                                    f'Error position: Line {get_location(self)["line"]},',
                                    f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
@@ -580,10 +649,14 @@ class prec12(ExpressionElement):
         ret (variable type): previous level object if no prec12 operations are not presented in constraint
                             operation result in opposite case.
         """
-        ret = self.op[0].value
-        self.exception_flag = False
 
-        for operation, operand in zip(self.op[1::2], self.op[2::2]):
+        self.exception_flag = False
+        if len(self.op) == 4:
+            shift = 1
+        else:
+            ret = self.op[0].value
+            shift = 0
+        for operation, operand in zip(self.op[1+shift::2+shift], self.op[2+shift::2+shift]):
 
             # Take exception flag if it was still not taken.
             if operation in ['<', '>', '==', '>=', '<=', '!=', 'in', 'not in']:
@@ -591,48 +664,67 @@ class prec12(ExpressionElement):
                     logging.debug("Level 12 Exception flag.")
                     self.update_wfml_data('Flags.Exception', True)
                     self.exception_flag = True
-                ret = self.op[0].value
-                logging.debug(f'{ret} {operation} {operand.value}')
+                ret = self.op[0+shift].value
+                logging.info(f'{ret} {operation} {operand.value}')
+            if self.op[0] == 'all':
+                ret = list(ret.replace(' ', '').split(','))
+            else:
+                ret = [ret]
+            for iteration in range(0, len(ret)):
+                if operation == '<':
+                    res = ret[iteration] < operand.value
+                    logging.debug("Level 12 comparison < operation")
 
-            if operation == '<':
-                ret = ret < operand.value
-                logging.debug("Level 12 comparison < operation")
+                elif operation == '>':
+                    res = ret[iteration] > operand.value
+                    logging.debug("Level 12 comparison > operation")
 
-            elif operation == '>':
-                ret = ret > operand.value
-                logging.debug("Level 12 comparison > operation")
+                elif operation == '==':
+                    res = ret[iteration] == operand.value
+                    logging.debug("Level 12 comparison == operation")
 
-            elif operation == '==':
-                ret = ret == operand.value
-                logging.debug("Level 12 comparison == operation")
+                elif operation == '>=':
+                    res = ret[iteration] >= operand.value
+                    logging.debug("Level 12 comparison >= operation")
 
-            elif operation == '>=':
-                ret = ret >= operand.value
-                logging.debug("Level 12 comparison >= operation")
+                elif operation == '<=':
+                    res = ret[iteration] <= operand.value
+                    logging.debug("Level 12 comparison <= operation")
 
-            elif operation == '<=':
-                ret = ret <= operand.value
-                logging.debug("Level 12 comparison <= operation")
+                elif operation == '!=':
+                    res = ret[iteration] != operand.value
+                    logging.debug("Level 12 comparison != operation")
 
-            elif operation == '!=':
-                ret = ret != operand.value
-                logging.debug("Level 12 comparison != operation")
+                elif operation == 'in':
+                    res = ret[iteration] in operand.value
+                    logging.debug("Level 12 comparison in operation")
 
-            elif operation == 'in':
-                ret = ret in operand.value
-                logging.debug("Level 12 comparison in operation")
-
-            elif operation == 'not in':
-                ret = ret not in operand.value
+                elif operation == 'not in':
+                    res = ret[iteration] not in operand.value
+                if res is False:
+                    err_index = iteration
+                    err_ret = ret
+                    break
+            ret = res
 
         # Raise exception if result is False and exception flag was taken by this operation.
         if ret is False and self.exception_flag is True:
             ol = self._tx_position_end - self._tx_position
-            msg = ''.join((f'Expression operation ({self.op[0].value} {operation} {operand.value})',
-                           ' was not satisfied.\n',
-                           f'Error position: Line {get_location(self)["line"]},',
-                           f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
-                           f' Filename {get_location(self)["filename"]}\n'))
+            if len(self.op) == 3:
+                msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                               f' Expression operation ({self.op[0+shift].value} {operation} {operand.value})',
+                               ' was not satisfied.\n',
+                               f'Error position: Line {get_location(self)["line"]},',
+                               f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                               f' Filename {get_location(self)["filename"]}\n'))
+            else:
+                msg = ''.join((f'{self.get_wfml_data("CurrentConstraintExpression")}',
+                               f'Expression operation ({self.op[0]} {self.op[0+shift].value} {operation} {operand.value})',
+                               ' was not satisfied.\n',
+                               f' Wrong element: {err_ret[err_index]}'
+                               f' Error position: Line {get_location(self)["line"]},',
+                               f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol},',
+                               f' Filename {get_location(self)["filename"]}\n'))
             raise Exception(msg)
 
         # Release exception flag.
@@ -673,6 +765,7 @@ class prec11(ExpressionElement):
                 flag_left = False
                 flag_right = False
                 for element in self.get_wfml_data('Model').elements:
+                    print(f'Name {element.name}')
                     if element.name == ret:
                         flag_left = True
                     elif element.name == operand.value:
@@ -695,12 +788,16 @@ class prec10(ExpressionElement):
             ret = self.op[0].value
         else:
             for operation, operand in zip(self.op[1::2], self.op[2::2]):
+                try:
+                    self.flag
+                except AttributeError:
+                    self.flag = False
                 self.update_wfml_data('Flags.Update', True)
                 ret = self.op[0].value
+                cardinality_flag = self.get_wfml_data('Flags.Cardinality')
                 self.update_wfml_data('Flags.Update', False)
                 right_value = operand.value
                 if operation == '=':
-                    cardinality_flag = self.get_wfml_data('Flags.Cardinality')
                     logging.debug(f"Level 10 assignment operation: {ret} {operation} {right_value} {cardinality_flag}")
 
                     # Assign to complex path variable.
@@ -724,23 +821,31 @@ class prec10(ExpressionElement):
                         self.update_wfml_data('Namespace.' + path, assign, False, False)
 
                     # If cardinality flag was set, then update cardinality value instead of variable in namespace.
-                    elif re.match(r'(\w+\.)+\w+', ret) and cardinality_flag == 'fcard':
+                    elif re.match(r'(\w+\.)+\w+', ret) and cardinality_flag == 'fcard' and self.flag is False:
                         self.update_wfml_data('Cardinalities.Feature', {ret.split('.', 1)[1]: right_value})
 
                 else:
                     raise Exception(f'Parameter {ret} is not defined.')
         return ret
 
-    def cross_tree_check(self):
+    def cross_tree_check(self, flag=None):
+        self.flag = False
         if len(self.op) > 1 and self.op[1] == '=':
+            self.flag = True
             self.update_wfml_data('Flags.Update', True)
-
+            self.flag = False
+        try:
+            if len(self.op) > 1 and self.op[1] == '=' and flag is None:
+                self.value
+        except Exception:
+            pass
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.cross_tree_check()
             else:
                 self.update_wfml_data('Flags.Update', False)
         self.update_wfml_data('Flags.Update', False)
+
 
 class prec9(ExpressionElement):
     @property
@@ -803,13 +908,20 @@ class prec7(ExpressionElement):
         """
         # TODO debug checks for list type
         for operation, operand in zip(self.op[0::2], self.op[1::2]):
+            ret = operand.value
+            if isinstance(ret, str):
+                ret = ret.replace(' ', '').split(',')
             if operation == 'min':
                 logging.debug(f"Level 8 min operation: {operation}")
-                ret = min(operand.value)
+                ret = min(ret)
 
             elif operation == 'max':
                 logging.debug(f"Level 8 max operation: {operation}")
-                ret = max(operand.value)
+                ret = max(ret)
+
+            elif operation == 'size':
+                logging.debug(f"Level 8 size operation: {operation}")
+                ret = len(ret)
         if len(self.op) == 1:
             ret = self.op[0].value
 
@@ -842,6 +954,32 @@ class prec6(ExpressionElement):
         if len(self.op) == 1:
             ret = self.op[0].value
         return ret
+
+
+class prec50(ExpressionElement):
+    @property
+    def value(self):
+        for operation, key, search_list in zip(self.op[0::3], self.op[1::3], self.op[2::3]):
+            if operation == 'unique':
+                logging.debug(f'Level 5.0 Operation unique x in y.')
+                ret = self.find_unique(search_list.value, key.value)
+        if len(self.op) == 1:
+            ret = self.op[0].value
+        return ret
+
+    def find_unique(self, input, key, res=None):
+        if res is None:
+            res = []
+        for k, v in input.items():
+            if k == key:
+                if type(v) is dict and 'value' in v.keys() and v['value'] not in res:
+                    res.append(v['value'])
+                elif type(v) is not dict and v not in res:
+                    res.append(v)
+            if type(v) is dict:
+                self.find_unique(v, key, res)
+        logging.debug(f'find_unique Result: {res}')
+        return res
 
 
 class prec5(ExpressionElement):
@@ -984,7 +1122,7 @@ class term(ExpressionElement):
         op (variable type): variable, number, string, etc.
         """
         op = self.op
-
+        logging.debug(f'Lowest level operation with value {op}.')
         # In case of int or float value, just return it
         if type(op) in {int, float}:
             logging.debug(f"Operation object: {op} with type {type(op)}")
@@ -998,7 +1136,7 @@ class term(ExpressionElement):
         # In case of top-level variable in global namespace return its value.
         elif op in self.get_wfml_data('Namespace').keys():
             logging.debug("Variable in global namespace.")
-            return self.get_wfml_data('Namespace')[op]['value']
+            return self.get_wfml_data('Namespace')[op]
 
         # In case of bool value, just return it.
         elif type(op) is bool:
@@ -1010,7 +1148,7 @@ class term(ExpressionElement):
             if op not in self.get_wfml_data('Namespace').keys() and not re.match(r'(\w+\.)+\w+', op):
                 check = f'{self.get_wfml_data("Path")}.{op}'
                 if check in self.get_wfml_data('Iterable.Mapping.Structure').keys():
-                    check = self.map_variable(check)
+                    check = self.map_variable(False, check)
                 namespace = self.get_wfml_data('Namespace')
                 try:
                     for part in check.split('.'):
@@ -1029,12 +1167,33 @@ class term(ExpressionElement):
 
             # If string pattern match path to variable (splitted with dot delimiters: 'a.b.c')
             elif re.match(r'(\w+\.)+\w+', op):
-                # Check for mappings
-                if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
-                    op = self.map_variable()
-                self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
+                direct_mapping = False
+                tail = []
                 path = op.split('.')
 
+                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent' or path[0] == 'path':
+                    if path[1] == 'self':
+                        direct_mapping = True
+                        op = self.get_wfml_data('Path')
+                        if len(path) > 2:
+                            for index in range(2, len(path)):
+                                tail.append(path[index])
+                            tail = '.'.join(tail)
+                    else:
+                        op = ''
+                        for section in path[1:]:
+                            if op == '':
+                                op = section
+                            else:
+                                op = f'{op}.{section}'
+
+                # Check for mappings
+                if op in self.get_wfml_data('Iterable.Mapping.Structure').keys():
+                    op = self.map_variable(direct_mapping, op)
+                self.update_wfml_data('Iterable.UnvalidatedFeatures', op)
+                if path[0] == 'fcard' or path[0] == 'childs' or path[0] == 'parent' or path[0] == 'path':
+                    op = f'{path[0]}.{op}'
+                path = op.split('.')
                 # Perform feature of group cardinality search if first part of string is a appropriate keyword.
                 if path[0] == 'fcard' or path[0] == 'gcard':
                     self.update_wfml_data('Flags.Cardinality', path[0])
@@ -1059,57 +1218,114 @@ class term(ExpressionElement):
                     except KeyError:
                         raise Exception(f'No such cardinality exist {full_path} for type {cardinality_flag}')
 
-                elif path[0] == 'childs':
-                    path = path[1:]
-                    res = self.get_wfml_data('Namespace')
-                    for section in path:
-                        res = res[section]
-                    res = res['value']
-                    res = list(res.keys())
+                # Perform keyword checks
+                elif path[0] == 'parent' or path[0] == 'path' or path[0] == 'childs':
+
+                    # Construct path depending on keyword 'self' if such exist
+                    if path[1] == 'self' and len(path) == 2:
+                        npath = self.get_wfml_data('Path').split('.')
+                    else:
+                        npath = path[1:]
+
+                    # In case of 'parent' keyword remove the last part from the path
+                    if path[0] == 'parent':
+                        npath = npath[:-1]
+                        if tail != []:
+                            for section in tail.split('.'):
+                                npath.append(section)
+
+                    # In case of 'childs' keyword return list of child's path
+                    if path[0] == 'childs':
+                        res = self.get_wfml_data('Namespace')
+                        for section in npath:
+                            res = res[section]
+                        res = list(res.keys())
+
+                    # In case of 'parent' or 'path' keyword return path
+                    else:
+                        if tail != []:
+                            res = self.get_wfml_data('Namespace')
+                            for section in npath:
+                                res = res[section]
+                            res = res['value']
+                        else:
+                            res = ''
+                            for section in npath:
+                                if res == '':
+                                    res = section
+                                else:
+                                    res = f'{res}.{section}'
 
                 # If no cardinalities keyword presented in path, then try to find variable using this path.
                 else:
                     res = self.get_wfml_data('Namespace')
                     for section in path:
                         res = res[section]
-                    res = res['value']
+                    try:
+                        res = res['value']
+                    except KeyError:
+                        logging.debug('Non-leaf parameter.')
                 if self.get_wfml_data('Flags.Update') is False:
                     op = res
             return op
         else:
             raise Exception('Unknown variable "{}" at position {}'
                             .format(op, self._tx_position))
-        return self.op
 
-    def map_variable(self, feature=None):
+    def map_variable(self, direct_mapping, feature=None):
         if feature is None:
             feature = self.op
-        threshold = self.get_wfml_data('Iterable.Mapping.Total')
-        repeat = self.get_wfml_data('Iterable.Mapping.Current')
+        threshold = self.get_wfml_data('Iterable.Mapping.Current')
         mappings = self.get_wfml_data('Iterable.Mapping.Structure')
-        for key, value in mappings.items():
-            threshold = threshold / len(mappings[feature])
-            suffix = repeat / threshold
-            repeat = repeat % threshold
-            if key == feature:
-                break
-        return f'{feature}_{str(int(suffix))}'
+        logging.debug(f'OP: {self.op}, mappings: {mappings}')
+        if direct_mapping is True:
+            suffix = int(threshold % len(mappings[feature]))
+        else:
+            for key, _ in mappings.items():
+                if key == feature:
+                    suffix = int(threshold % len(mappings[key]))
+                    break
+                else:
+                    threshold = int(threshold / len(mappings[key]))
+        return mappings[feature][suffix]
 
     def mapping_check(self):
+        self_flag = False
+        if isinstance(self.op, ExpressionElement):
+            self.op.mapping_check()
         if isinstance(self.op, str) and not re.match(r'(\w+\.)+\w+', self.op):
             check = f'{self.get_wfml_data("Path")}.{self.op}'
             if check in self.get_wfml_data('Features.Mapped').keys():
                 op = check
             else:
                 op = self.op
+        elif isinstance(self.op, str) and re.match(r'(\w+\.)+\w+', self.op):
+            op_arr = self.op.split('.')
+            if op_arr[0] == 'path' or op_arr[0] == 'parent' or op_arr[0] == 'childs':
+                if op_arr[1] == 'self':
+                    self_flag = True
+                    op = self.get_wfml_data('Path')
+                else:
+                    op_arr = op_arr[1:]
+                    op = '.'.join(op_arr)
+            else:
+                op = self.op
         else:
             op = self.op
         if op in self.get_wfml_data('Dependencies.Mappings').keys():
-            self.update_wfml_data('Iterable.Mapping.Total',
-                                  self.get_wfml_data('Iterable.Mapping.Total') * len(
-                                      self.get_wfml_data('Dependencies.Mappings')[op]))
+            mappings = self.get_wfml_data('Dependencies.Mappings')[op]
+            rm_list = []
+            for i in mappings:
+                res = self.check_gcard(i)
+                if res is False:
+                    rm_list.append(i)
+            for i in rm_list:
+                mappings.remove(i)
+            if self_flag is False:
+                self.update_wfml_data('Iterable.Mapping.Total',
+                                      self.get_wfml_data('Iterable.Mapping.Total') * len(mappings))
             self.update_wfml_data('Iterable.Mapping.Structure',
-                                  {op: self.get_wfml_data('Dependencies.Mappings')[op]})
+                                  {op: mappings})
 
     def initial_super_reference_check(self):
         if self.op in self.get_wfml_data('Namespace').keys():
@@ -1199,7 +1415,6 @@ class textX_API():
         self.reset_wfml_data('Iterable.Mapping.Structure')
         self.reset_wfml_data('Flags.Cardinality')
         constraint.name.mapping_check()
-        logging.debug(f'Constraint name: {constraint.name}')
 
         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
@@ -1311,7 +1526,6 @@ class textX_API():
 
         wfml_data_section[path] = copy.deepcopy(wfml_data_init[path])
         logging.debug(f'WFML data for {full_path} was reset to {wfml_data_section[path]}.')
-        logging.debug(f'{self.get_wfml_data(full_path)}')
 
     def pickle_wfml_data(self):
         global wfml_data
@@ -1699,11 +1913,87 @@ class textX_API():
         else:
             return 'Group feature'
 
+    def name_builder_old(self, feature, namespace, cardinality_type=None):
+        """
+        Function to construct full feature name according to all cardinalities in the path.
+
+        INPUTS
+        feature (type = str): feature's name.
+        namespace (type = dict): entire namespace.
+        cardinality_type (type = str): specify field type.
+
+        RETURN
+        Feature's transformed name
+        """
+        feature_name = ''
+        feature_list = {}
+        feature_split = feature.split('.')
+        if len(feature_split) == 1:
+            features = []
+            fcard = namespace[feature]['Fcard']
+            if len(fcard.keys()) == 1:
+                key = 'Original'
+            else:
+                key = feature
+            try:
+                if int(fcard[key]) > 0:
+                    for i in range(0, int(fcard[key])):
+                        features.append(f'{feature}_{i}' if int(fcard[key]) > 1 else feature)
+            except Exception:
+                features.append(feature)
+            return features
+        for index, part in enumerate(feature_split):
+            parent_feature = feature_name
+            if cardinality_type == 'Fcard' and index == len(feature_split) - 1:
+                if feature_list == {}:
+                    features = [part]
+                else:
+                    features = []
+                    for feature in feature_list[feature_split[index - 1]]:
+                        features.append(f'{feature}.{part}')
+                gcard = namespace[parent_feature]['Gcard']
+                features = self.filter_gcards(gcard, features)
+                feature_list.update({part: features})
+                break
+            features = []
+            feature_name = f'{feature_name}.{part}' if feature_name != '' else part
+            fcard = namespace[feature_name]['Fcard']
+            if feature_list == {}:
+                if isinstance(fcard['Original'], str) and len(fcard) == 1:
+                    features.append(feature)
+                elif isinstance(fcard['Original'], int) and len(fcard) == 1:
+                    for i in range(0, int(fcard['Original'])):
+                        features.append(f'{part}_{i}' if int(fcard['Original']) > 1 else part)
+                else:
+                    for key in fcard.keys():
+                        if key != 'Original':
+                            for i in range(0, int(fcard[key])):
+                                features.append(f'{part}_{i}' if int(fcard[key]) > 1 else part)
+            else:
+                for key in fcard.keys():
+                    if key != 'Original':
+                        for feature in feature_list[feature_split[index - 1]]:
+                            if key.rsplit('.', 1)[0] == feature:
+                                for i in range(0, int(fcard[key])):
+                                    features.append(f'{feature}.{part}_{i}' if int(fcard[key]) > 1 else f'{feature}.{part}')
+                    elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], int):
+                        for feature in feature_list[feature_split[index - 1]]:
+                            for i in range(0, int(fcard['Original'])):
+                                features.append(f'{feature}.{part}_{i}' if int(fcard[key]) > 1 else f'{feature}.{part}')
+                    elif (key == 'Original' and len(fcard.keys()) == 1) and isinstance(fcard['Original'], str):
+                        for feature in feature_list[feature_split[index - 1]]:
+                            features.append(f'{feature}.{part}')
+                gcard = namespace[parent_feature]['Gcard']
+                features = self.filter_gcards(gcard, features)
+
+            feature_list.update({part: features})
+        return feature_list[feature_split[-1]]
+
     def topological_sort(self, dependency_pairs):
         """
         Subfunction to define sequence of features to validate. The analogue of directed graph path.
 
-        INPUTS
+        INPUTSe
         dependency_pairs: list of cross-tree dependencies pairs.
 
         RETURN
@@ -1898,11 +2188,30 @@ class textX_API():
         key (type = dict): read value.
         """
         key = {}
+        mappings = self.get_wfml_data('Dependencies.Mappings')
+        path_s = path.split('.')
+        path_arr = []
+        f_p = ''
 
-        if path in self.get_wfml_data('Dependencies.Mappings').keys():
-            path = self.get_wfml_data('Dependencies.Mappings')[path]
+        if path in mappings.keys():
+            path_arr = mappings[path]
         else:
+            for part in path_s:
+                if f_p == '':
+                    f_p = part
+                else:
+                    f_p = f'{f_p}.{part}'
+
+                if f_p in mappings.keys():
+                    for elem in mappings[f_p]:
+                        path_arr.append(elem)
+                if path_arr != []:
+                    for elem in path_arr:
+                        elem = f'{elem}.{part}'
+        if path_arr == []:
             path = [path]
+        else:
+            path = path_arr
         for subpath in path:
             namespace = self.get_wfml_data('Namespace')
             for part in subpath.split('.'):
@@ -1929,7 +2238,11 @@ class textX_API():
         Update global namespace with data from web interface.
         """
         for k, v in input_data.items():
+            logging.info(f'Updating namespace. Key: {k}, value: {v}')
             self.update_namespace(new={k: v})
+        if len(input_data.keys()) >= 1:
+            top_level_key = f'Namespace.{list(input_data.keys())[0].split(".")[0]}'
+            logging.info(f'Updated namespace: {self.get_wfml_data(top_level_key)}')
 
     def group_feature(self, feature, namespace: dict):
         """
@@ -2011,32 +2324,54 @@ class textX_API():
         if check_gcard is True:
             for child in feature.nested:
                 for child1 in child.child:
-                    print(self.cname(child1))
                     constraints_validated = 0
                     # Perform constraint validation using feature mappings if such are exist.
                     if self.cname(child1) == "Constraint":
+                        constraint_expression = f'{self.get_wfml_data("ModelDescription").splitlines()[get_location(child1)["line"] - 1].lstrip()}; '
+                        msg = (f'Validating constraint: '
+                               f'{constraint_expression}; '
+                               f'Line: {get_location(child1)["line"]}')
+                        logging.info(msg)
+                        self.update_wfml_data('CurrentConstraintExpression', constraint_expression)
                         self.reset_wfml_data('Iterable.Mapping.Current')
                         self.reset_wfml_data('Iterable.Mapping.Total')
                         self.reset_wfml_data('Iterable.Mapping.Structure')
                         self.reset_wfml_data('Flags.Cardinality')
                         child1.name.mapping_check()
-                        logging.debug(f'Constraint name: {child1.name}')
+                        logging.debug(f'Iterable Mapping Current: {self.get_wfml_data("Iterable.Mapping.Current")}')
+                        logging.debug(f'Iterable Mapping Total: {self.get_wfml_data("Iterable.Mapping.Total")}')
+                        logging.debug(f'Iterable Mapping Structure: {self.get_wfml_data("Iterable.Mapping.Structure")}')
+                        logging.debug(f'Path: {self.get_wfml_data("Path")}')
 
                         while self.get_wfml_data('Iterable.Mapping.Current') < self.get_wfml_data('Iterable.Mapping.Total'):
+                            logging.info(f'Iteration {self.get_wfml_data("Iterable.Mapping.Current") + 1} of {self.get_wfml_data("Iterable.Mapping.Total")}')
                             self.reset_wfml_data('Iterable.UnvalidatedFeatures')
-                            if self.get_wfml_data('Flags.CrossTreeCheck') is True:
-                                child1.name.cross_tree_check()
-                            else:
-                                child1.name.value
-                                constraints_validated += 1
+                            repeat = self.get_wfml_data('Iterable.Mapping.Current')
+                            mappings = self.get_wfml_data('Iterable.Mapping.Structure')
+                            try:
+                                check_gcard = self.check_gcard(mappings[list(mappings.keys())[0]][repeat])
+                            except KeyError:
+                                pass
+                            except IndexError:
+                                pass
+                            if check_gcard is True:
+                                if self.get_wfml_data('Flags.CrossTreeCheck') is True:
+                                    try:
+                                        child1.name.cross_tree_check()
+                                    except Exception:
+                                        pass
+                                else:
+                                    child1.name.value
+                                    constraints_validated += 1
                             self.update_wfml_data('Iterable.Mapping.Current', self.get_wfml_data('Iterable.Mapping.Current') + 1)
 
                         if self.get_wfml_data('Flags.Cardinality') == 'fcard':
                             self.mapping()
-
+            for child in feature.nested:
+                for child1 in child.child:
                     # Perform constraint validation for nested features.
-                    elif self.cname(child1) == 'Feature' and isinstance(child1.reference, type(None)):
-                        logging.info(f'CLAFR {feature.namespace}')
+                    if self.cname(child1) == 'Feature' and isinstance(child1.reference, type(None)):
+                        logging.info(f'Feature namespace {feature.namespace}')
                         self.feature_constraints_validation(child1, False)
                 logging.info(f'For feature {feature.name} there is/are {constraints_validated} constraint expression(s) validated.')
 
@@ -2046,16 +2381,6 @@ class textX_API():
         else:
             self.update_wfml_data('Path', local_path)
         return feature.namespace
-
-    def cardinalities_update(self, data):
-        for record in data:
-            if record[0] == 'fcard':
-                self.update_wfml_data('Cardinalities.Feature', record[1])
-                self.mapping(record[1])
-            elif record[0] == 'gcard':
-                self.update_wfml_data('Cardinalities.Group', record[1])
-            else:
-                raise ValueError('Incorrect cardinality type.')
 
     def add_super_relations(self, feature):
         """
@@ -2070,7 +2395,9 @@ class textX_API():
             for element in self.get_wfml_data('Model').elements:
                 if element.name == feature.super.initial_super_reference_check():
                     super_copy = copy.deepcopy(element.namespace)
-                    feature.namespace.update(super_copy)
+                    for k, v in super_copy.items():
+                        if k not in feature.namespace.keys():
+                            feature.namespace.update({k: v})
                     if len(element.nested) > 0:
                         # If feature has no childs, just copy super feature nested elements.
                         if feature.nested == []:
@@ -2141,6 +2468,8 @@ class textX_API():
         copy: copy of original feature name with added suffix _x, where x is sequentional mapping number.
         """
         for original in self.sort_fcards():
+            if original == 'Context.Experiment.TaskConfiguration.Objectives.Objective':
+                full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
             if original not in self.get_wfml_data('Dependencies.Mappings').keys():
                 copies = []
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
@@ -2156,7 +2485,7 @@ class textX_API():
             else:
                 full_feature_cardinality, structure = self.get_full_feature_cardinality(original)
                 if isinstance(full_feature_cardinality, int) and full_feature_cardinality != 1:
-                    if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings').keys()):
+                    if full_feature_cardinality != len(self.get_wfml_data('Dependencies.Mappings')[original]):
                         copies = []
                         for iteration in range(0, full_feature_cardinality):
                             copies.append(self.name_generation(original, structure, iteration))
@@ -2201,17 +2530,28 @@ class textX_API():
         e (type = Exception): if not.
         """
         self.update_wfml_data('Path', '')
-        try:
+        debug_mode = False
+        if debug_mode is True:
             for element in self.get_wfml_data('Model').elements:
                 if self.cname(element) == 'Feature' and element.name == feature:
                     self.update_wfml_data('Flags.Exception', False)
                     self.feature_constraints_validation(element, True)
             self.update_wfml_data('Path', '')
+            logging.debug(pprint.pprint(self.get_wfml_data('Namespace')))
             return True
-        except Exception as e:
-            logging.info(f'! Exception: {e}.')
-            self.update_wfml_data('Path', '')
-            return e
+        else:
+            try:
+                for element in self.get_wfml_data('Model').elements:
+                    if self.cname(element) == 'Feature' and element.name == feature:
+                        self.update_wfml_data('Flags.Exception', False)
+                        self.feature_constraints_validation(element, True)
+                self.update_wfml_data('Path', '')
+                logging.debug(pprint.pprint(self.get_wfml_data('Namespace')))
+                return True
+            except Exception as e:
+                logging.info(f'! Exception: {e}.')
+                self.update_wfml_data('Path', '')
+                return e
 
     def reset_global_variables(self):
         """
@@ -2301,6 +2641,9 @@ class textX_API():
 
         self.pickle_wfml_data()
         return res
+
+    def get_json(self):
+        return open('./core/output/configuration.json', 'r')
 
     def define_features(self):
         """
@@ -2437,11 +2780,11 @@ class textX_API():
         fcards = self.get_wfml_data('Cardinalities.Feature')
         x = {}
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value != 1):
+            if isinstance(value, str) or (isinstance(value, int)):
                 x.update({key: len(key.split('.'))})
         sort = dict(sorted(x.items(), key=lambda item: item[1]))
         for key, value in fcards.items():
-            if isinstance(value, str) or (isinstance(value, int) and value != 1):
+            if isinstance(value, str) or (isinstance(value, int)):
                 sort.update({key: value})
         return sort
 
@@ -2460,10 +2803,10 @@ class textX_API():
         this_folder = dirname(__file__)
         mm = metamodel_from_file(join(this_folder, 'grammar.tx'),
                                  classes=[prec0, prec1, prec2, prec3,
-                                          prec4, prec5, prec6, prec7, prec8,
+                                          prec4, prec5, prec50, prec6, prec7, prec8,
                                           prec9, prec10, prec11, prec12, prec13,
                                           prec14, prec15, prec16, prec17,
-                                          prec18, prec19, prec20, prec21, prec22, prec23, term],
+                                          prec18, prec19, prec20, prec21, prec22, prec23, prec24, term],
                                  autokwd=True)
 
         # Reset shared info variables and create textX model object from description.
@@ -2487,6 +2830,10 @@ class textX_API():
         self.update_wfml_data('NamespaceInitial', copy.deepcopy(self.get_wfml_data('Namespace')))
         self.get_model_cardinalities()
 
+        # Perform mapping and clear abstract features
+        self.mapping()
+        self.clear_abstract_features()
+
         # Perform cross-tree dependencies check.
         self.cross_tree_check()
 
@@ -2497,11 +2844,47 @@ class textX_API():
         logging.debug(pprint.pprint(self.show_wfml_data()))
         stages = self.staging(res_cross_tree)
 
-        self.mapping()
-        self.clear_abstract_features()
-
         self.initial_snap()
+        # self.test_textX()
         return stages
+
+    def copy_textX_model_test(self):
+        model = self.get_wfml_data('Model')
+        for feature in model.elements:
+            if self.cname(feature) == 'Feature':
+                print(f'Feature: {feature.name}')
+                print(f'Type: {type(feature)}')
+                for child in feature.nested:
+                    del_arr = []
+                    add_arr = []
+                    for subfeature in child.child:
+                        print(f'Subfeature: {subfeature.name}')
+                        print(f'Type: {type(subfeature)}')
+                        if subfeature.name == 'b':
+                            for index in range(0, 2):
+                                # child_copy = type('child_copy', subfeature.__bases__, dict(subfeature.__dict__))
+                                child_copy = copy.copy(subfeature)
+                                child_copy.name = f'{child_copy.name}_{index}'
+                                if child_copy not in add_arr:
+                                    add_arr.append(child_copy)
+                                if subfeature not in del_arr:
+                                    del_arr.append(subfeature)
+                    print(f'What is child: {child.child}')
+                    print(f'Type: {type(child.child)}')
+                    for i, o in enumerate(child.child):
+                        if o in del_arr:
+                            del child.child[i]
+
+                    for subfeature in add_arr:
+                        child.child.append(subfeature)
+                    print(f'What is child now: {child.child}')
+                    print(f'Type: {type(child.child)}')
+
+                for child in feature.nested:
+                    for subfeature in child.child:
+                        print(f'New subfeature: {subfeature.name}')
+                        print(f'Type: {type(subfeature)}')
+
 
     def solve_constraints(self):
         """
@@ -2510,11 +2893,11 @@ class textX_API():
         Performs solving for all types of constraints.
         """
         logging.debug('Solving constraints...')
-        print(self.get_wfml_data('Stages.List'))
+        logging.debug(self.get_wfml_data('Stages.List'))
         for stage in self.get_wfml_data('Stages.List')[0]:
             logging.debug(f'For stage {stage}')
             if stage != "FeatureCardinalities" and stage != "GroupCardinalities":
-                cycles = api.get_cycle_keys()
+                cycles = self.get_cycle_keys()
                 if stage in cycles.keys():
                     for element in cycles[stage]:
                         self.validate_feature(element)
@@ -2551,9 +2934,9 @@ class textX_API():
     def feature_cardinality_check(self, key):
         logging.debug(f'Checking feature cardinality for {key}.')
         base_feature = key.split('_')
-        print(f'Base Feature: {base_feature}')
+        logging.debug(f'Base Feature: {base_feature}')
         base_subfeature = base_feature[0].split('.')
-        print(f'Base SubFeature: {base_subfeature}')
+        logging.debug(f'Base SubFeature: {base_subfeature}')
         res = ''
         if len(base_subfeature) > 1:
             for subfeature in base_subfeature[:-1]:
@@ -2564,7 +2947,7 @@ class textX_API():
             region = self.get_wfml_data(f'Namespace.{res}')
         else:
             region = self.get_wfml_data('Namespace')
-        print(f'Region: {region.keys()}')
+        logging.debug(f'Region: {region.keys()}')
         counter = 0
         for feature in region.keys():
             if base_subfeature[-1] == feature.split('_')[0]:
@@ -2623,9 +3006,9 @@ class textX_API():
 
 if __name__ == '__main__':
     this_folder = dirname(__file__)
-    print(this_folder)
+    logging.info(this_folder)
     description = open(join(this_folder, 'configuration.tx')).read()
-    print(description)
+    logging.info(description)
     with open(join(this_folder, 'configuration.json')) as json_file:
         configuration = json.load(json_file)
     api = textX_API()

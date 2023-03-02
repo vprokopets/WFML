@@ -1,0 +1,15 @@
+Weather {
+	Temperature -> integer
+	Humidity -> integer
+	xor Clouds {
+		Sunny
+		PartiallyCloudy
+		Cloudy
+	}
+	Wind -> integer
+	[Humidity >= 0]
+	[Humidity <= 100]
+	[Wind >= 0]
+	[Temperature >= -50]
+	[Temperature <= 50]
+}

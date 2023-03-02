@@ -1,0 +1,9 @@
+feature_model {
+	Duck -> string ?
+	Witch -> string ?
+	Floats -> string ?
+	[Floats => Duck]
+	[Floats <=> Witch]
+	[!Duck]
+	[Witch]
+}

@@ -1,0 +1,18 @@
+PN{
+    Places {
+        Place * {
+            IntParam -> integer
+            StrParam -> string
+            [IntParam > 0]
+        }
+    }
+    Transitions {
+        Transition * {
+            Start -> string
+            End -> string
+            [Start in childs.PN.Places]
+            [End in childs.PN.Places]
+            [Start != End]
+        }
+    }
+}

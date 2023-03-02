@@ -1,0 +1,19 @@
+MandatoryFeature {
+	a -> integer
+	b -> integer
+	[b > a]
+}
+
+OptionalFeature ? {
+	a -> integer
+	b -> integer
+	[b > a]
+}
+
+SubOptionalFeature {
+	a -> integer
+	b ? {
+		c -> integer
+		[c > SubOptionalFeature.a]
+	}
+}

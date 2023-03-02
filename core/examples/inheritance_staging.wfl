@@ -1,0 +1,34 @@
+abstract abstract_feature {
+    a -> string
+    xor b 1..2 {
+        c -> integer
+        d -> integer
+    }
+    e -> integer
+    [a > 2]
+}
+
+feature_inheritance{
+	feature_for_inheritance: abstract_feature 2{
+		a -> integer
+    	[a > 3]
+	}
+}
+
+cross_tree_feature {
+    a -> integer
+    [a > feature_inheritance.feature_for_inheritance.a]
+}
+
+cycled_feature_a {
+    a -> integer
+    b -> integer
+    [a > cycled_feature_b.a]
+}
+
+cycled_feature_b {
+    a -> integer
+    b -> integer
+    [b > cycled_feature_a.b]
+    [a > feature_inheritance.feature_for_inheritance.a]
+}
