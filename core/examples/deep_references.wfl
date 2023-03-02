@@ -1,0 +1,19 @@
+
+abstract a {
+	a -> integer
+}
+abstract b: a {
+	b -> integer
+}
+
+abstract c: a {
+	c -> integer
+}
+
+abstract d: c {
+	d -> integer
+}
+
+f1: d
+f2 ->> a
+f3 ->>> a

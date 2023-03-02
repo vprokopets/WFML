@@ -5,8 +5,16 @@
 {{ wizard.form.media }}
 {% endblock %}
 
+{% block header %}
+  <div class="headerText">Configure product</div>
+  <div class="progressBar">
+    <progress id="file" max={{ wizard.steps.count }} value={{ wizard.steps.step1 }}> 100% </progress>
+  </div>
+{% endblock header %}
+
 {% block content %}
-<p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
+<main style="margin-left: 1.5%; margin-top: 10px; margin-right: 1.5%;">
+<p>Stage {{ wizard.form.stage }} of {{ wizard.form.stages_number }}; Step {{wizard.form.stage_step}}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
 <table>
@@ -26,6 +34,7 @@
             </div>
         {% endfor %}
         {% if form.non_field_errors %}
+        <hr style="margin-top: 20px;">
         <div class="alert alert-danger" role="alert">
             {{ wizard.form.non_field_errors }}
         </div>
@@ -44,23 +53,73 @@
     </div>
     {% endfor %}
     {% if form.non_field_errors %}
+    <hr style="margin-top: 20px;">
     <div class="alert alert-danger" role="alert">
         {{ wizard.form.non_field_errors }}
     </div>
     {% endif %}
 {% endif %}
-
+<hr style="margin-top: 40px;">
 </table>
 {% if wizard.steps.prev %}
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.first }}">{% trans "first step" %}</button>
-<button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}">{% trans "prev step" %}</button>
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.first }}">
+        first step
+    </button>
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.prev }}">
+        prev step
+    </button> 
 {% endif %}
 <input type="submit" value="{% trans "Next step" %}"/>
 </form>
 <br>
 <form action="" method="post">{% csrf_token %}
     {% csrf_token %}
-    <button type="submit" name='mybtn2' value={{done}}>Download configuration pickle.</button>
+    <button type="submit" name='mybtn2' value={{done}} disabled>Download configuration pickle.</button>
 </form>
+
+<style>
+    .form-group {
+        margin-top: 15px;
+        width: 100%;
+    }
+    input[type=text]{
+      margin-top: 10px;
+      width: 400px;
+      height: 30px;
+    }
+    input[type=number]{
+      margin-top: 10px;
+      width: 400px;
+      height: 30px;
+    }
+    input[type=checkbox]{
+      margin-top: 10px;
+      width: 50px;
+      height: 20px;
+    }
+    input[type=radio]{
+      margin-top: 10px;
+      width: 50px;
+      height: 20px;
+    }
+    input[type=submit], button[type=submit], button[formnovalidate=formnovalidate] {
+      margin-top: 20px;
+      text-align: center;
+      width: 150px;
+      height: 40px;
+    }
+    select {
+        margin-top: 10px;
+        text-align: center;
+        width: 120px;
+        height: 30px;
+    }
+    .alert{
+      background-color: rgb(255, 155, 155);
+    }
     
+
+</style>
+
+</main>
 {% endblock %}

@@ -1,0 +1,17 @@
+a 2..3 {
+	xor b 2..3 {
+		c 2..3 {
+			d -> integer
+		}
+		e 2..3 {
+			b -> integer 2..3
+			c -> integer
+			[c > b]
+		}
+	}
+}
+
+b 2..3 {
+	c -> integer 2..3 
+	[c > 2]
+}

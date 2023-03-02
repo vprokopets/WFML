@@ -1,0 +1,42 @@
+abstract ParentCategoricalHyperparameter : Hyperparameter {
+	Categories -> predefined
+    Default -> string    
+    [Default in Categories]
+	[Type = "ParentCategoricalHyperparameter"]
+    [Categories = (filter childs.self where Type == "Category")]    
+}
+
+abstract Hyperparameter {
+    Type -> predefined
+    Region -> predefined
+    [if parent.Type == "Category" then Region = fname.parent else Region = parent.Region]
+}
+
+abstract Category {
+    Type -> predefined
+    Region -> predefined
+    [Type = "Category"]
+    [Region = parent.Region]
+}
+
+abstract IntegerHyperparameter: Hyperparameter {
+    Lower -> integer
+    Upper -> integer
+    Default -> integer
+    [Default >= Lower]
+    [Default <= Upper]
+    [Type = "IntegerHyperparameter"]
+}
+
+SearchSpace {
+            Type -> predefined
+            Region -> predefined
+            [Type = "SearchSpace"]
+            [Region = "TopLevel"]
+			a: ParentCategoricalHyperparameter{ 
+				b: Category {
+					d: IntegerHyperparameter
+				}
+				c: Category
+			}
+}

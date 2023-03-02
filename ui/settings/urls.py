@@ -14,9 +14,16 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
+from django.shortcuts import redirect
+from django.urls import include, path, re_path
+
+def redirect_to_homepage(request):
+    response = redirect('/wizard/initialize/')
+    return response
+
 
 urlpatterns = [
     path('wizard/', include('ui.urls')),
     path('admin/', admin.site.urls),
+    re_path(r'^', redirect_to_homepage)
 ]

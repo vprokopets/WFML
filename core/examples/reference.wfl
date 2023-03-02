@@ -1,0 +1,20 @@
+abstract A {
+	a -> integer
+	[a > 1]
+}
+abstract B : A {
+	b -> integer
+	[b > 2]
+}
+abstract C : A {
+	c -> integer
+	[c > 3]
+}
+
+abstract D {
+    d -> integer
+    [d > 4]
+}
+F: D {
+    xor E ->> A
+}

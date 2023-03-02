@@ -1,0 +1,10 @@
+xor a {
+	b {
+		c -> integer
+		[c > 2]
+	}
+	d {
+		e -> integer
+		[e < 2]
+	}
+}
