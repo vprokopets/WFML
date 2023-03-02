@@ -295,7 +295,6 @@ class prec23(ExpressionElement):
 
         # Perform IF expression check.
         statement = self.boolify(self.op[1].parse())
-        print(f'Statement: {statement}')
         self.api.exception_flag = False
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
@@ -606,10 +605,6 @@ class prec11(ExpressionElement):
                             operation result in opposite case.
         """
         left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
-        print('________________')
-        print(left)
-        print(right)
-        print(self.op[2].parse())
         if operation == 'requires':
             ret = not left or (left and right)
             self.check_exception(ret, 'Required feature does not exist')
@@ -633,7 +628,6 @@ class prec10(ExpressionElement):
         left = self.get_value(self.op[0].parse())
         self.api.keyword = ''
         right = self.get_value(self.op[2].parse())
-        print(f'Assign operation: {left} = {right}')
         self.api.update_namespace({left: right})
 
         return True
@@ -945,6 +939,8 @@ class term(ExpressionElement):
             return self.get_value(op.parse())
         elif isinstance(op, str) and op not in keywords and self.src is False:
             op = self.parse_string()
+            if isinstance(op, list):
+                return op
             fop = op.replace('Fcard.', '').replace('Gcard.', '').replace('fcard.', '').replace('gcard.', '')
             if (self.api.keyword == 'Update' and self.is_feature is True) or self.is_fname is True:
                 for mapping in self.mappings:
@@ -1185,7 +1181,7 @@ class term(ExpressionElement):
                 elif forbidden_flag is False and reverse is True:
                     api.cross_tree_dependencies.append([path[0], self.api.tlf])
             except Exception:
-                raise Exception(self.get_error_message(f'No such feature: {path[0]}.{path[1]}'))
+                raise Exception(self.get_error_message(f'No such feature: {path}'))
 
     def boolify(self, string):
         if string == 'True':
@@ -1254,7 +1250,6 @@ class Waffle():
 
         logging.info('Final result was successfully created.')
         logging.debug(f'Final Model {res}')
-        print(f'Final Model {res}')
         with open('./core/output/configuration.json', 'w', encoding='utf-8') as f:
             json.dump(res, f, ensure_ascii=False, indent=4)
 
@@ -1398,6 +1393,13 @@ class Waffle():
         return msg
 
     def update_namespace(self, data):
+        """
+        Function to update namespace with new values.
+
+        INPUTS
+        data (type = dict): a collection of feature name - feature value elements to update.
+
+        """
         for key, value in data.items():
             field = key.split('.', 1)[0] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
             mapping = key.split('.', 1)[1] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else key
@@ -1426,6 +1428,15 @@ class Waffle():
         self.defined_features_backup = copy.deepcopy(self.defined_features)
 
     def get_feature(self, fname):
+        """
+        Function to read the value of any feature in the namespace.
+
+        INPUTS
+        fname (type = str): feature's name.
+
+        RETURN
+        list of feature attributes: ActiveF, ActiveG, Value.
+        """
         field = fname.split('.', 1)[0] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
         mapping = fname.split('.', 1)[1] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else fname
         original = self.get_original_name(mapping)
@@ -1435,6 +1446,15 @@ class Waffle():
         return res
 
     def get_feature_input_type(self, fname):
+        """
+        Function to read the type of a feature (e.g., integer, string).
+
+        INPUTS
+        fname (type = str): feature's name.
+
+        RETURN
+        type of a feature.
+        """
         mapping = fname.split('.', 1)[1] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else fname
         original = self.get_original_name(mapping)
         tlf = original.split('.')[0]
@@ -1442,6 +1462,16 @@ class Waffle():
         return res
 
     def get_feature_childrens(self, fname, own_only_flag=True):
+        """
+        Function to read the value of some feature's childrens.
+
+        INPUTS
+        fname (type = str): feature's name.
+        own_only_flag (type = bool): flag to read values only one level lower in the hierarchy or not.
+
+        RETURN
+        dict with structure child name - child name attributes
+        """
         res = {}
         original = self.get_original_name(fname)
         tlf = original.split('.')[0]
@@ -1454,6 +1484,16 @@ class Waffle():
         return res
 
     def activation_flag_update(self, namespace, field, value, mapping=None):
+        """
+        Function to change activation flags according to cardinalities specified.
+
+        INPUTS
+        namespace (type = dict): tlf's namespace.
+        field (type = str): type of a feature (fcard, gcard).
+        value (type = Any): new cardinality value.
+        mapping (type = str): feature mapping to whom new value is related).
+
+        """
         filter_field = value if field == 'Gcard' else mapping
         if not isinstance(filter_field, list):
             filter_field = [filter_field]
@@ -1486,6 +1526,17 @@ class Waffle():
                                         mvalue['ActiveF'] = False if index >= value else True
 
     def get_mappings_for_constraint(self, constraint_data):
+        """
+        Function to get the list of valid mappings of all features in this constraint.
+
+        INPUTS
+        constraint_data (type = dict): constraint's metadata dict.
+
+        RETURN
+        constraint_ready (type = bool): flag, do all features in this constraint have specified cardinalities?
+        mappings (type = dict): mappings of all features
+        deactivated (type = bool): was constraint-related feature deactivated due to cardinalities specified.
+        """
         mappings = {'Mappings': {'Assign': {}, 'Read': {}}, 'MappingsFull': {'Assign': {}, 'Read': {}}}
         constraint_ready, deactivated = True, False
         tlf = self.get_original_name(constraint_data['RelatedFeature'].split('.')[0])
@@ -1530,21 +1581,34 @@ class Waffle():
                                     if fname not in mappings[type][assign_type][original]:
                                         mappings[type][assign_type][original].append(fname)
                                     if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                        print(f'Feature {fname} is not ready (mapping: {mapping}).')
+                                        logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                         constraint_ready = False
                                     for constraint in self.namespace[tlf]['Constraints'].values():
                                         if constraint['Validated'] is None:
                                             if original in constraint['Assign']['Fcard']:
                                                 constraint_ready = False
-                                                print(f'Fcard Feature {fname} will be defined in constraint')
+                                                logging.info(f'Fcard Feature {fname} will be defined in constraint')
 
         else:
             constraint_ready = False
             deactivated = True
-            print('Constraint deactivated')
+            logging.info('Constraint deactivated')
         return constraint_ready, mappings, deactivated
 
     def filter_mappings_for_constraint(self, constraint, mappings):
+        """
+        Function to filter mappings combinations to avoid mapping overlays.
+        Example: there are feature a with cardinality 2 and features a.b and a.c with cardinalities 1.
+        Mappings are a.b:[a1.b, a2.b], a.c:[a1.c, a2.c]
+        Possible combinations are [(a1.b, a1.c), (a1.b, a2.c), (a2.b, a1.c), (a2.b, a2.c)]
+        Filtered combinations are [(a1.b, a1.c), (a2.b, a2.c)]
+
+        INPUTS
+        mappings (type = dict): dict, that contains all the mappings (read/assign), (fcard/gcard/value).
+
+        RETURN
+        dict of filtered mappings with the same structure as input mappings.
+        """
         res = {'Assign': None, 'Read': None}
         for assign_type in ['Assign', 'Read']:
             combinations = itertools.product(*mappings[assign_type].values())
@@ -1561,12 +1625,22 @@ class Waffle():
                                 break
                 if rm is False and comb != ():
                     filtered_combinations.append(comb)
-            print(f'Unfiltered combinations for constraint {assign_type} {constraint} ({counter})')
-            print(f'Filtered combinations for constraint {assign_type} {constraint} ({len(filtered_combinations)})')
+            logging.info(f'Unfiltered combinations for constraint {assign_type} {constraint} ({counter})')
+            logging.info(f'Filtered combinations for constraint {assign_type} {constraint} ({len(filtered_combinations)})')
             res[assign_type] = filtered_combinations
         return res
 
     def validate_constraint(self, constraint, value):
+        """
+        Function that performs constraint checks and validation.
+
+        INPUTS
+        constraint (type = str): constraint's expression.
+        value (type = str): constraint's metadata.
+
+        RETURN
+        constraint_ready(type = bool): flag, was constraint validated
+        """
         constraint_expression = f' \
                 {self.description.splitlines()[get_location(value["Constraint"])["line"] - 1].lstrip()}; '
         self.rf = value['RelatedFeature']
@@ -1617,10 +1691,17 @@ class Waffle():
                 constraint_obj.set_mappings([])
                 constraint_obj.parse()
         else:
-            print(f'Constraint {constraint} is not ready to validate')
+            logging.info(f'Constraint {constraint} is not ready to validate')
         return constraint_ready
 
     def validate_constraints(self, tlf, cards):
+        """
+        Function to validate all constraints of a defined top-level feature.
+
+        INPUTS
+        tlf (type = str): top-level feature's name.
+
+        """
         self.cache_f = self.get_features_ready(tlf)
         constraints = {}
         constraints.update({'Dependent': self.namespace[tlf]['ConstraintsValidationOrder']})
@@ -1649,6 +1730,16 @@ class Waffle():
                     constraint_metadata['Validated'] = True
 
     def map_feature_cache(self, fname, cardinalities=True):
+        """
+        Function to get all mappings for a feature.
+
+        INPUTS
+        fname (type = str): feature's name.
+        cardinalities (type = bool), flag to return fcard mappings or value mappings
+
+        RETURN
+        list of all mappings.
+        """
         split = fname.split('.')
         tlf = split[0]
         original = self.get_original_name(fname)
@@ -1659,6 +1750,16 @@ class Waffle():
         return res
 
     def map_feature(self, fname, cardinalities=True):
+        """
+        Function to define all mappings for a feature.
+
+        INPUTS
+        fname (type = str): feature's name.
+        cardinalities (type = bool), flag to return fcard mappings or value mappings
+
+        RETURN
+        list of all mappings
+        """
         split = fname.split('.')
         tlf = split[0]
         names = []
@@ -1687,6 +1788,15 @@ class Waffle():
         return names
 
     def preprocess_step(self, tlf):
+        """
+        Function to define the next step features for the current stage (top-level feature).
+
+        INPUTS
+        tlf (type = str): top-level feature's name.
+
+        RETURN
+        dict of structure fname - ftype
+        """
         fcards, values = self.check_integrities(tlf)
         undefined_values, undefined_values = {}, {}
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
@@ -1697,6 +1807,16 @@ class Waffle():
         return undefined_cards if undefined_cards is not None else undefined_values
 
     def check_integrities(self, tlf):
+        """
+        Function to check the consistency of all namespace features.
+
+        INPUTS
+        tlf (type = str): top-level feature's name.
+
+        RETURN
+        fcards (type = list): list of all consistent fcards for tlf.
+        values (type = list): list of all consistent values for tlf.
+        """
         fcards = self.check_integrity(tlf, True)
         values = self.check_integrity(tlf, False)
         return fcards, values
@@ -1714,10 +1834,18 @@ class Waffle():
                             value[f'Mappings{suffix}'][feature]['ActiveF'] = False
                         value[f'Mappings{suffix}'].update({key: copy.deepcopy(value[f'Initial{suffix}'])})
                 result = result + check
-        # print(f'Feature {tlf}. {"Cardinality" if cardinality is True else "Value"}: {result}')
         return result
 
     def get_features_ready(self, tlf):
+        """
+        Function to get all features with defined cardinalities.
+
+        INPUTS
+        tlf (type = str): top-level feature's name.
+
+        RETURN
+        ret (type = dict): lists of all consistent features for tlf.
+        """
         ret = {}
         fcards, values = self.check_integrities(tlf)
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
@@ -1743,6 +1871,22 @@ class Waffle():
         return ret
 
     def get_undefined_cards(self, listc, listv, tlf, filter=True):
+        """
+        Function to get all undefined cardinalities for the top-level feature.
+
+        INPUTS
+        listc (type = list): list of all consistent fcards for tlf.
+        listv (type = list): list of all consistent values for tlf.
+        tlf (type = str): top-level feature's name
+        filter (type = bool): flag, do we filter cardinalities to define step.
+        Example: we have feature a with cardinality !(one or more) and feature a.b with the same cardinality.
+        If the filter flag is true, we will get only feature a as a result
+        Because now we can't define the cardinality of feature a.b correctly
+        If we define fcard.a = 2, then for feature a.b, we will need to define 2 cardinalities: a1.b and a2.b
+
+        RETURN
+        dict of all undefined cardinalities
+        """
         result = {'Fcard': [], 'Gcard': []}
         namespace = self.namespace[tlf]['Features']
         fcards = self.get_undefined_fcards(listc, namespace)
@@ -1770,6 +1914,17 @@ class Waffle():
         return result if result != {'Fcard': [], 'Gcard': []} else None
 
     def feature_active_flag(self, fname, namespace, card):
+        """
+        Function to check the active state of the feature.
+
+        INPUTS
+        fname (type = str): feature's name.
+        namespace (type = dict): namespace of corresponding top-level feature
+        card (type = bool): flag to check activation for fcards
+
+        RETURN
+        bool, is feature active
+        """
         suffix = 'C' if card is True else 'V'
         #suffix = 'V'
         shift = 0 if card is True else 0
@@ -1787,6 +1942,17 @@ class Waffle():
         return feature_active_flag
 
     def get_undefined_fcards(self, list, namespace):
+        """
+        Function to get all undefined feature cardinalities for a top-level feature.
+
+        INPUTS
+        list (type = list): list of all consistent fcards for tlf.
+        namespace (type = dict): namespace of corresponding top-level feature
+
+        RETURN
+        
+        result (type = list): list of all undefined feature cardinalities.
+        """
         result = []
         for feature in list:
             original = self.get_original_name(feature)
@@ -1797,6 +1963,17 @@ class Waffle():
         return result
 
     def get_undefined_gcards(self, list, namespace):
+        """
+        Function to get all undefined group cardinalities for a top-level feature.
+
+        INPUTS
+        list (type = list): list of all consistent values for tlf.
+        namespace (type = dict): namespace of corresponding top-level feature
+
+        RETURN
+        
+        result (type = list): list of all undefined group cardinalities.
+        """
         result = []
         for feature in list:
             gcard_to_define = False
@@ -1819,6 +1996,19 @@ class Waffle():
         return result
 
     def get_filtered_values(self, list, namespace, undefined=True, card=False):
+        """
+        Function filter mappings for every feature from the list.
+
+        INPUTS
+        list (type = list): list of all consistent values for tlf.
+        namespace (type = dict): namespace of corresponding top-level feature
+        undefined (type = bool): flag, is a feature still undefined
+        card (type = bool): flag to filter mappings for fcards
+
+        RETURN
+
+        result (type = dict): list of all filtered mappings.
+        """
         result = {'Value': []}
         for feature in list:
             original = self.get_original_name(feature)
@@ -2111,7 +2301,7 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = True
+        self.debug_mode = False
         self.reset()
         self.description = description
         # Read language grammar and create textX metamodel object from it.
