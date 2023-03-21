@@ -1559,7 +1559,8 @@ class Waffle():
                         fmappings = {'Mappings': {}, 'MappingsFull': {}}
                         vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
                         if vmappings is None:
-                            constraint_ready = False
+                            if assign_type == 'Read' and ftype == 'Value':
+                                constraint_ready = False
                             vmappings = {'Value': []}
                         fmappings.update({'Mappings': vmappings})
                         fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
@@ -1581,6 +1582,7 @@ class Waffle():
                                     if fname not in mappings[type][assign_type][original]:
                                         mappings[type][assign_type][original].append(fname)
                                     if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
+                                        print(feature)
                                         logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                         constraint_ready = False
                                     for constraint in self.namespace[tlf]['Constraints'].values():
@@ -2328,12 +2330,14 @@ class Waffle():
                 print(feature['Constraints'][sequence_number]['Assign'])
                 print(feature['Constraints'][sequence_number]['Read'])
                 print(feature['Constraints'][sequence_number]['Pattern'])
+                print(feature['Constraints'][sequence_number]['Operations'])
             for sequence_number in feature['IndependentConstraints']:
                 print('------------------')
                 print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
                 print(feature['Constraints'][sequence_number]['Assign'])
                 print(feature['Constraints'][sequence_number]['Read'])
                 print(feature['Constraints'][sequence_number]['Pattern'])
+                print(feature['Constraints'][sequence_number]['Operations'])
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
         # metamodel_export(mm, join(this_folder, 'output/metamodel.dot'))

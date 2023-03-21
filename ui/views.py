@@ -53,6 +53,7 @@ class WizardStepForm(forms.Form):
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
             self.up = {}
             check = []
+            cards_step = True
             for key, value in cd.items():
                 res = api.cardinality_solver(key, value)
                 check.append(res)
@@ -62,7 +63,6 @@ class WizardStepForm(forms.Form):
                 self.add_error(key, error)
             if all(x is True for x in check):
                 api.update_namespace(cd)
-                cards_step = True
         else:
             api.update_namespace(cd)
             cards_step = False
