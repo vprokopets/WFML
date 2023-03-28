@@ -68,7 +68,6 @@ class FeatureAnalyzer:
                                         and assign_constraint != constraint:
                                     print(f'Assign: {assign_feature} / Read: {read_feature} / {constraints[assign_constraint]["Assign"]} / {value["Read"]}')
                                     dependencies.append([assign_constraint, constraint])
-        print('adsapodapodsakpodsakdposakdpoadpoaskdposad')
         print(f'Dependencies: {dependencies}')
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()

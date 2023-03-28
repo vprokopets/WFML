@@ -1421,6 +1421,8 @@ class Waffle():
             if field in ['Fcard', 'Gcard'] and key != 'Initial':
                 self.check_integrities(tlf)
                 self.activation_flag_update(self.namespace[tlf]['Features'], field, value, mapping)
+                import pprint
+                pprint.pprint(self.namespace[tlf]['Features'])
 
             defined_features = self.defined_features[field]
             if field not in defined_features:
@@ -1504,6 +1506,8 @@ class Waffle():
                         if any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
                             if (suffix == 'V' and len(mapping.split('.')) >= len(filter_field[0].split('.'))) or (suffix == 'C' and len(mapping.split('.')) > len(filter_field[0].split('.'))): 
                                 mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
+                    elif field == 'Fcard' and value in ['*', '?', '!'] and suffix == 'C':
+                        mvalue['ActiveF'] = True
                     else:
                         mapping_sp = mapping.split('.')
                         mapping_sp[-1] = self.get_original_name(mapping_sp[-1])
@@ -1790,6 +1794,15 @@ class Waffle():
         return names
 
     def preprocess_step(self, tlf):
+        result = {}
+        if tlf in self.cycles.keys():
+            for cycle_part in self.cycles[tlf]:
+                result.update(self.preprocess_step_helper(cycle_part))
+        else:
+            result = self.preprocess_step_helper(tlf)
+        return result
+
+    def preprocess_step_helper(self, tlf):
         """
         Function to define the next step features for the current stage (top-level feature).
 
@@ -1799,6 +1812,7 @@ class Waffle():
         RETURN
         dict of structure fname - ftype
         """
+
         fcards, values = self.check_integrities(tlf)
         undefined_values, undefined_values = {}, {}
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
@@ -1952,7 +1966,7 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-        
+
         result (type = list): list of all undefined feature cardinalities.
         """
         result = []
@@ -1973,7 +1987,7 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-        
+
         result (type = list): list of all undefined group cardinalities.
         """
         result = []
