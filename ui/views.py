@@ -48,8 +48,6 @@ class WizardStepForm(forms.Form):
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
         # Write data from form fields to global namespace.
-        print(tlf)
-        print(api.preprocess_step(tlf))
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
             self.up = {}
             check = []

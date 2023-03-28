@@ -1421,8 +1421,13 @@ class Waffle():
             if field in ['Fcard', 'Gcard'] and key != 'Initial':
                 self.check_integrities(tlf)
                 self.activation_flag_update(self.namespace[tlf]['Features'], field, value, mapping)
-                import pprint
-                pprint.pprint(self.namespace[tlf]['Features'])
+                if value in ['+', '*', '?'] and field == 'Fcard':
+                    init_ns = self.namespace[tlf]['Features'][fname]['InitialC']
+                    init_ns['Fcard'] = value
+                    init_ns['ActiveF'] = True
+                if value in ['or', 'xor'] and field == 'Gcard':
+                    init_ns = self.namespace[tlf]['Features'][fname]['InitialV']
+                    init_ns['Gcard'] = value
 
             defined_features = self.defined_features[field]
             if field not in defined_features:
@@ -1506,7 +1511,7 @@ class Waffle():
                         if any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
                             if (suffix == 'V' and len(mapping.split('.')) >= len(filter_field[0].split('.'))) or (suffix == 'C' and len(mapping.split('.')) > len(filter_field[0].split('.'))): 
                                 mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
-                    elif field == 'Fcard' and value in ['*', '?', '!'] and suffix == 'C':
+                    elif field == 'Fcard' and value in ['*', '?', '+'] and suffix == 'C':
                         mvalue['ActiveF'] = True
                     else:
                         mapping_sp = mapping.split('.')
@@ -2226,37 +2231,8 @@ class Waffle():
         card_type = feature.split('.')[0]
         suffix = 'C' if card_type == 'Fcard' else 'V'
         original_name = self.get_original_name(feature)
-
-        res_orig = []
-        # Transform special cardinality values to simple constraint. Fullfill match groups.
-        if not isinstance(card_value, list):
-            if card_value == '*':
-                res_orig.append(['x>=0'])
-            elif card_value in ['+', 'or']:
-                res_orig.append('x>=1')
-            elif card_value in ['?', 'mux']:
-                res_orig.append(['x>=0', 'x<=1'])
-            elif card_value == 'xor':
-                res_orig.append('x==1')
-            elif type(card_value) == int or re.match(r'^\d+$', card_value):
-                res_orig.append(f'x=={card_value}')
-            else:
-                strspl = card_value.split(',')
-                for lexem in strspl:
-                    if re.match(r'(\d+\.\.)+(\d+|\*)', lexem):
-                        lexspl = lexem.split('..')
-                        res_orig.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'] if lexspl[1] != '*' else [f'x>={lexspl[0]}'])
-                    else:
-                        res_orig.append(f'x=={lexem}')
-            if len(res_orig) > 0:
-                self.original_card_from_c[card_type].update({feature: card_value})
-                return True
-
         tlf = original_name.split('.')[0]
-        if feature in self.original_card_from_c[card_type].keys():
-            original_card = self.original_card_from_c[card_type][feature]
-        else:
-            original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
+        original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
         if original_card is None:
             return True
         if card_type == 'Fcard':
