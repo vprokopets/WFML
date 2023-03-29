@@ -160,6 +160,15 @@ class FeatureAnalyzer:
             raise Exception(msg)
 
     def merge_dicts(self, dicts):
+        """
+        Function to merge all dicts with duplicates.
+
+        dicts
+        feature (type = set): a set of dicts to merge.
+
+        RETURN
+        ret (type = dynamic): the result of the check if duplicate values are different, else - feature name.
+        """
         res = collections.defaultdict(list)
         for d in dicts:
             for k, v in d.items():
