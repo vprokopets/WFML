@@ -1,5 +1,5 @@
+import collections
 import itertools
-from pprint import pprint
 
 
 class FeatureAnalyzer:
@@ -66,10 +66,7 @@ class FeatureAnalyzer:
                             for read_feature in value['Read'][read_type]:
                                 if (assign_feature == read_feature or f'{assign_feature}.' in read_feature) and [assign_constraint, constraint] not in dependencies \
                                         and assign_constraint != constraint:
-                                    print(f'Assign: {assign_feature} / Read: {read_feature} / {constraints[assign_constraint]["Assign"]} / {value["Read"]}')
                                     dependencies.append([assign_constraint, constraint])
-        print('adsapodapodsakpodsakdposakdpoadpoaskdposad')
-        print(f'Dependencies: {dependencies}')
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()
         if cycles != {}:
@@ -111,31 +108,70 @@ class FeatureAnalyzer:
         expressions = list(self.api.requirements.keys())
         if len(expressions) == 0:
             return
-        combinations = itertools.product(*self.api.requirements.values())
-        for iter, comb in enumerate(combinations):
-            temp = {}
-            for index, constraint in enumerate(comb):
-                for feature, value in constraint.items():
-                    if feature not in temp.keys():
-                        temp.update({feature: {True: [], False: []}})
-                    temp[feature][value].append(expressions[index])
-                validity = True
-                for feature, value in temp.items():
-                    check = all(x != [] for x in list(value.values()))
-                    if check is True:
-                        validity = False
-                        if feature not in self.inconsistencies.keys():
-                            self.inconsistencies.update({feature: []})
-                        features = self.inconsistencies[feature]
-                        for x in list(value.values()):
-                            features = list(set(features + x))
-                        self.inconsistencies.update({feature: features})
-                self.validity.update({iter: validity})
-        if not any(list(self.validity.values())):
-            msg = ''.join(('Constraints cardinalities inconsistencies, please check the following constraints \n',
-                           '\n'.join(f'{k}: {v}' for k, v in self.inconsistencies.items())))
+        single = {}
+        multi = {}
+        for expr, values in self.api.requirements.items():
+            if len(values) == 1:
+                for dict_obj in values:
+                    for k, v in dict_obj.items():
+                        if k in single.keys() and v != single[k]['Value']:
+                            msg = ''.join(('Constraints cardinalities mismatch. \n',
+                                           f'Please check expressions on feature {k} for constraints: \n',
+                                           '\n'f'{single[k]["Expr"]} and {expr}'))
+                            msg = msg.replace('; ', '')
+                            raise Exception(msg)
+                        single.update({k: {'Value': v, 'Expr': expr}})
+        false_obj = []
+        for expr, values in self.api.requirements.items():
+            if len(values) > 1:
+                added = False
+                for dict_obj in values:
+                    add = True
+                    for k, v in dict_obj.items():
+                        if k in single.keys() and v != single[k]['Value']:
+                            add = False
+                            false_obj.append(k)
+                    if add is True:
+                        added = True
+                        if expr not in multi.keys():
+                            multi.update({expr: []})
+                        multi[expr].append(dict_obj)
+                if added is False:
+                    msg = ''.join(('Constraints cardinalities mismatch. \n',
+                                   f'Please check all expressions on feature {k} for constraints: \n',
+                                   '\n'f'{single[k]["Expr"]} and {expr}'))
+                    msg = msg.replace('; ', '')
+                    raise Exception(msg)
+        combinations = itertools.product(*multi.values())
+        success = False
+        for _, comb in enumerate(combinations):
+            check = self.merge_dicts(comb)
+            if check is True:
+                success = True
+                break
+        if success is False:
+            msg = ''.join(('Constraints cardinalities mismatch. \n',
+                           f'Please check all expressions on feature {check}'))
             msg = msg.replace('; ', '')
             raise Exception(msg)
+
+    def merge_dicts(self, dicts):
+        """
+        Function to merge all dicts with duplicates.
+
+        dicts
+        feature (type = set): a set of dicts to merge.
+
+        RETURN
+        ret (type = dynamic): the result of the check if duplicate values are different, else - feature name.
+        """
+        res = collections.defaultdict(list)
+        for d in dicts:
+            for k, v in d.items():
+                if len(res[k]) == 1 and v not in res[k]:
+                    return k
+                res[k].append(v)
+        return True
 
     def type_analysis(self):
         """

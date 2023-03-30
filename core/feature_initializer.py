@@ -111,6 +111,8 @@ class FeatureInitializer:
         feature_tmpl['InitialC']['Fcard'] = feature.fcard if feature.fcard is not None else 1
         feature_tmpl['InitialV']['Gcard'] = feature.gcard if feature.gcard is not None else None
         feature_tmpl['InitialV']['Value'] = feature.init if feature.init is not None else None
+        feature_tmpl['InitialC']['ActiveF'] = False if feature.fcard == 0 else True
+        feature_tmpl['InitialV']['ActiveF'] = False if feature.fcard == 0 else True
 
         feature_tmpl['MappingsC'].update({full_name: copy.deepcopy(feature_tmpl['InitialC'])})
         feature_tmpl['MappingsV'].update({full_name: copy.deepcopy(feature_tmpl['InitialV'])})
@@ -291,9 +293,9 @@ class FeatureInitializer:
                 self.define_feature(element)
                 self.namespace.update({str(element.name): copy.copy(self.top_level_feature)})
         logging.info('Feature definition: Finished.')
-        cyckes, sequence = self.api.define_sequence_for_deps(self.dependencies)
-        if cyckes != {}:
-            raise Exception(f'There are cycled super relations: {cyckes}')
+        cycles, sequence = self.api.define_sequence_for_deps(self.dependencies)
+        if cycles != {}:
+            raise Exception(f'There are cycled super relations: {cycles}')
         right_parts = []
         for dep in self.dependencies:
             right_parts.append(dep[0])

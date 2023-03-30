@@ -48,11 +48,10 @@ class WizardStepForm(forms.Form):
         logging.debug(f'Cleaned Data: {cd}')
         logging.debug(f'Label: {self.label}')
         # Write data from form fields to global namespace.
-        print(tlf)
-        print(api.preprocess_step(tlf))
         if cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']:
             self.up = {}
             check = []
+            cards_step = True
             for key, value in cd.items():
                 res = api.cardinality_solver(key, value)
                 check.append(res)
@@ -62,7 +61,6 @@ class WizardStepForm(forms.Form):
                 self.add_error(key, error)
             if all(x is True for x in check):
                 api.update_namespace(cd)
-                cards_step = True
         else:
             api.update_namespace(cd)
             cards_step = False
@@ -102,7 +100,7 @@ class WizardStepForm(forms.Form):
             ps = pstats.Stats(ob, stream=sec).sort_stats(sortby)
             ps.print_stats()
 
-            print(sec.getvalue())
+            logging.debug(sec.getvalue())
         return cd
 
     def validation(self, element: str, cards: bool):
