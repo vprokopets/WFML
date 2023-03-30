@@ -66,9 +66,7 @@ class FeatureAnalyzer:
                             for read_feature in value['Read'][read_type]:
                                 if (assign_feature == read_feature or f'{assign_feature}.' in read_feature) and [assign_constraint, constraint] not in dependencies \
                                         and assign_constraint != constraint:
-                                    print(f'Assign: {assign_feature} / Read: {read_feature} / {constraints[assign_constraint]["Assign"]} / {value["Read"]}')
                                     dependencies.append([assign_constraint, constraint])
-        print(f'Dependencies: {dependencies}')
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()
         if cycles != {}:
@@ -146,9 +144,7 @@ class FeatureAnalyzer:
                     raise Exception(msg)
         combinations = itertools.product(*multi.values())
         success = False
-        for iter, comb in enumerate(combinations):
-            if iter % 500 == 0:
-                print(iter)
+        for _, comb in enumerate(combinations):
             check = self.merge_dicts(comb)
             if check is True:
                 success = True

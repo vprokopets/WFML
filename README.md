@@ -45,7 +45,7 @@ Python (version 3.7+) with actual pip installed - **only for Standalone mode**
 
 #### Required pip packaged are listed in ![requirements.txt](requirements.txt) and could be installed with:
 
-```python3.7 -m pip install --no-cache-dir -q -r /root/requirements.txt```
+```python3.7 -m pip install --no-cache-dir -q -r *path_to_requirements.txt*```
 
 ## License
 ![MIT](LICENSE)

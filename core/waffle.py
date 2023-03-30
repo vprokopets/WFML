@@ -1591,7 +1591,6 @@ class Waffle():
                                     if fname not in mappings[type][assign_type][original]:
                                         mappings[type][assign_type][original].append(fname)
                                     if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                        print(feature)
                                         logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                         constraint_ready = False
                                     for constraint in self.namespace[tlf]['Constraints'].values():
@@ -1817,7 +1816,6 @@ class Waffle():
         RETURN
         dict of structure fname - ftype
         """
-
         fcards, values = self.check_integrities(tlf)
         undefined_values, undefined_values = {}, {}
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
@@ -1971,7 +1969,6 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-
         result (type = list): list of all undefined feature cardinalities.
         """
         result = []
@@ -1992,7 +1989,6 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-
         result (type = list): list of all undefined group cardinalities.
         """
         result = []

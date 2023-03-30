@@ -100,7 +100,7 @@ class WizardStepForm(forms.Form):
             ps = pstats.Stats(ob, stream=sec).sort_stats(sortby)
             ps.print_stats()
 
-            print(sec.getvalue())
+            logging.debug(sec.getvalue())
         return cd
 
     def validation(self, element: str, cards: bool):
