@@ -1421,6 +1421,13 @@ class Waffle():
             if field in ['Fcard', 'Gcard'] and key != 'Initial':
                 self.check_integrities(tlf)
                 self.activation_flag_update(self.namespace[tlf]['Features'], field, value, mapping)
+                if value in ['+', '*', '?'] and field == 'Fcard':
+                    init_ns = self.namespace[tlf]['Features'][fname]['InitialC']
+                    init_ns['Fcard'] = value
+                    init_ns['ActiveF'] = True
+                if value in ['or', 'xor'] and field == 'Gcard':
+                    init_ns = self.namespace[tlf]['Features'][fname]['InitialV']
+                    init_ns['Gcard'] = value
 
             defined_features = self.defined_features[field]
             if field not in defined_features:
@@ -1504,6 +1511,8 @@ class Waffle():
                         if any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
                             if (suffix == 'V' and len(mapping.split('.')) >= len(filter_field[0].split('.'))) or (suffix == 'C' and len(mapping.split('.')) > len(filter_field[0].split('.'))): 
                                 mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
+                    elif field == 'Fcard' and value in ['*', '?', '+'] and suffix == 'C':
+                        mvalue['ActiveF'] = True
                     else:
                         mapping_sp = mapping.split('.')
                         mapping_sp[-1] = self.get_original_name(mapping_sp[-1])
@@ -1559,7 +1568,8 @@ class Waffle():
                         fmappings = {'Mappings': {}, 'MappingsFull': {}}
                         vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
                         if vmappings is None:
-                            constraint_ready = False
+                            if assign_type == 'Read' and ftype == 'Value':
+                                constraint_ready = False
                             vmappings = {'Value': []}
                         fmappings.update({'Mappings': vmappings})
                         fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
@@ -1581,6 +1591,7 @@ class Waffle():
                                     if fname not in mappings[type][assign_type][original]:
                                         mappings[type][assign_type][original].append(fname)
                                     if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
+                                        print(feature)
                                         logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                         constraint_ready = False
                                     for constraint in self.namespace[tlf]['Constraints'].values():
@@ -1788,6 +1799,15 @@ class Waffle():
         return names
 
     def preprocess_step(self, tlf):
+        result = {}
+        if tlf in self.cycles.keys():
+            for cycle_part in self.cycles[tlf]:
+                result.update(self.preprocess_step_helper(cycle_part))
+        else:
+            result = self.preprocess_step_helper(tlf)
+        return result
+
+    def preprocess_step_helper(self, tlf):
         """
         Function to define the next step features for the current stage (top-level feature).
 
@@ -1797,6 +1817,7 @@ class Waffle():
         RETURN
         dict of structure fname - ftype
         """
+
         fcards, values = self.check_integrities(tlf)
         undefined_values, undefined_values = {}, {}
         undefined_cards = self.get_undefined_cards(fcards, values, tlf)
@@ -1950,7 +1971,7 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-        
+
         result (type = list): list of all undefined feature cardinalities.
         """
         result = []
@@ -1971,7 +1992,7 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-        
+
         result (type = list): list of all undefined group cardinalities.
         """
         result = []
@@ -2210,37 +2231,8 @@ class Waffle():
         card_type = feature.split('.')[0]
         suffix = 'C' if card_type == 'Fcard' else 'V'
         original_name = self.get_original_name(feature)
-
-        res_orig = []
-        # Transform special cardinality values to simple constraint. Fullfill match groups.
-        if not isinstance(card_value, list):
-            if card_value == '*':
-                res_orig.append(['x>=0'])
-            elif card_value in ['+', 'or']:
-                res_orig.append('x>=1')
-            elif card_value in ['?', 'mux']:
-                res_orig.append(['x>=0', 'x<=1'])
-            elif card_value == 'xor':
-                res_orig.append('x==1')
-            elif type(card_value) == int or re.match(r'^\d+$', card_value):
-                res_orig.append(f'x=={card_value}')
-            else:
-                strspl = card_value.split(',')
-                for lexem in strspl:
-                    if re.match(r'(\d+\.\.)+(\d+|\*)', lexem):
-                        lexspl = lexem.split('..')
-                        res_orig.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'] if lexspl[1] != '*' else [f'x>={lexspl[0]}'])
-                    else:
-                        res_orig.append(f'x=={lexem}')
-            if len(res_orig) > 0:
-                self.original_card_from_c[card_type].update({feature: card_value})
-                return True
-
         tlf = original_name.split('.')[0]
-        if feature in self.original_card_from_c[card_type].keys():
-            original_card = self.original_card_from_c[card_type][feature]
-        else:
-            original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
+        original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
         if original_card is None:
             return True
         if card_type == 'Fcard':
@@ -2328,12 +2320,14 @@ class Waffle():
                 print(feature['Constraints'][sequence_number]['Assign'])
                 print(feature['Constraints'][sequence_number]['Read'])
                 print(feature['Constraints'][sequence_number]['Pattern'])
+                print(feature['Constraints'][sequence_number]['Operations'])
             for sequence_number in feature['IndependentConstraints']:
                 print('------------------')
                 print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
                 print(feature['Constraints'][sequence_number]['Assign'])
                 print(feature['Constraints'][sequence_number]['Read'])
                 print(feature['Constraints'][sequence_number]['Pattern'])
+                print(feature['Constraints'][sequence_number]['Operations'])
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
         # metamodel_export(mm, join(this_folder, 'output/metamodel.dot'))
