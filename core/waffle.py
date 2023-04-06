@@ -1971,7 +1971,6 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-
         result (type = list): list of all undefined feature cardinalities.
         """
         result = []
@@ -1992,7 +1991,6 @@ class Waffle():
         namespace (type = dict): namespace of corresponding top-level feature
 
         RETURN
-
         result (type = list): list of all undefined group cardinalities.
         """
         result = []
