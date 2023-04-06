@@ -1927,7 +1927,8 @@ class Waffle():
                             flag = False
                     for aelement in card_type_list:
                         if (aelement in celement and aelement != celement) or (self.get_original_name(aelement) in celement and self.get_original_name(aelement) != celement and self.get_original_name(aelement) != self.get_original_name(celement)):
-                            flag = False
+                            if len(aelement.split('.')) != len(celement.split('.')):
+                                flag = False
                     if flag is True and celement not in result[card_type]:
                         result[card_type].append(celement)
         else:
@@ -2313,19 +2314,19 @@ class Waffle():
         self.feature_analyzer.analyze_feature_model(stages)
         for a, feature in self.namespace.items():
             for sequence_number in feature['ConstraintsValidationOrder']:
-                print('_______________')
-                print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
-                print(feature['Constraints'][sequence_number]['Assign'])
-                print(feature['Constraints'][sequence_number]['Read'])
-                print(feature['Constraints'][sequence_number]['Pattern'])
-                print(feature['Constraints'][sequence_number]['Operations'])
+                logging.debug('_______________')
+                logging.debug(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
+                logging.debug(feature['Constraints'][sequence_number]['Assign'])
+                logging.debug(feature['Constraints'][sequence_number]['Read'])
+                logging.debug(feature['Constraints'][sequence_number]['Pattern'])
+                logging.debug(feature['Constraints'][sequence_number]['Operations'])
             for sequence_number in feature['IndependentConstraints']:
-                print('------------------')
-                print(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
-                print(feature['Constraints'][sequence_number]['Assign'])
-                print(feature['Constraints'][sequence_number]['Read'])
-                print(feature['Constraints'][sequence_number]['Pattern'])
-                print(feature['Constraints'][sequence_number]['Operations'])
+                logging.debug('------------------')
+                logging.debug(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
+                logging.debug(feature['Constraints'][sequence_number]['Assign'])
+                logging.debug(feature['Constraints'][sequence_number]['Read'])
+                logging.debug(feature['Constraints'][sequence_number]['Pattern'])
+                logging.debug(feature['Constraints'][sequence_number]['Operations'])
         return stages
         # Export both metamodel and model in .dot format for class diagram construction.
         # metamodel_export(mm, join(this_folder, 'output/metamodel.dot'))
