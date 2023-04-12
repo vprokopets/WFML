@@ -436,3 +436,113 @@ def download_file(request):
     response['Content-Disposition'] = "attachment; filename=%s" % filename
     # Return the response value
     return response
+
+
+def use_pn_models(request, *args, **kwargs):
+    """
+    ! This method is automatically called to render petrinet initial page (GET request)
+    or to process filled ModelInputForm and create wizard with petrinet models(POST request).
+
+    RETURN
+    initial page (GET)
+    redirect to wizard (POST)
+    """
+    if request.method == 'POST':
+        # add pn model to input
+        inputDict = request.POST.copy()
+        if request.POST['pn_type'] == 'dpn':
+            inputDict['model_field'] = dpn_model
+        else:
+            inputDict['model_field'] = hpn_model
+
+        # Create a form instance and populate it with data from the request (binding) and selected pn model:
+        form = ModelInputForm(inputDict)
+        if form.is_valid():
+            global model_stages, generated_steps, step_current, factory_forms, tlf, init_factory_forms
+            factory_forms, step_current, tlf = None, None, None
+            generated_steps, model_stages = [], []
+            init_factory_forms = {}
+            model = form.cleaned_data['model_field']
+            logging.info(f'Model: {model}')
+            model_stages = api.initialize_product(model)
+            factory_forms = [WizardStepForm for _ in range(len(model_stages))]
+            for stage in model_stages:
+                init_factory_forms.update({stage: 0})
+            return HttpResponseRedirect(reverse('factory_wizard'))
+
+    elif request.method == 'GET':
+        form = ModelInputForm()
+        return render(request, 'pn_models.html', {
+            'form': form,
+        })
+
+
+# TODO seperate models to different files or move to frontend
+dpn_model = '\
+DPN{\
+    Places {\
+        PD * {\
+            startTokens -> integer\
+            nIn -> integer\
+            nOut -> integer\
+        }\
+    }\
+    Transitions {\
+        T * {\
+            nIn -> integer\
+            nOut -> integer\
+        }\
+    }\
+    Arcs {\
+        Arc*{\
+            start -> string\
+            end -> string\
+            weight -> integer\
+            [start in childs.DPN.Places or start in childs.DPN.Transitions]\
+            [end in childs.DPN.Places or end in childs.DPN.Transitions]\
+            [start != end]\
+            [weight > 0]\
+        }\
+    }\
+}'
+
+hpn_model = '\
+HPN{\
+    Places {\
+        PD* {\
+			startTokens-> integer\
+			nIn -> integer\
+			nOut -> integer\
+        }\
+        PC* {\
+            startMarks\
+        }\
+    }\
+    Transitions {\
+        T* {\
+        nIn -> integer\
+        nOut -> integer\
+        }\
+        TD* {\
+            nIn -> integer\
+            nOut -> integer\
+            delay -> float\
+        }\
+        TC*{\
+            nIn -> integer\
+            nOut -> integer\
+            maximumSpeed -> float\
+        }\
+    }\
+    Arcs {\
+        Arc*{\
+            start -> string\
+            end-> string\
+            weight -> float\
+            [start in childs.HPN.Places or start in childs.HPN.Transitions ]\
+            [end in childs.HPN.Places or end in childs.HPN.Transitions ]\
+            [start != end]\
+            [weight > 0]\
+        }\
+    }\
+}'
