@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<form action="" method="post">
+    {% csrf_token %}
+    <button type="submit" name="pn_type" value="dpn">Use Discrete PNModel</button>
+    <button type="submit" name="pn_type" value="hpn">Use Hybrid PNModel</button>
+</form>
+
+<style>
+    textarea {
+        position: relative;
+        margin-top: 40px;
+        width: 96%;
+        left: 2%;
+        height: 600px;
+        font-size: 11pt;
+        tab-size: 4;
+    }
+
+    input {
+        position: relative;
+        margin-top: 20px;
+        left: 2%;
+        text-align: center;
+        width: 150px;
+        height: 40px;
+        font-size: 12pt;
+    }
+</style>
+{% endblock %}
