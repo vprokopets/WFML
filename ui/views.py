@@ -16,6 +16,8 @@ import cProfile
 import pstats
 import io
 from pstats import SortKey
+
+import jsonToModelica.wfmlToOMSimulation as wfmlToOMSimulation
 profiling = False
 factory_forms = None
 generated_steps = []
@@ -137,6 +139,12 @@ class WizardClass(CookieWizardView):
         """
         res = api.save_json()
         logging.info(f'! Final result: {res}')
+
+        # check json for DPN or HPN, return pn_models_done.html if true
+        if "DPN" in res or "HPN" in res:
+            return render(self.request, 'pn_models_done.html', {
+                'form_data': res,
+            })
 
         return render(self.request, 'done.html', {
             'form_data': res,
@@ -475,6 +483,19 @@ def use_pn_models(request, *args, **kwargs):
         return render(request, 'pn_models.html', {
             'form': form,
         })
+
+def download_modelica_file(request):
+    json_path = "./core/output/configuration.json"
+    modelname, components, equations = wfmlToOMSimulation.parseJson(json_path)
+    wfmlToOMSimulation.writeModelicaFile(modelname, components, equations)
+
+    filename = modelname+'.mo'
+    mime_type, _ = mimetypes.guess_type(filename)
+
+    response = HttpResponse('models/' + filename, content_type=mime_type)
+    #wfmlToOMSimulation.simulateInOM(modelname, 0, 10, 500, '{PD_0.t, PD_1.t, PC_0.t, PC_1.t}')
+    response['Content-Disposition'] = "attachment; filename=%s" % filename
+    return response
 
 
 # TODO seperate models to different files or move to frontend
