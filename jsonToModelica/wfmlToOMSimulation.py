@@ -1,4 +1,3 @@
-from OMPython import OMCSessionZMQ
 import json
 
 
@@ -72,29 +71,3 @@ def writeModelicaFile(name, components, equations):
     # writes modelica file
     modelicaFile.write(modelStr)
     return modelStr
-
-
-def simulateInOM(modelName, startTime=0, stopTime=10, numberOfIntervals=500, plotVars=''):
-    # start OpenModelica
-    omc = OMCSessionZMQ()
-    cmds = [
-        # load PNlib
-        'loadModel(PNlib)',
-
-        # load model
-        'loadFile("models/'+modelName+'.mo")',
-
-        # simulate model
-        'simulate('+modelName + \
-
-        ', startTime = '+str(startTime) + \
-        ', stopTime = '+str(stopTime) + \
-        ', numberOfIntervals ='+str(numberOfIntervals)+')',
-        # plot results
-        "plot("+plotVars+")"
-    ]
-
-    # execute commands and print results
-    for cmd in cmds:
-        answer = omc.sendExpression(cmd)
-        print("\n{}:\n{}".format(cmd, answer))
