@@ -517,11 +517,9 @@ DPN{\
         Arc*{\
             start -> string\
             end -> string\
-            weight -> integer\
             [start in childs.DPN.Places or start in childs.DPN.Transitions]\
             [end in childs.DPN.Places or end in childs.DPN.Transitions]\
             [start != end]\
-            [weight > 0]\
         }\
     }\
 }'
@@ -535,14 +533,12 @@ HPN{\
 			nOut -> integer\
         }\
         PC* {\
-            startMarks\
+            startMarks -> float\
+            nIn -> integer\
+			nOut -> integer\
         }\
     }\
     Transitions {\
-        T* {\
-        nIn -> integer\
-        nOut -> integer\
-        }\
         TD* {\
             nIn -> integer\
             nOut -> integer\
@@ -558,11 +554,9 @@ HPN{\
         Arc*{\
             start -> string\
             end-> string\
-            weight -> float\
             [start in childs.HPN.Places or start in childs.HPN.Transitions ]\
             [end in childs.HPN.Places or end in childs.HPN.Transitions ]\
             [start != end]\
-            [weight > 0]\
         }\
     }\
 }'
