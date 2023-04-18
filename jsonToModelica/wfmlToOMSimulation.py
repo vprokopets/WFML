@@ -30,26 +30,27 @@ def parseJson(jsonPath):
                 else:
                     # add arc to equation string
                     # assumes after place always transition and vice versa
-                    # TODO arcs count out, intplaces
                     startName = currentObj['start'].split('.')[-1]
                     endName = currentObj['end'].split('.')[-1]
+
+                    # count arcs leaving and entering place/transition
+                    startCount = 1 + equationsStr.count('connect(' + startName)
+                    endCount = 1 + equationsStr.count(',' + endName)
                     if 'Transition' in currentObj['start']:
-                        # TODO outPlace number
-                        startName += '.outPlaces[1]'
+                        startName += '.outPlaces[' + str(startCount) + ']'
 
                     else:
-                        # TODO outT number
-                        startName += '.outTransition[1]'
+                        startName += '.outTransition[' + str(startCount) + ']'
 
                     if 'Transition' in currentObj['end']:
-                        # TODO inPlace number
-                        endName += '.inPlaces[1]'
+                        endName += '.inPlaces[' + str(endCount) + ']'
                     else:
-                        # TODO inT number
-                        endName += '.inTransition[1]'
+                        endName += '.inTransition[' + str(endCount) + ']'
 
                     # add to equation string
                     # example connect(PD_0.outPlaces[1],T_0.inTransition[1]);
+
+                    print(startCount, endCount)
                     equationsStr += '        connect(' + \
                         startName + ',' + endName + ');\n'
     return name, componentsStr, equationsStr
