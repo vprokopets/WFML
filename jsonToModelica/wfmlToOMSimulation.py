@@ -24,8 +24,9 @@ def parseJson(jsonPath):
                     # example (startTokens=1,nIn=0,nOut=1);
 
                     for property in currentObj:
-                        componentsStr += property + '=' + \
-                            str(currentObj[property]) + ','
+                        if str(currentObj[property]) != '':
+                            componentsStr += property + '=' + \
+                                str(currentObj[property]) + ','
                     componentsStr = componentsStr[:-1] + ');\n'
                 else:
                     # add arc to equation string
