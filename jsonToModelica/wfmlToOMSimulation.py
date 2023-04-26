@@ -51,7 +51,6 @@ def parseJson(jsonPath):
                     # add to equation string
                     # example connect(PD_0.outPlaces[1],T_0.inTransition[1]);
 
-                    print(startCount, endCount)
                     equationsStr += '        connect(' + \
                         startName + ',' + endName + ');\n'
     return name, componentsStr, equationsStr
