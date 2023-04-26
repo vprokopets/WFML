@@ -13,7 +13,8 @@ def parseJson(jsonPath):
             # key = places, transitions, arcs
             for obj in data[model][key]:
                 # obj is specific place, transition, arc
-                currentObj = data[model][key][obj]
+                objProperties = data[model][key][obj]
+                print("################" + str(obj))
                 if key != 'Arcs':
                     # add component type and name to string
                     # example : PNlib.Components.PD PD_0
@@ -23,27 +24,27 @@ def parseJson(jsonPath):
                     # loop over properties and add to string
                     # example (startTokens=1,nIn=0,nOut=1);
 
-                    for property in currentObj:
-                        if str(currentObj[property]) != '':
+                    for property in objProperties:
+                        if str(objProperties[property]) != '':
                             componentsStr += property + '=' + \
-                                str(currentObj[property]) + ','
+                                str(objProperties[property]) + ','
                     componentsStr = componentsStr[:-1] + ');\n'
                 else:
                     # add arc to equation string
                     # assumes after place always transition and vice versa
-                    startName = currentObj['start'].split('.')[-1]
-                    endName = currentObj['end'].split('.')[-1]
+                    startName = objProperties['start'].split('.')[-1]
+                    endName = objProperties['end'].split('.')[-1]
 
                     # count arcs leaving and entering place/transition
                     startCount = 1 + equationsStr.count('connect(' + startName)
                     endCount = 1 + equationsStr.count(',' + endName)
-                    if 'Transition' in currentObj['start']:
+                    if 'Transition' in objProperties['start']:
                         startName += '.outPlaces[' + str(startCount) + ']'
 
                     else:
                         startName += '.outTransition[' + str(startCount) + ']'
 
-                    if 'Transition' in currentObj['end']:
+                    if 'Transition' in objProperties['end']:
                         endName += '.inPlaces[' + str(endCount) + ']'
                     else:
                         endName += '.inTransition[' + str(endCount) + ']'
