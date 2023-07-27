@@ -488,9 +488,8 @@ def download_modelica_file(request):
     json_path = "./core/output/configuration.json"
     modelname, components, equations = wfmlToOMSimulation.parseJson(json_path)
     wfmlToOMSimulation.writeModelicaFile(modelname, components, equations)
-
     filename = modelname+'.mo'
-    file = open('jsonToModelica/models/'+filename, 'r')
+    file = open('jsonToModelica/'+filename, 'r')
     response = HttpResponse(file, content_type='application/mo')
     #wfmlToOMSimulation.simulateInOM(modelname, 0, 10, 500, '{PD_0.t, PD_1.t, PC_0.t, PC_1.t}')
     response['Content-Disposition'] = "attachment; filename=%s" % filename

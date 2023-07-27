@@ -14,7 +14,6 @@ def parseJson(jsonPath):
             for obj in data[model][key]:
                 # obj is specific place, transition, arc
                 objProperties = data[model][key][obj]
-                print("################" + str(obj))
                 if key != 'Arcs':
                     # add component type and name to string
                     # example : PNlib.Components.PD PD_0
@@ -59,7 +58,7 @@ def parseJson(jsonPath):
 
 def writeModelicaFile(name, components, equations):
     # create .mo file
-    modelicaFile = open('jsonToModelica/models/'+name+'.mo', 'w')
+    modelicaFile = open('jsonToModelica/'+name+'.mo', 'w')
 
     # build .mo file
     modelStr = 'model ' + name + '\n'\
