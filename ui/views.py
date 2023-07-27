@@ -16,7 +16,7 @@ import cProfile
 import pstats
 import io
 from pstats import SortKey
-
+from ui.pn_models import PetriNetModels 
 import jsonToModelica.wfmlToOMSimulation as wfmlToOMSimulation
 profiling = False
 factory_forms = None
@@ -459,9 +459,9 @@ def use_pn_models(request, *args, **kwargs):
         # add pn model to input
         inputDict = request.POST.copy()
         if request.POST['pn_type'] == 'dpn':
-            inputDict['model_field'] = dpn_model
+            inputDict['model_field'] = PetriNetModels.dpn_model
         else:
-            inputDict['model_field'] = hpn_model
+            inputDict['model_field'] = PetriNetModels.hpn_model
 
         # Create a form instance and populate it with data from the request (binding) and selected pn model:
         form = ModelInputForm(inputDict)
@@ -495,81 +495,3 @@ def download_modelica_file(request):
     #wfmlToOMSimulation.simulateInOM(modelname, 0, 10, 500, '{PD_0.t, PD_1.t, PC_0.t, PC_1.t}')
     response['Content-Disposition'] = "attachment; filename=%s" % filename
     return response
-
-
-# TODO seperate models to different files or move to frontend
-dpn_model = '\
-DPN{\
-  Places {\
-    PD* {\
-      startTokens-> integer\
-      nIn -> integer\
-      nOut -> integer\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-  }\
-  Transitions {\
-    T* {\
-      nIn -> integer\
-      nOut -> integer\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-  }\
-  Arcs {\
-    Arc*{\
-      start -> string\
-      end -> string\
-      [start in childs.DPN.Places or start in childs.DPN.Transitions]\
-      [end in childs.DPN.Places or end in childs.DPN.Transitions]\
-      [start != end]\
-    }\
-  }\
-}'
-
-hpn_model = "\
-HPN{\
-  Places {\
-    PD* {\
-      startTokens-> integer\
-      nIn -> integer\
-      nOut -> integer\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-    PC* {\
-      startMarks -> float\
-      nIn -> integer\
-      nOut -> integer\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-  }\
-  Transitions {\
-    T* {\
-      nIn -> integer\
-      nOut -> integer\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-    TC*{\
-      nIn -> integer\
-      nOut -> integer\
-      maximumSpeed -> float\
-      [nIn >= 0]\
-      [nOut >= 0]\
-    }\
-  }\
-  Arcs {\
-    Arc*{\
-      start -> string\
-      end-> string\
-      [start in childs.HPN.Places or start in childs.HPN.Transitions]\
-      [end in childs.HPN.Places or end in childs.HPN.Transitions]\
-      [start != end]\
-      [if start in childs.HPN.Places.PD then end not in childs.HPN.Transitions.TC]\
-      [if start in childs.HPN.Transitions.TC then end not in childs.HPN.Places.PD]\
-    }\
-  }\
-}"
