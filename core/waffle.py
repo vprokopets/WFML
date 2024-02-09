@@ -1713,7 +1713,7 @@ class Waffle():
         tlf (type = str): top-level feature's name.
 
         """
-        self.cache_f = self.get_features_ready(tlf)
+        self.cache_f = self.get_features_ready()
         constraints = {}
         constraints.update({'Dependent': self.namespace[tlf]['ConstraintsValidationOrder']})
         constraints.update({'Independent': self.namespace[tlf]['IndependentConstraints']})
@@ -1857,7 +1857,7 @@ class Waffle():
                 result = result + check
         return result
 
-    def get_features_ready(self, tlf):
+    def get_features_ready(self):
         """
         Function to get all features with defined cardinalities.
 
@@ -1867,28 +1867,32 @@ class Waffle():
         RETURN
         ret (type = dict): lists of all consistent features for tlf.
         """
-        ret = {}
-        fcards, values = self.check_integrities(tlf)
-        undefined_cards = self.get_undefined_cards(fcards, values, tlf)
-        if undefined_cards is not None:
-            fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
-        else:
-            fcards, gcards = [], []
+        ret = {
+            'MappingsV': [],
+            'MappingsC': []
+        }
+        for tlf in self.namespace.keys():
+            fcards, values = self.check_integrities(tlf)
+            undefined_cards = self.get_undefined_cards(fcards, values, tlf)
+            if undefined_cards is not None:
+                fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
+            else:
+                fcards, gcards = [], []
 
-        for mapping_type in ['MappingsV', 'MappingsC']:
-            res = []
-            for feature, value in self.namespace[tlf]['Features'].items():
-                for mapping in value[mapping_type].keys():
-                    flag = True
-                    for card in fcards:
-                        if card in mapping:
-                            flag = False
-                    for card in gcards:
-                        if card in mapping and card != mapping:
-                            flag = False
-                    if flag is True and mapping not in res:
-                        res.append(mapping)
-                ret.update({mapping_type: res})
+            for mapping_type in ['MappingsV', 'MappingsC']:
+                res = []
+                for feature, value in self.namespace[tlf]['Features'].items():
+                    for mapping in value[mapping_type].keys():
+                        flag = True
+                        for card in fcards:
+                            if card in mapping:
+                                flag = False
+                        for card in gcards:
+                            if card in mapping and card != mapping:
+                                flag = False
+                        if flag is True and mapping not in res:
+                            res.append(mapping)
+                    ret[mapping_type].extend(res)
         return ret
 
     def get_undefined_cards(self, listc, listv, tlf, filter=True):
