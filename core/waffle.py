@@ -1255,7 +1255,7 @@ class Waffle():
         with open('./core/output/configuration.json', 'w', encoding='utf-8') as f:
             json.dump(res, f, ensure_ascii=False, indent=4)
 
-        # TODO: Pickling WFML for future true dynamicity
+        # TODO: Pickling WFML for dynamicity
         # self.pickle_wfml_data()
         return res
 
