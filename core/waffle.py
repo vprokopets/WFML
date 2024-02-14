@@ -1324,7 +1324,7 @@ class Waffle():
         self.unique_key = ''
         self.feature_analyzer = FeatureAnalyzer(self)
         self.feature_initializer = FeatureInitializer(self)
-        self.boolean = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'prec11', 'term']
+        self.boolean = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'term']
         self.var_attrc = ['Fcard']
         self.var_attrv = ['Value', 'Gcard']
 
@@ -1576,6 +1576,7 @@ class Waffle():
                             if vmappings is None:
                                 if assign_type == 'Read' and ftype == 'Value' or ftype == 'Gcard':
                                     constraint_ready = False
+                                    logging.info('Constraint reads (gcard) values not available')
                                 vmappings = {'Value': []}
                             fmappings.update({'Mappings': vmappings})
                             fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
@@ -1587,7 +1588,8 @@ class Waffle():
                                             filtered_mappings.append(mapping)
                                 else:
                                     filtered_mappings = fmappings[type]['Value']
-                                if filtered_mappings in [[], {'Assign': [], 'Read': []}]:
+                                if filtered_mappings in [[], {'Assign': [], 'Read': []}] and (assign_type != 'Read' or ftype != 'Fcard'):
+                                    logging.info(f'New disabling : {filtered_mappings}   --   {assign_type} | {ftype}')
                                     constraint_ready = False
                                 for mapping in filtered_mappings:
                                     split = mapping.split('.')
