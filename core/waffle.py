@@ -3,6 +3,7 @@ import json
 import itertools
 import logging
 import pandas as pd
+import pprint
 import re
 from core.feature_analyzer import FeatureAnalyzer
 from core.feature_initializer import FeatureInitializer
@@ -1602,7 +1603,6 @@ class Waffle():
                                             if fname not in mappings[type][assign_type][original]:
                                                 mappings[type][assign_type][original].append(fname)
                                             if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                                print(feature)
                                                 logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                                 constraint_ready = False
                                             for constraint in self.namespace[tlf]['Constraints'].values():
@@ -1610,6 +1610,8 @@ class Waffle():
                                                     if original in constraint['Assign']['Fcard']:
                                                         constraint_ready = False
                                                         logging.info(f'Fcard Feature {fname} will be defined in constraint')
+                                        else:
+                                            break
 
         else:
             constraint_ready = False
@@ -1899,7 +1901,7 @@ class Waffle():
                             if card in mapping:
                                 flag = False
                         for card in gcards:
-                            if card in mapping and card != mapping or card == mapping:
+                            if (card in mapping and card != mapping and mapping_type == 'MappingsC') or (card in mapping and mapping_type == 'MappingsV'):
                                 flag = False
                         if flag is True and mapping not in res:
                             res.append(mapping)

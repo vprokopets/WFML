@@ -3,15 +3,12 @@ from os.path import dirname, abspath
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver import FirefoxOptions
-from selenium.webdriver.firefox.service import Service
 
 class TestTest1():
   def setup_method(self):
         opts = FirefoxOptions()
         opts.add_argument("--headless")
-        serv = Service(executable_path=f'{dirname(dirname(abspath(__file__)))}/geckodriver')
-        self.driver = webdriver.Firefox(options=opts,
-                                        service=serv)
+        self.driver = webdriver.Firefox(options=opts)
         self.vars = {}
   
   def teardown_method(self, method):
