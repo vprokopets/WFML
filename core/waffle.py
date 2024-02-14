@@ -1009,11 +1009,13 @@ class term(ExpressionElement):
                     op[index] = self.autoconvert(element)
                 logging.debug(op)
             elif re.match(r'(\w+\.)+\w+', op):
-                split = op.split('.', 2)
+                split = op.split('.')
                 if 'self' in split:
                     split[split.index('self')] = self.api.rf
                 elif 'parent' in split:
-                    split[split.index('parent')] = '.'.join(self.api.rf.split('.')[:len(self.api.rf.split('.')) - 1])
+                    a = re.findall('parent', op)
+                    split[split.index('parent')] = '.'.join(self.api.rf.split('.')[:len(self.api.rf.split('.')) - len(a)])
+                    split = [i for i in split if i != 'parent']
                 elif 'tlf' in split:
                     split[split.index('tlf')] = self.api.rf.split('.')[0]
                 op_type = split[0] if split[0] in ['fname', 'childs'] else None
@@ -1557,48 +1559,57 @@ class Waffle():
                 if mapping in self.cache_f['MappingsV']:
                     filtered_mappings.append(mapping)
         if len(filtered_mappings) > 0:
-            for assign_type in ['Assign', 'Read']:
-                for ftype in constraint_data[assign_type].keys():
-                    card_flag = True if ftype == 'Fcard' else False
-                    mapping_type = 'MappingsC' if ftype == 'Fcard' else 'MappingsV'
-                    for feature in constraint_data[assign_type][ftype]:
-                        tlf = self.get_original_name(feature.split('.')[0])
-                        namespace = self.namespace[tlf]['Features']
+            for rfmapping in filtered_mappings:
+                orig = rfmapping.split('.')
 
-                        fmappings = {'Mappings': {}, 'MappingsFull': {}}
-                        vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
-                        if vmappings is None:
-                            if assign_type == 'Read' and ftype == 'Value':
-                                constraint_ready = False
-                            vmappings = {'Value': []}
-                        fmappings.update({'Mappings': vmappings})
-                        fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
-                        for type in fmappings.keys():
-                            filtered_mappings = []
-                            if type == 'Mappings':
-                                for mapping in fmappings[type]['Value']:
-                                    if mapping in self.cache_f[mapping_type]:
-                                        filtered_mappings.append(mapping)
-                            else:
-                                filtered_mappings = fmappings[type]['Value']
-                            for mapping in filtered_mappings:
-                                split = mapping.split('.')
-                                for index in range(0, len(split)):
-                                    fname = '.'.join(split[:index + 1])
-                                    original = self.get_original_name(fname)
-                                    if original not in mappings[type][assign_type].keys():
-                                        mappings[type][assign_type].update({original: []})
-                                    if fname not in mappings[type][assign_type][original]:
-                                        mappings[type][assign_type][original].append(fname)
-                                    if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                        print(feature)
-                                        logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
-                                        constraint_ready = False
-                                    for constraint in self.namespace[tlf]['Constraints'].values():
-                                        if constraint['Validated'] is None:
-                                            if original in constraint['Assign']['Fcard']:
+                for assign_type in ['Assign', 'Read']:
+                    for ftype in constraint_data[assign_type].keys():
+                        card_flag = True if ftype == 'Fcard' else False
+                        mapping_type = 'MappingsC' if ftype == 'Fcard' else 'MappingsV'
+                        for feature in constraint_data[assign_type][ftype]:
+                            tlf = self.get_original_name(feature.split('.')[0])
+                            namespace = self.namespace[tlf]['Features']
+
+                            fmappings = {'Mappings': {}, 'MappingsFull': {}}
+                            vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
+                            if vmappings is None:
+                                if assign_type == 'Read' and ftype == 'Value' or ftype == 'Gcard':
+                                    constraint_ready = False
+                                vmappings = {'Value': []}
+                            fmappings.update({'Mappings': vmappings})
+                            fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
+                            for type in fmappings.keys():
+                                filtered_mappings = []
+                                if type == 'Mappings':
+                                    for mapping in fmappings[type]['Value']:
+                                        if mapping in self.cache_f[mapping_type]:
+                                            filtered_mappings.append(mapping)
+                                else:
+                                    filtered_mappings = fmappings[type]['Value']
+                                if filtered_mappings in [[], {'Assign': [], 'Read': []}]:
+                                    constraint_ready = False
+                                for mapping in filtered_mappings:
+                                    split = mapping.split('.')
+                                    for index in range(0, len(split)):
+                                        fname = '.'.join(split[:index + 1])
+                                        relf = '.'.join(orig[:index + 1])
+                                        original = self.get_original_name(fname)
+                                        orig_relf = self.get_original_name(relf)
+                                        check = False if original == orig_relf and fname != relf else True
+                                        if check is True:
+                                            if original not in mappings[type][assign_type].keys():
+                                                mappings[type][assign_type].update({original: []})
+                                            if fname not in mappings[type][assign_type][original]:
+                                                mappings[type][assign_type][original].append(fname)
+                                            if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
+                                                print(feature)
+                                                logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
                                                 constraint_ready = False
-                                                logging.info(f'Fcard Feature {fname} will be defined in constraint')
+                                            for constraint in self.namespace[tlf]['Constraints'].values():
+                                                if constraint['Validated'] is None:
+                                                    if original in constraint['Assign']['Fcard']:
+                                                        constraint_ready = False
+                                                        logging.info(f'Fcard Feature {fname} will be defined in constraint')
 
         else:
             constraint_ready = False
@@ -1888,11 +1899,11 @@ class Waffle():
                             if card in mapping:
                                 flag = False
                         for card in gcards:
-                            if card in mapping and card != mapping:
+                            if card in mapping and card != mapping or card == mapping:
                                 flag = False
                         if flag is True and mapping not in res:
                             res.append(mapping)
-                    ret[mapping_type].extend(res)
+                ret[mapping_type].extend(res)
         return ret
 
     def get_undefined_cards(self, listc, listv, tlf, filter=True):
