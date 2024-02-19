@@ -1588,7 +1588,7 @@ class Waffle():
                                             filtered_mappings.append(mapping)
                                 else:
                                     filtered_mappings = fmappings[type]['Value']
-                                if filtered_mappings in [[], {'Assign': [], 'Read': []}] and (assign_type != 'Read' or ftype != 'Fcard'):
+                                if filtered_mappings in [[], {'Assign': [], 'Read': []}] and (ftype != 'Fcard'):
                                     logging.info(f'New disabling : {filtered_mappings}   --   {assign_type} | {ftype}')
                                     constraint_ready = False
                                 for mapping in filtered_mappings:
