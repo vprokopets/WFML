@@ -8,8 +8,7 @@ class TestTest2():
   def setup_method(self):
         opts = FirefoxOptions()
         opts.add_argument("--headless")
-        self.driver = webdriver.Firefox(options=opts,
-                                        executable_path=f'{dirname(dirname(abspath(__file__)))}/geckodriver')
+        self.driver = webdriver.Firefox(options=opts)
         self.vars = {}
   
   def teardown_method(self, method):
