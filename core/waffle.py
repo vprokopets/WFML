@@ -2,17 +2,16 @@ import copy
 import json
 import itertools
 import logging
-import pandas as pd
 import pprint
 import re
-from core.feature_analyzer import FeatureAnalyzer
-from core.feature_initializer import FeatureInitializer
+
 from collections import defaultdict
 from functools import reduce
-import networkx as nx
 from os.path import join, dirname
-from textx import metamodel_from_file, get_location
+from textx import metamodel_from_file, get_location, get_metamodel
 from textx.export import metamodel_export, model_export
+
+from core.graph import Graph
 
 # Global variables.
 keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
@@ -48,36 +47,63 @@ class ExpressionElement(object):
         """
         ol = self._tx_position_end - self._tx_position
         msg = ''.join((f'{message}.\n',
-                       f'Constraint expression: {self.constraint_expression}\n'
+                       f'Constraint expression: {self.constr_md['Expression']}\n'
                        f'Error position: Line {get_location(self)["line"]},',
                        f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol}\n'))
         return msg
 
-    def parse(self):
+    def parse_constraint(self, constr_md):
+        # print('Inner constraint function')
+        # pprint.pprint(constr_md['Mappings'].values())
+        for index, mapping in enumerate(mappings:=constr_md['Mappings'].values()):
+            pprint.pprint(mapping)
+            if mapping['Active'] is True and mapping['Validated'] is False:
+                mapping_md = {
+                    'Index': index,
+                    'Current': mapping['Comb'],
+                    'Total': len(mapping['Comb']),
+                    'All': [x['Comb'] for x in mappings],
+                    'ExceptionFlag': False
+                }
+                # print(f'Parsing mapping {index + 1} of {len(mappings)} | Mapping values: {list(mapping['Comb'].values())}')
+                self.parse(mapping_md, constr_md)
+        for mapping in mappings:
+            mapping['Validated'] = True
+    
+    def parse(self, mapping_md, constr_md):
         """
         Function to parse an expression string in self object.
 
         RETURN
         ret (variable type): result of parsing.
         """
+        self.mapping_md = mapping_md
+        self.constr_md = constr_md
         if len(self.op) == 1:
-            ret = self.op[0].parse()
+            ret = self.op[0].parse(self.mapping_md, self.constr_md)
         else:
-            if self.api.mode != 'Validate':
-                if self.api.exception_flag is False:
-                    self.api.exception_flag = True
-                    self.exception = True
-                else:
-                    self.exception = False
-                ret = self.value
-                if self.exception is True:
-                    self.api.exception_flag = False
-            else:
-                if self.__class__.__name__ in self.api.boolean:
-                    ret = self.value
-                else:
-                    ret = True
+            if mapping_md['ExceptionFlag'] is False:
+                self.exception, mapping_md['ExceptionFlag'] = True, True
+            if self.api.cname(self) != 'prec23':
+                self.res = [self.op[x].parse(self.mapping_md, self.constr_md) if isinstance(self.op[x], ExpressionElement) else self.op[x] for x in range(len(self.op))]
+            ret = self.value
         return ret
+    
+    def connect_waffle(self, api=None):
+        """
+        Function to initialize constraint object attributes.
+        Also, it detects any features that are present in other tree branches.
+        As a result, a connection (own feature - another branch feature) is assigned.
+
+        INPUTS
+        reverse (type = bool): the flag that reverses the connection direction.
+        api (type = Waffle() object): Waffle API object.
+        """
+        self.api = api
+        if isinstance(self.op, list):
+            for part in self.op:
+                if isinstance(part, ExpressionElement):
+                    part.connect_waffle(api)
 
     def check_exception(self, res: bool, err_msg: str):
         """
@@ -90,31 +116,7 @@ class ExpressionElement(object):
         err_msg (type = string): an error message that can be displayed
         """
         if res is False and self.exception is True:
-            raise Exception(self.get_error_message(err_msg))
-
-    def cross_tree_check(self, reverse: bool = False, api=None):
-        """
-        Function to initialize constraint object attributes.
-        Also, it detects any features that are present in other tree branches.
-        As a result, a connection (own feature - another branch feature) is assigned.
-
-        INPUTS
-        reverse (type = bool): the flag that reverses the connection direction.
-        api (type = Waffle() object): Waffle API object.
-        """
-        self.src = False
-        self.api = api
-        self.constraint_expression = api.constraint_expression
-        if len(self.op) > 1:
-            self.api.obj_id = self.__class__.__name__
-            self.api.constraint['Operations'].append(self.__class__.__name__)
-            if self.api.constraint['HigherOperation'] is None:
-                upd = self.__class__.__name__
-                if upd != 'prec23':
-                    self.api.constraint.update({'HigherOperation': upd})
-        for part in self.op:
-            if isinstance(part, ExpressionElement):
-                part.cross_tree_check(reverse, api)
+            raise Exception(self.get_error_message(err_msg), list(self.mapping_md['Current'].values()))
 
     def get_mappings(self):
         """
@@ -142,7 +144,7 @@ class ExpressionElement(object):
         INPUTS
         mappings (type = dict): features mapping table.
         """
-        self.mappings = mappings
+        self.mapping_md = mappings
         for part in self.op:
             if isinstance(part, ExpressionElement):
                 part.set_mappings(mappings)
@@ -175,43 +177,18 @@ class ExpressionElement(object):
         """
         if not isinstance(feature_metadata, bool):
             try:
-                return feature_metadata['ActiveF'] and feature_metadata['ActiveG']
+                return self.api.feature_is_active(feature_metadata['Fname'])
             except Exception:
                 return True
         else:
             return feature_metadata
 
-    def get_value(self, feature_metadata):
-        if isinstance(feature_metadata, dict) and 'Value' in feature_metadata.keys():
-            return feature_metadata['Value']
-        elif isinstance(feature_metadata, list):
-            res = []
-            for subfeature in feature_metadata:
-                if isinstance(subfeature, dict) and 'Value' in subfeature.keys():
-                    res.append(subfeature['Value'])
-                else:
-                    return feature_metadata
-            return res
-        elif isinstance(feature_metadata, dict) and 'Value' not in feature_metadata.keys():
-            filtered = {}
-            for k, v in feature_metadata.items():
-                if v['ActiveF'] is True and v['ActiveG'] is True:
-                    filtered.update({k: v})
-            return filtered
+    def get_value(self, feature_metadata, ftype = None):
+        if isinstance(feature_metadata, dict):
+            ftype = "Value" if feature_metadata['IsFeature'] is False else ftype
+            return feature_metadata[feature_metadata['Ftype'] if ftype is None else ftype]
         else:
             return feature_metadata
-
-    def define_truth(self):
-        """
-        Function to define the truth table for boolean expression.
-        """
-        if len(self.op) > 1:
-            self.exception = False
-            if self.__class__.__name__ == self.api.constraint['HigherOperation']:
-                self.api.constraint['TruthTable'].update({'Result': self.value})
-        for part in self.op:
-            if isinstance(part, ExpressionElement):
-                part.define_truth()
 
 class prec24(ExpressionElement):
     @property
@@ -225,7 +202,7 @@ class prec24(ExpressionElement):
         """
         logging.info(f'Level 24 Operation filter x where y.')
         self.api.keyword = 'ChildNamespace'
-        key, condition = self.get_value(self.op[1].parse()), self.op[2]
+        key, condition = self.get_value(self.op[1].parse(self.mapping_md, self.constr_md)), self.op[2]
         self.api.keyword = ''
         return self.filter(condition, key)
 
@@ -250,32 +227,12 @@ class prec24(ExpressionElement):
                 tmp.append(item)
         for item in keys:
             self.api.replace_feature = item
-            if self.get_value(condition.parse()) is True:
+            if self.get_value(condition.parse(self.mapping_md, self.constr_md)) is True:
                 res.append(item)
 
         self.api.keyword = ''
         logging.debug(f'filter Result: {res}')
         return res
-
-    def cross_tree_check(self, reverse: bool = False, api=None):
-        self.src = False
-        self.api = api
-        self.constraint_expression = api.constraint_expression
-        if len(self.op) > 1:
-            self.api.obj_id = self.__class__.__name__
-            self.api.constraint['Operations'].append(self.__class__.__name__)
-            if self.api.constraint['HigherOperation'] is None:
-                upd = self.__class__.__name__
-                self.api.constraint.update({'HigherOperation': upd})
-            self.api.keyword = 'ReplaceFeature1'
-            self.op[1].cross_tree_check(reverse, api)
-            self.api.keyword = 'ReplaceFeature'
-            self.op[2].cross_tree_check(reverse, api)
-            self.api.keyword = ''
-        else:
-            for part in self.op:
-                if isinstance(part, ExpressionElement):
-                    part.cross_tree_check(reverse, api)
 
 class prec23(ExpressionElement):
     @property
@@ -295,14 +252,14 @@ class prec23(ExpressionElement):
         logging.debug("Level 23 IF THEN ELSE statement.")
 
         # Perform IF expression check.
-        statement = self.boolify(self.op[1].parse())
-        self.api.exception_flag = False
+        statement = self.op[1].parse(self.mapping_md, self.constr_md)
+        print(f'IF ELSE STATEMENT {statement}')
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
-            self.get_value(self.op[2].parse())
+            self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
         # If not, then perform ELSE expression if it exist. In the opposite case, do nothing.
         elif statement is False and len(self.op) > 3:
-            self.get_value(self.op[3].parse())
+            self.get_value(self.op[3].parse(self.mapping_md, self.constr_md))
         return statement
 
 
@@ -323,7 +280,7 @@ class prec22(ExpressionElement):
 
         logging.debug("Level 22 boolean IFF operation")
 
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
+        left, operation, right = self.boolify(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.boolify(self.op[2].parse(self.mapping_md, self.constr_md))
         ret = left == right
 
         self.check_exception(ret, f'Expression ({left} {operation} {right})')
@@ -345,7 +302,7 @@ class prec21(ExpressionElement):
         """
         logging.debug("Level 21 boolean IMPLIES operation")
 
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
+        left, operation, right = self.boolify(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.boolify(self.op[2].parse(self.mapping_md, self.constr_md))
         ret = not left or right
 
         self.check_exception(ret, f'Expression ({left} {operation} {right})')
@@ -367,9 +324,9 @@ class prec20(ExpressionElement):
         """
         logging.debug("Level 20 boolean OR operation")
 
-        left = self.boolify(self.op[0].parse())
+        left = self.boolify(self.op[0].parse(self.mapping_md, self.constr_md))
         for op, r in zip(self.op[1::2], self.op[2::2]):
-            operation, right = op, self.boolify(r.parse())
+            operation, right = op, self.boolify(r.parse(self.mapping_md, self.constr_md))
             ret = left or right
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
             left = ret
@@ -391,9 +348,9 @@ class prec19(ExpressionElement):
         """
         logging.debug("Level 19 boolean XOR operation")
 
-        left = self.boolify(self.op[0].parse())
+        left = self.boolify(self.op[0].parse(self.mapping_md, self.constr_md))
         for op, r in zip(self.op[1::2], self.op[2::2]):
-            operation, right = op, self.boolify(r.parse())
+            operation, right = op, self.boolify(r.parse(self.mapping_md, self.constr_md))
             ret = bool(left) ^ bool(right)
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
             left = ret
@@ -415,9 +372,9 @@ class prec18(ExpressionElement):
         """
         logging.debug("Level 18 boolean AND operation")
 
-        left = self.boolify(self.op[0].parse())
+        left = self.boolify(self.op[0].parse(self.mapping_md, self.constr_md))
         for op, r in zip(self.op[1::2], self.op[2::2]):
-            operation, right = op, self.boolify(r.parse())
+            operation, right = op, self.boolify(r.parse(self.mapping_md, self.constr_md))
             logging.info(f"Level 18 boolean {left} {operation} {right} operation")
             ret = left and right
             self.check_exception(ret, f'Expression ({left} {operation} {right})')
@@ -473,7 +430,7 @@ class prec14(ExpressionElement):
         """
         logging.debug("Level 14 boolean NO operation")
 
-        operation, right = self.op[0], self.boolify(self.op[1].parse())
+        operation, right = self.op[0], self.boolify(self.op[1].parse(self.mapping_md, self.constr_md))
         ret = not(right)
 
         self.check_exception(ret, f'Expression ({operation} {right})')
@@ -567,8 +524,8 @@ class prec12(ExpressionElement):
         ret (variable type): previous level object if no prec12 operations are not presented in constraint
                             operation result in opposite case.
         """
-        for l, op, r in zip(self.op[0::2], self.op[1::2], self.op[2::2]):
-            left, operation, right = self.get_value(l.parse()), op, self.get_value(r.parse())
+        for l, op, r in zip(self.res[0::2], self.res[1::2], self.res[2::2]):
+            left, operation, right = self.get_value(l), op, self.get_value(r)
             left, right = [self.get_value(feature) for feature in [left, right]]
             logging.info(f'Level 12 comparison {left} {operation} {right} operation')
             if operation == '<':
@@ -605,12 +562,14 @@ class prec11(ExpressionElement):
         ret (variable type): previous level object if no prec11 operations are not presented in constraint
                             operation result in opposite case.
         """
-        left, operation, right = self.boolify(self.op[0].parse()), self.op[1], self.boolify(self.op[2].parse())
+        left, operation, right = self.boolify(self.res[0]), self.res[1], self.boolify(self.res[2])
         if operation == 'requires':
             ret = not left or (left and right)
+            print(f'REQUIRES CHECK {left} | {right} | {ret}')
             self.check_exception(ret, 'Required feature does not exist')
         elif operation == 'excludes':
             ret = not (left and right)
+            print(f'EXCLUDES CHECK {left} | {right} | {ret}')
             self.check_exception(ret, 'One of the features under excludes constraint should not exist')
         return ret
 
@@ -625,27 +584,14 @@ class prec10(ExpressionElement):
                             operation result in opposite case.
         """
 
-        self.api.keyword = 'Update'
-        left = self.get_value(self.op[0].parse())
-        self.api.keyword = ''
-        right = self.get_value(self.op[2].parse())
-        self.api.update_namespace({left: right})
+        fname = self.get_value(self.res[0], 'Fname')
+        field = self.get_value(self.res[0], 'Ftype')
+        value = self.get_value(self.res[2])
+
+        self.api.update_metadata(fname, field, value)
 
         return True
 
-    def cross_tree_check(self, reverse: bool = False, api=None):
-        self.src = False
-        self.api = api
-        self.constraint_expression = api.constraint_expression
-        if len(self.op) > 1:
-            self.api.constraint['Operations'].append(self.__class__.__name__)
-            if self.api.constraint['HigherOperation'] is None:
-                self.api.constraint.update({'HigherOperation': self.__class__.__name__})
-        for index, part in enumerate(self.op):
-            if isinstance(part, ExpressionElement) and len(self.op) > 1 and index == 0:
-                part.cross_tree_check(reverse=True, api=api)
-            elif isinstance(part, ExpressionElement):
-                part.cross_tree_check(reverse=reverse, api=api)
 
 class prec9(ExpressionElement):
     @property
@@ -657,9 +603,9 @@ class prec9(ExpressionElement):
         ret (variable type): previous level object if no prec9 operations are not presented in constraint
                             operation result in opposite case.
         """
-        ret = self.get_value(self.op[0].parse())
+        ret = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md))
         for op, r in zip(self.op[1::2], self.op[2::2]):
-            operation, right = op, r.parse()
+            operation, right = op, r.parse(self.mapping_md, self.constr_md)
             right = self.get_value(right)
             logging.info(f'Level 9 Math operation {ret} {operation} {right} ')
             if operation == '+':
@@ -679,9 +625,9 @@ class prec8(ExpressionElement):
         ret (variable type): previous level object if no prec8 operations are not presented in constraint
                             operation result in opposite case.
         """
-        ret = self.get_value(self.op[0].parse())
+        ret = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md))
         for op, r in zip(self.op[1::2], self.op[2::2]):
-            operation, right = op, self.get_value(r.parse())
+            operation, right = op, self.get_value(r.parse(self.mapping_md, self.constr_md))
             logging.info(f'Level 8 Math operation {ret} {operation} {right} ')
             if operation == '*':
                 ret *= right
@@ -703,7 +649,7 @@ class prec7(ExpressionElement):
                             operation result in opposite case.
         """
         # TODO debug checks for list type
-        operation, right = self.op[0], self.get_value(self.op[1].parse())
+        operation, right = self.op[0], self.get_value(self.op[1].parse(self.mapping_md, self.constr_md))
         if operation == 'min':
             logging.debug(f"Level 8 min operation")
             ret = min(right)
@@ -729,7 +675,7 @@ class prec6(ExpressionElement):
                             operation result in opposite case.
         """
         # TODO debug checks for list type
-        operation, right = self.op[0], self.get_value(self.op[1].parse())
+        operation, right = self.op[0], self.get_value(self.op[1].parse(self.mapping_md, self.constr_md))
         if operation == 'sum':
             logging.debug(f"Level 7 sum operation: {operation}")
             ret = sum(right)
@@ -755,9 +701,15 @@ class prec50(ExpressionElement):
                             operation result in opposite case.
         """
         self.api.keyword = 'AllFeatures'
-        right = self.get_value(self.op[2].parse())
+        print('------------------------------')
+        for index, part in enumerate(self.op):
+            try:
+                print(f'Part {index}: {part.parse(self.mapping_md, self.constr_md)}')
+            except AttributeError:
+                print(f'Part {index}: {part} is a {type(part)}')
+        right = self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
         self.api.keyword = ''
-        left = self.get_value(self.op[1].parse())
+        left = self.get_value(self.op[1].parse(self.mapping_md, self.constr_md))
         logging.debug(f'Level 5.0 Operation unique x in y.')
         ret = self.find_unique(right, left)
 
@@ -781,27 +733,6 @@ class prec50(ExpressionElement):
                 if namespace['Value'] is not None and namespace['Value'] not in res:
                     res.append(namespace['Value'])
         return res
-
-    def cross_tree_check(self, reverse: bool = False, api=None):
-        self.src = False
-        self.api = api
-        self.constraint_expression = api.constraint_expression
-        if len(self.op) > 1:
-            self.api.obj_id = self.__class__.__name__
-            self.api.constraint['Operations'].append(self.__class__.__name__)
-            if self.api.constraint['HigherOperation'] is None:
-                upd = self.__class__.__name__
-                self.api.constraint.update({'HigherOperation': upd})
-            self.op[1].cross_tree_check(reverse, api)
-            self.api.unique_key = self.get_value(self.op[1].parse())
-            self.api.keyword = 'AllFeatures'
-            self.op[2].cross_tree_check(reverse, api)
-            self.api.keyword = ''
-            self.api.unique_key = ''
-        else:
-            for part in self.op:
-                if isinstance(part, ExpressionElement):
-                    part.cross_tree_check(reverse, api)
 
 
 class prec5(ExpressionElement):
@@ -836,7 +767,7 @@ class prec3(ExpressionElement):
         ret (variable type): previous level object if no prec3 operation is not presented in constraint
                             merged lists in opposite case.
         """
-        left, operation, right = self.get_value(self.op[0].parse()), self.op[1], self.get_value(self.op[2].parse())
+        left, operation, right = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
 
         # Perform list union if such operation exist.
         if operation == ',' or operation == '++':
@@ -859,7 +790,7 @@ class prec2(ExpressionElement):
         ret (variable type): previous level object if no prec2 operation is not presented in constraint
                             merged lists in opposite case.
         """
-        left, operation, right = self.get_value(self.op[0].parse()), self.op[1], self.get_value(self.op[2].parse())
+        left, operation, right = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
 
         # Perform list difference if such operation exist.
         if operation == '--' and type(left) == list and type(right) == list:
@@ -882,7 +813,7 @@ class prec1(ExpressionElement):
                             merged lists in opposite case.
         """
         # TODO Rethink prec1 and prec0 classes as their functionality is duplicated.
-        left, operation, right = self.get_value(self.op[0].parse()), self.op[1], self.get_value(self.op[2].parse())
+        left, operation, right = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
 
         # Perform list merge (without duplicates) if such operation exist.
         if operation == '**' and type(left) == list and type(right) == list:
@@ -905,7 +836,7 @@ class prec0(ExpressionElement):
         op (variable type): term object if no prec0 operations are not presented in constraint
                             concatenated/merged lists in opposite case.
         """
-        left, operation, right = self.get_value(self.op[0].parse()), self.op[1], self.get_value(self.op[2].parse())
+        left, operation, right = self.get_value(self.op[0].parse(self.mapping_md, self.constr_md)), self.op[1], self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
 
         # Perform list concatenation (with duplicates) if such operation exist.
         if operation == '..' and type(left) == list and type(right) == list:
@@ -937,256 +868,43 @@ class term(ExpressionElement):
         op = self.op
         if isinstance(op, ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
-            return self.get_value(op.parse())
-        elif isinstance(op, str) and op not in keywords and self.src is False:
-            op = self.parse_string()
-            if isinstance(op, list):
-                return op
-            fop = op.replace('Fcard.', '').replace('Gcard.', '').replace('fcard.', '').replace('gcard.', '')
-            if (self.api.keyword == 'Update' and self.is_feature is True) or self.is_fname is True:
-                for mapping in self.mappings:
-                    if fop == self.api.get_original_name(mapping):
-                        op = f'{self.ftype}.{mapping}' if self.ftype in ('Fcard', 'Gcard') else mapping
-                        break
-            elif self.api.keyword == 'AllFeatures':
-                op = self.api.get_feature_childrens(op, own_only_flag=False)
-            elif self.api.keyword == 'ChildNamespace' or self.is_childs is True:
-                for mapping in self.mappings:
-                    if fop == self.api.get_original_name(mapping):
-                        op = mapping
-                        break
-                op = self.api.get_feature_childrens(op)
+            res = self.get_value(op.parse(self.mapping_md, self.constr_md))
+            return self.get_value(op.parse(self.mapping_md, self.constr_md))
+        elif isinstance(op, str) and op not in keywords:
+            is_list = True if any(op.startswith(x[0]) and op.endswith(x[1]) for x in [('[', ']'), ('{', '}')]) else False
 
-            elif self.is_feature is True and self.is_childs is False:
-                if 'ReplaceFeature' in self.api.keyword:
-                    mappings = [op]
-                else:
-                    mappings = self.mappings
-                try:
-                    for mapping in mappings:
-                        if fop == self.api.get_original_name(mapping):
-                            op = f'{self.ftype}.{mapping}' if self.ftype in ('Fcard', 'Gcard') else mapping
-                            break
-                    op = self.api.get_feature(op)
-                    if self.ftype == 'Gcard':
-                        op['Gcard'] = op['Gcard'].split('.')[-1]
-                    op['Value'] = self.autoconvert(op[self.ftype]) if isinstance(op[self.ftype], str) else op[self.ftype]
-                except KeyError:
-                    if 'ReplaceFeature' in self.api.keyword:
-                        op = None
-                    else:
-                        msg = f'No such feature {op}'
-                        raise Exception(self.get_error_message(msg))
-        return op
+            repl = ['[', ']', '{', '}', "'", '"', ' ']
+            for pattern in repl:
+                op = op.replace(pattern, '')
+            res = [self.autoconvert(x) for x in op.split(',')] if is_list is True else self.autoconvert(op)
 
-    def parse_string(self, for_mapping=False):
-        """
-        Function to parse the string for some keywords and do appropriate replacements.
-
-        INPUTS
-        for_mapping (type = bool): keyword to capitalize world.
-
-        RETURN
-        op (type = str): modified string.
-        """
-        op = self.op
-        check = False
-        self.is_childs = False
-        self.is_fname = False
-        self.ftype = 'Value'
-        if '"' in op or "'" in op:
-            op = op.replace("'", '').replace('"', '')
-            self.is_feature = False
         else:
-            if self.api.keyword == 'ReplaceFeature':
-                op = f'{self.api.replace_feature}.{op}'
-            elif f'{self.api.rf}.{op}' in self.api.namespace[self.api.tlf]['Features'].keys():
-                op = f'{self.api.rf}.{op}'
-            if re.match(r'\{.+\}', op):
-                op = op.replace('{', '').replace('}', '').replace(' ', '')
-                logging.debug("List object")
-                op = op.split(',')
-                for index, element in enumerate(op):
-                    op[index] = self.autoconvert(element)
-                logging.debug(op)
-            elif re.match(r'(\w+\.)+\w+', op):
-                split = op.split('.')
-                if 'self' in split:
-                    split[split.index('self')] = self.api.rf
-                elif 'parent' in split:
-                    a = re.findall('parent', op)
-                    split[split.index('parent')] = '.'.join(self.api.rf.split('.')[:len(self.api.rf.split('.')) - len(a)])
-                    split = [i for i in split if i != 'parent']
-                elif 'tlf' in split:
-                    split[split.index('tlf')] = self.api.rf.split('.')[0]
-                op_type = split[0] if split[0] in ['fname', 'childs'] else None
-                if op_type == 'childs':
-                    self.is_childs = True
-                    op = '.'.join(split[1:])
-                    check = True
-                elif op_type == 'fname':
-                    self.is_fname = True
-                    op = '.'.join(split[1:])
-                else:
-                    if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard']:
-                        self.ftype = split[0].capitalize()
-                        if for_mapping is False:
-                            split[0] = self.ftype
-                        else:
-                            split = split[1:]
-                    op = '.'.join(split)
-                    check = True
-            else:
-                if op == 'self':
-                    op = self.api.rf
-                    check = True
-                else:
-                    op = self.autoconvert(op)
-            self.is_feature = check
-        if self.is_feature is True:
-            for part in op.split('.'):
-                if part in keywords:
-                    raise Exception(f'Feature name {op} contains forbidden keyword: {part}. Please change feature name.')
-        return op
+            res = op
 
-    def constraint_sequence_check(self, reverse):
-        """
-        Function to define constraint validation sequence depending on cross-tree features.
+        return res
 
-        INPUTS
-        reverse (type = bool): the flag that defines features to write value instead of default read.
-        """
-        if self.api.keyword == 'ReplaceFeature':
-            if reverse is True:
-                data = self.api.constraint['Assign']
-                repl = self.api.assign
-            else:
-                data = self.api.constraint['Read']
-                repl = self.api.read
-            for field_type in data.keys():
-                rm = []
-                for index, feature in enumerate(data[field_type]):
-                    if feature in repl:
-                        if f'{feature}.{self.op}' in self.api.namespace[self.api.tlf]['Features'].keys():
-                            data[field_type][index] = f'{feature}.{self.op}'
-                        else:
-                            rm.append(index)
-                for index in sorted(rm, reverse=True):
-                    del data[field_type][index]
+    def parse(self, mapping_md, constr_md):
+        self.mapping_md = mapping_md
+        self.constr_md = constr_md
+        if (obj_id:=id(self)) in constr_md['Features'].keys():
+            obj_md = constr_md['Features'][obj_id]
+            fname = mapping_md['Current'][(orig:=list(obj_md.keys())[0])]
+            ftype = list(obj_md.values())[0]
+            ret = self.api.read_metadata(fname)['__self__']
+            ret.update({'GFcard': len(set(itertools.chain.from_iterable([sub[orig]] for sub in mapping_md['All']))),
+                         'Fname': fname,
+                         'Ftype': ftype,
+                         'IsFeature': True})
+            if mapping_md['ExceptionFlag'] is False:
+                self.exception, mapping_md['ExceptionFlag'] = True, True
+                self.check_exception(self.boolify(ret), f'Expression {fname}')
         else:
-            op = self.parse_string()
-            if self.is_feature is True:
+            ret = {'IsFeature': False,
+                   'Value': self.value}
 
-                if self.api.keyword == 'AllFeatures':
-                    res = []
-                    op = self.api.get_feature_childrens(op, own_only_flag=False).keys()
-                    for key in op:
-                        if key.split('.')[-1] == self.api.unique_key:
-                            res.append(key)
-                    op = res
-                elif self.is_childs is True:
-                    op = self.api.get_feature_childrens(op)
-                else:
-                    op = [op]
-                self.api.assign = []
-                self.api.read = []
-                for feature in op:
-                    field_type = feature.split('.', 1)[0] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-                    feature = feature.split('.', 1)[1] if feature.split('.', 1)[0] in ('Fcard', 'Gcard') else feature
-                    if reverse is True:
-                        if self.api.keyword == 'ReplaceFeature1':
-                            self.api.assign.append(feature)
-                        self.api.constraint['Assign'][field_type].append(feature)
-                    else:
-                        if self.api.keyword == 'ReplaceFeature1':
-                            self.api.read.append(feature)
-                        self.api.constraint['Read'][field_type].append(feature)
-                    if self.api.obj_id in [None, 'prec23']:
-                        self.api.obj_id = self.__class__.__name__
-                    if self.api.obj_id not in self.api.constraint['Pattern'].keys():
-                        self.api.constraint['Pattern'].update({self.api.obj_id: []})
-                    self.api.constraint['Pattern'][self.api.obj_id].append(feature)
-
-    def parse(self):
-        if self.api.mode != 'Validate':
-            self.tmp = True
-            ret = self.value
-        else:
-            if self.is_feature is True:
-                op = self.parse_string()
-                ret = self.api.truth_table[op]
-            else:
-                ret = True
         return ret
 
-    def check_cardinalities(self):
-        pass
-
-    def set_mappings(self, mappings):
-        self.mappings = mappings
-        if isinstance(self.op, ExpressionElement):
-            self.op.set_mappings(mappings)
-
-    def get_mappings(self):
-        result = {}
-        self.tmp = True
-        if self.is_feature is True:
-            op = self.parse_string(for_mapping=True)
-            res = self.api.get_feature(op, field_type=self.ftype, for_mapping=True)
-            for feature in res:
-                constructor_original = []
-                constructor = []
-                for subfeature in feature.split('.'):
-                    constructor_original.append(re.sub(r'_\d+', '', subfeature))
-                    constructor.append(subfeature)
-                    original = '.'.join(constructor_original)
-                    if original not in result.keys():
-                        result.update({original: []})
-                    if '.'.join(constructor) not in result[original]:
-                        result[original].append('.'.join(constructor))
-        return result
-
-    def cross_tree_check(self, reverse: bool = False, api=None):
-        self.src = False
-        self.mappings = []
-        self.api = api
-        op = self.op
-        self.tmp = False
-        self.constraint_expression = api.constraint_expression
-        if self.api.constraint['HigherOperation'] is None:
-            self.api.constraint.update({'HigherOperation': self.__class__.__name__})
-        if type(op) is str:
-            self.constraint_sequence_check(reverse)
-        else:
-            self.is_feature = False
-            self.is_childs = False
-        if isinstance(op, ExpressionElement):
-            logging.debug(f"Operation object: {op} with value {type(op)}")
-            return op.cross_tree_check(reverse, api)
-        elif type(op) is str and op not in keywords and (re.match(r'(\w+\.)+\w+', op) or op in self.api.namespace.keys()):
-            if 'self' in op.split('.', 2) or 'parent' in op.split('.', 2) or 'tlf' in op.split('.', 2):
-                return
-            forbidden_flag = False
-            path = op.split('.', 1)
-
-            # Check for cardinality keyword and remove it.
-            if path[0] in ['fcard', 'gcard', 'fname', 'childs']:
-                path = path[1].split('.', 1)
-
-            # Forbid to add to cross-tree features own features written in full-path form.
-            if path[0] == self.api.tlf:
-                forbidden_flag = True
-            feature = '.'.join(path)
-            try:
-                api.namespace[path[0]]['Features'][feature]
-                if forbidden_flag is False and reverse is False:
-                    api.cross_tree_dependencies.append([self.api.tlf, path[0]])
-                elif forbidden_flag is False and reverse is True:
-                    api.cross_tree_dependencies.append([path[0], self.api.tlf])
-            except Exception:
-                raise Exception(self.get_error_message(f'No such feature: {path}'))
-
-    def boolify(self, string):
+    def boolify_str(self, string):
         if string == 'True':
             return True
         if string == 'False':
@@ -1194,20 +912,667 @@ class term(ExpressionElement):
         raise ValueError('String value is not Boolean.')
 
     def autoconvert(self, string):
-        for fn in (self.boolify, int, float):
+        for fn in (self.boolify_str, int, float):
             try:
                 return fn(string)
             except ValueError:
                 pass
         return string
 
-    def define_truth(self):
-        op = self.parse_string()
-        if self.is_feature is True:
-            return self.api.truth_table[op]
 
-class Waffle():
+class Waffle:
+    def __init__(self) -> None:
+        self.reset()
+    
+    def reset(self):
+        self.prec_bool = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'prec11', 'prec0', 'term']
+        self.metamodel, self.stage_snap, self.last_snap = {}, {}, {}
+        self.exception_flag = False
+        self.initial_fcards, self.groups = {}, {}
+        self.inheritance = []
+        self.metagraph = []
+        self.features_to_configure = {}
+        self.id_counter = 0
+        self.card_boundaries = {
+            '*': [(0, 1e6)],
+            '+': [(1, 1e6)],
+            '?': [(0, 1)],
+            'or': [(1, 1e6)],
+            'xor': [(1, 1)]
+        }
+        self.constraints = {}
+        self.constraint_pattern = {
+            'Assign': {
+                'Fcard': [],
+                'Gcard': [],
+                'Value': []
+            },
+            'Read': {
+                'Fcard': [],
+                'Gcard': [],
+                'Value': []
+            },
+            'Requires': {
+                'Fcard': [],
+                'Gcard': [],
+                'Value': []
+            },
+            'Mappings': {},
+            'ParentFeature': '',
+            'isValidated': False,
+            'Expression': '',
+            'Precedence': {},
+            'Features': {},
+            'FeaturesPrec': {}
+        }
 
+    def initialize_feature(self, name, fcard, gcard, value, abstract, inheritance, attribute, constraints):
+        mm = self.metamodel
+        self.test_graph = []
+        for level in name.split('.'):
+            if level not in mm.keys():
+                mm.update({level: {'__self__': {
+                        'DeactStandard': False,
+                        'ActiveF': True,
+                        'ActiveG': True,
+                        'Active': True ,
+                        'Fcard': 1,
+                        'Gcard': 'all',
+                        'Value': None,
+                        'Abstract': None,
+                        'Inheritance': None,
+                        'Attribute': None,
+                        'Constraints': None
+                        }}})
+            mm = mm[level]
+            
+        mm.update({'__self__': {
+                        'DeactStandard': False,
+                        'ActiveF': True if fcard != 0 else False,
+                        'ActiveG': True,
+                        'Active': True if fcard != 0 else False,
+                        'Fcard': fcard if fcard is not None else 1,
+                        'Gcard': gcard if gcard is not None else 'all',
+                        'Value': value,
+                        'Abstract': abstract,
+                        'Inheritance': inheritance.replace(':', '') if inheritance is not None else None,
+                        'Attribute': attribute.replace('->', '') if attribute is not None else None,
+                        'Constraints': None
+                        }})
+
+        if inheritance is not None:
+            self.inheritance.append((name, mm['__self__']['Inheritance']))
+
+        self.initial_fcards.update({name: {
+            'MM': mm,
+            'Value': fcard
+        }})
+
+    def get_original(self, feature):
+        return re.sub(r'\_\d+', '', feature)
+    
+    def get_tlf(self, feature):
+        return feature.split('.')[0]
+    
+    def feature_is_active(self, name):
+        mm = self.metamodel
+        for level in name.split('.'):
+            mm = mm[level]
+            if mm['__self__']['Active'] is False:
+                return False
+        return True
+
+    def define_inheritance(self):
+        seq, _ = self.topo_sort(self.inheritance, rev=True)
+        print('-----------------------')
+        for feature in seq:
+            md = self.read_metadata(feature)
+            if (super_feature:=md['__self__']['Inheritance']) is not None:
+                md_copy = copy.deepcopy(self.read_metadata(super_feature))
+                constr_copy = md_copy['__self__']['Constraints']
+                
+                del md_copy['__self__']
+                md.update(md_copy)
+                for constr in constr_copy:
+                    print(f'{feature} | {constr} | {md['__self__']['Constraints']}')
+                    if md['__self__']['Constraints'] is None:
+                        md['__self__']['Constraints'] = []
+                    if constr not in md['__self__']['Constraints']:
+                        print(self.constraints.keys())
+                        constr_md = self.constraints[constr]
+                        md['__self__']['Constraints'].append(self.parse_constraint(constr_md['Object'], feature)['ID'])
+
+    def update_metadata(self, name, field, value):
+        print(f'Updating field {field} for feature {name} with value {value}')
+        md = self.read_metadata(name)
+        if field == 'Value' and 'Array' in (attr_type:=md['__self__']['Attribute']):
+            try:
+                value = value.replace(' ','').split(',')
+                if attr_type == 'floatArray':
+                    for v in value:
+                        v = float(v)
+                elif attr_type == 'integerArray':
+                    for v in value:
+                        v = int(v)
+            except Exception as e:
+                return e
+        md['__self__'][field] = value
+        if field == 'Inheritance':
+            self.inheritance.append((name, value))
+        elif field == 'Fcard':
+            if self.check_card_value(name, value, field) == (True, ''):
+                self.handle_fcards(name, md, value)
+        elif field == 'Gcard':
+            if self.check_card_value(name, value, field) == (True, ''):
+                self.handle_gcards(name, md, value)
+    
+    def is_card_defined(self, value):
+        return False if (value in ['*', '+', '?', 'xor', 'or'] or 
+            (isinstance(value, str) and (len(value.split(',')) > 1 or len(value.split('..')) > 1))) else True
+    
+    def check_card_value(self, name, value, card_type):
+        md = self.read_metadata(name)
+        error_msg = ''
+        old_value = md['__self__'][card_type]
+
+        check_curr = self.is_card_defined(old_value)
+        check_new = self.is_card_defined(value)
+
+        if check_curr is False and check_new is True:
+            if old_value in self.card_boundaries.keys():
+                card_boundaries = self.card_boundaries[old_value]
+            else:
+                card_boundaries = []
+                for card_interval in old_value.split(','):
+                    if len(values:=card_interval.split('..')) > 1:
+                        card_boundaries.append((int(values[0]), int(values[1])))
+                    else:
+                        card_boundaries.append((int(card_interval), int(card_interval)))
+            if isinstance(value, list) and card_type == 'Gcard':
+                value_to_check = len(value)
+            elif isinstance(value, str) and card_type == 'Gcard':
+                value_to_check = 1
+            else:
+                value_to_check = int(value)
+            if any(value_to_check >= x[0] and value_to_check <= x[1] in x for x in card_boundaries):
+                res = True
+            else:
+                res = False
+                # TODO proper error message
+                error_msg = f'Wrong cardinality value ({value_to_check}), must be in range {card_boundaries}'
+        else:
+            res = True
+
+        return res, error_msg
+
+    def check_card_in_constraints(self, value, card_type, name):
+        for constraint in self.constraints.values():
+            constr_md = constraint['Metadata']
+            check = self.get_feature_mappings(constr_md['ParentFeature'], self.metamodel)
+            if check != []:
+                for assign_type in ['Assign', 'Read']:
+                    for feature_type in ['Fcard', 'Gcard', 'Value']:
+                        if not (assign_type == 'Assign' and feature_type == 'Fcard'):
+                            for feature in constr_md[assign_type][feature_type]:
+                                check1 = self.get_feature_mappings(feature, self.metamodel)
+                                if feature in constr_md['FeaturesPrec'].keys():
+                                    if check1 == [] and any([x not in self.prec_bool and not (x == 'prec12' and feature_type == 'Fcard') for x in constr_md['FeaturesPrec'][feature]]):
+                                        raise Exception(f'{card_type} cardinality value {value} for feature {name} leads to inability to validate constraint {constr_md['Expression']}', name)
+
+    def handle_fcards(self, name, md, repeats):
+        repeats = md['__self__']['Fcard']
+        name_split = name.rsplit('.', 1)
+        pname, fname = name_split[0], name_split[-1]
+        tlf = len(name_split) == 1
+        par_md = self.metamodel if tlf is True else self.read_metadata(pname)
+        repl_md = {}
+        if isinstance(repeats, int) and repeats > 0:
+            for index in range(repeats):
+                new_name = fname if repeats == 1 else f'{fname}_{index}'
+                if new_name not in par_md.keys():
+                    repl_md.update({new_name: copy.deepcopy(md)})
+                    repl_md[new_name]['__self__']['ActiveF'] = True
+            par_md.update(repl_md)
+            for k, v in par_md.items():
+                index = k.rsplit('_', 1)
+                if k != '__self__' and index[0] in fname:
+                    v['__self__']['ActiveF'] = False if len(index) > 1 and ((index[1].isdigit() and int(index[1]) >= repeats) or repeats == 1) else True
+                    self.update_active_state(k if tlf is True else f'{pname}.{k}')
+        md['__self__']['ActiveF'] = False if (repeats != 1 and not isinstance(repeats, str)) else True
+        md['__self__']['DeactStandard'] = True if (not isinstance(repeats, str) and repeats >= 1) else False
+
+        self.update_active_state(name)
+        return self.check_card_in_constraints(repeats, 'Feature', name)
+
+    def get_constraint_mappings(self, constraint):
+       
+        features = {
+            'Parent': [],
+            'Fcard': [],
+            'Value': []
+        }
+
+        flat_mappings = {
+            'Parent': [],
+            'Fcard': [],
+            'Value': []
+        }
+        all_mappings = {}
+        for type in ['Assign', 'Read']:
+            for field in ['Fcard', 'Gcard', 'Value']:
+                if type == 'Assign' and field == 'Fcard':
+                    keyword = 'Parent'
+                elif type == 'Read' and field in ['Gcard', 'Value']:
+                    keyword = 'Value'
+                else:
+                    keyword = 'Fcard'
+                full_tree = False if type == 'Assign' and field == 'Fcard' else True
+                features_arr = constraint['Metadata'][type][field]
+                for feature in features_arr:
+                    split = feature.split('.')
+                    for index, _ in enumerate(split[:len(split) if full_tree is False else len(split) - 1]):
+                        if (ftr:='.'.join(split[:index + 1])) not in features_arr:
+                            features_arr.append(ftr)
+
+                features[keyword].extend(features_arr)
+        features['Fcard'].append(constraint['Metadata']['ParentFeature'])     
+   
+        features_to_configure = []
+        for tlf in self.metamodel.keys():
+            features_to_configure.append(self.get_undefined_features(tlf, all_features=True))
+        for k, v in features.items():
+            for feature in set(v):
+                if feature in constraint['Metadata']['FeaturesPrec'].keys():
+                    filter = False if any([x in self.prec_bool for x in constraint['Metadata']['FeaturesPrec'][feature]]) or feature in constraint['Metadata']['Read']['Fcard'] else True
+                else:
+                    filter = True
+                if feature not in all_mappings.keys():
+                    all_mappings.update({feature: []})
+                full_mapps = self.get_feature_mappings(feature, self.metamodel, filter)
+                if filter is False:
+                    for mapps in full_mapps:
+                        for i, _ in enumerate(mapps_spl:=mapps.split('.')):
+                            mapps_compose = '.'.join(mapps_spl[:i + 1])
+                            if (mapps_orig:=self.get_original(mapps_compose)) not in all_mappings.keys():
+                                all_mappings.update({mapps_orig: []})
+                            if mapps_compose not in all_mappings[mapps_orig]:
+                                all_mappings[mapps_orig].append(mapps_compose)
+                for mapps in full_mapps:
+                    if mapps not in all_mappings[feature]:
+                        all_mappings[feature].append(mapps)
+                flat_mappings[k].extend(full_mapps)
+        all_mappings_list = list(all_mappings.values())
+        for part in all_mappings_list:
+            part = list(set(part))
+        combinations = itertools.product(*all_mappings_list)
+        filtered_combinations = self.filter_combinations(combinations)
+
+        for comb in filtered_combinations:
+            if str(comb) not in constraint['Metadata']['Mappings'].keys():
+                subres = {}
+                for feature in comb:
+                    subres.update({self.get_original(feature): feature})
+                constraint['Metadata']['Mappings'].update({str(comb): {
+                    'Comb': subres,
+                    'Active': True,
+                    'Validated': False
+                }})
+
+        matched_features = []
+        for k, v in flat_mappings.items():
+            keywords = ['Gcard', 'Value'] if k == 'Value' else ['Fcard']
+            for kw in keywords:
+                for tlf_features_to_configure in features_to_configure:
+                    for x in v:
+                        if x in tlf_features_to_configure[kw] and self.get_original(x) not in constraint['Metadata']['Assign']['Fcard']:
+                            matched_features.append(x)
+        print(f'MATCHED FEATURES: {matched_features} | {tlf_features_to_configure}')
+        for mapping in constraint['Metadata']['Mappings'].values():
+            mapping['Active'] = False if any([mf in mapping['Comb'].values() for mf in matched_features]) else True              
+    
+    def filter_combinations(self, combinations):
+        res = []
+        for comb in combinations:
+            valid_elems = {}
+            valid_comb = True
+            for elem in comb:
+                name_split = elem.split('.')
+                for index, _ in enumerate(name_split):
+                    fname = '.'.join(name_split[:index+1])
+                    if (fname_orig:=self.get_original(fname)) not in valid_elems:
+                        valid_elems.update({fname_orig: fname})
+                    else:
+                        if valid_elems[fname_orig] != fname:
+                            valid_comb = False
+            if valid_comb is True:
+                res.append(comb)
+        return res
+    
+    def get_feature_childrens(self, feature, full_tree=False):
+        md = self.read_metadata(feature)
+        res = []
+        for k, v in md.items():
+            if k != '__self__' and v['__self__']['Active'] is True:
+                if full_tree is True:
+                    res.extend(self.get_feature_childrens(f'{feature}.{k}', True))
+                res.append(f'{feature}.{k}')
+        return res
+                
+    def get_feature_mappings(self, feature, md, filter=True, layer=0, fname=''):
+        res = []
+        name_split = feature.split('.') if not isinstance(feature, list) else feature
+        for k, v in md.items():
+            if k != '__self__' and (v['__self__']['Active'] is True or 
+                                    (filter is False and v['__self__']['DeactStandard'] is False)) and self.get_original(name_split[layer]) == self.get_original(k):
+                if layer < len(name_split) - 1:
+                    res = res + self.get_feature_mappings(feature, v, filter, layer + 1, f'{fname}.{k}' if layer >= 1 else k)
+                else:
+                    res.append(f'{fname}.{k}' if layer >= 1 else k)
+        return res
+    
+    def handle_gcards(self, name, md, value):
+        if value not in ['xor', 'or']:
+            for k, v in md.items():
+                if k != '__self__' :
+                    v['__self__']['ActiveG'] = True if k.rsplit('.', 1)[-1] == value else False
+                    self.update_active_state(f'{name}.{k}')
+            return self.check_card_in_constraints(value, 'Group', name)
+
+    def read_metadata(self, name, field=None):
+        mm = self.metamodel
+        for level in name.split('.'):
+            mm = mm[level]
+        return mm if field is None else mm['__self__'][field]
+
+    def topo_sort(self, deps, rev=False):
+        graph = Graph()
+        for dep in deps:
+            graph.add_edge(dep)
+        
+        seq, cycles = graph.topo_sort()
+        if rev is True:
+            seq.reverse()
+        return seq, cycles
+
+    def update_active_state(self, name):
+        md = self.read_metadata(name)['__self__']
+        md['Active'] = md['ActiveF'] and md['ActiveG'] if md['Abstract'] is None else False
+
+    def get_product(self, md, res):
+        for k, v in md.items():
+            if k != '__self__' and v['__self__']['Active'] is True:
+                self_value = {} if v['__self__']['Value'] is None else v['__self__']['Value']
+                res.update({k: self_value})
+                if len(v.values()) > 1:
+                    res.update({k: self.get_product(v, res[k])})
+        return res
+    
+    def get_undefined_features(self, tlf, md=None, layer=0, pname='', all_features=False):
+        res = {
+            'Fcard': [],
+            'Gcard': [],
+            'Value': []
+        }
+        md = self.metamodel if md is None else md
+        
+        for k, v in md.items():
+            if k != '__self__' and v['__self__']['Active'] is True and(layer > 0 or tlf in k):
+                feature_md = v['__self__']
+                fname = f'{pname}.{k}' if layer >= 1 else k
+                skip = False
+                if not self.is_card_defined(feature_md['Fcard']):
+                    res['Fcard'].append(fname)
+                    skip = True
+                if not self.is_card_defined(feature_md['Gcard']) and (fname not in res['Fcard'] or all_features is True):
+                    res['Gcard'].append(fname)
+                    skip = True
+                if (feature_md['Attribute'] not in [None, 'predefined'] and feature_md['Value'] is None) and (fname not in res['Fcard'] or all_features is True):
+                    res['Value'].append(fname)
+                    skip = True
+
+                if len(v.values()) > 1 and (not skip or all_features):
+                    subres = self.get_undefined_features(tlf, v, layer + 1, fname, all_features)
+                    for md_type in res.keys():
+                        res[md_type].extend(subres[md_type])
+        print(f'Undefined features: {res}')
+        return res
+
+    def validate_constraints(self, step):
+        main = True
+        if main:
+            print(f'STEP: {step}')
+            for index in range(self.seq.index(step) + 1, len(self.seq)):
+                if ((elem:=self.seq[index]).startswith('Constraint_')):
+                    for constraint in self.constraints.values():
+                        if constraint['ID'] == elem:
+                            constr_md = constraint['Metadata']
+                            print(f'Evaluating constraint {constr_md['Expression']}')
+                            self.get_constraint_mappings(constraint)
+                            pprint.pprint(constr_md)
+                            if self.debug_mode is False:
+
+                                try:
+                                    constraint['Object'].name.parse_constraint(constr_md)
+                                except Exception as e:
+                                    return e
+                            else:
+                                constraint['Object'].name.parse_constraint(constr_md)
+                            break
+                else:
+                    break
+        else:
+            for constraint in self.constraints.values():
+                
+                constr_md = constraint['Metadata']
+                print(f'Evaluating constraint {constr_md['Expression']}')
+                self.get_constraint_mappings(constraint)
+                if self.debug_mode is False:
+
+                    try:
+                        constraint['Object'].name.parse_constraint(constr_md)
+                    except Exception as e:
+                        return e
+                else:
+                    constraint['Object'].name.parse_constraint(constr_md)
+        return True
+    
+    def cname(self, obj):
+        """
+        Function to return class name of object.
+
+        INPUTS
+        obj: object to check.
+
+        RETURN
+        (type = string): object`s class name.
+        """
+        return obj.__class__.__name__
+
+    def parse_feature(self, feature, parent_name=None, parse_type='Feature', abstract=False):
+        """
+        ! This method is recursive.
+
+        Function to define features.
+
+        INPUTS
+        feature (type = feature): feature to define.
+        parent_namespace (type = dict): parent feature namespace to fullfill.
+
+        RETURN
+        parent_namespace (type = dict): fullfilled parent namespace. Only for not top-level features.
+        """
+        feature_name = feature.name if parent_name is None else f'{parent_name}.{feature.name}'
+        if abstract is False:
+            abstract = True if feature.abstract is not None else False
+        constraints = []
+        for child_obj in feature.nested:
+            for children in child_obj.child:
+                if self.cname(children) == 'Feature':
+                    self.parse_feature(children, feature_name, parse_type, abstract)
+                elif self.cname(children) == 'Constraint' and parse_type == 'Constraint':
+                    constraints.append(self.parse_constraint(children, feature_name)['ID'])
+        if parse_type == 'Feature':
+            if feature.super is not None and feature.reference is not None:
+                raise Exception(f'Super feature and Reference feature could not appear at the same time for {feature_name}')
+            if feature_name == 'Context' and feature.fcard not in [None, 1]:
+                raise Exception(f'Context feature is not allowed to have cartinality value other than 1')
+            self.initialize_feature(name=feature_name,
+                                    fcard=feature.fcard,
+                                    gcard=feature.gcard,
+                                    value=feature.init,
+                                    abstract=feature.abstract,
+                                    inheritance=feature.super,
+                                    attribute=feature.type,
+                                    constraints=None)
+        elif parse_type == 'Constraint' and constraints != []:
+            self.update_metadata(feature_name, 'Constraints', constraints)
+
+    def parse_constraint(self, constraint, parent_feature):
+        """
+        Function to define constraints in dict format.
+
+        INPUTS
+        constraint (type = textX generated class): constraint's object.
+        related_feature (type = string): full name of the feature to which this constraint belongs.
+
+        """
+        self.pattern = copy.deepcopy(self.constraint_pattern)
+        self.pattern.update({'ParentFeature': parent_feature})
+        self.pattern.update({'Expression': self.get_constraint_position(constraint)})
+        self.is_term = True
+        self.parse_constraint_helper(constraint.name, parent_feature)
+        constraint.name.connect_waffle(self)
+        constraint = {
+            'Object': constraint,
+            'Metadata': copy.deepcopy(self.pattern),
+            'ID': f'Constraint_{self.id_counter}'
+        }
+
+        self.constraints.update({f'Constraint_{self.id_counter}': constraint})
+        self.id_counter += 1
+        return constraint
+
+    def get_constraint_position(self, constraint):
+        start_pos = get_location(constraint)
+        end_pos = start_pos['col'] + constraint._tx_position_end - constraint._tx_position
+        line = self.description.splitlines()[start_pos['line'] - 1]
+        return line[start_pos['col'] - 1 : end_pos - 1]
+
+    def parse_constraint_helper(self, constraint, parent_feature):
+        cname = constraint.__class__.__name__
+        self.last_elem_id = 0
+        
+        if isinstance(constraint, ExpressionElement):
+            if isinstance(constraint.op, list):
+                res = {}
+                if len(elements:=constraint.op) > 1:
+                    self.is_term = False
+
+                for index, op in enumerate(elements):
+                    subres = self.parse_constraint_helper(op, parent_feature)
+                    
+                    if isinstance(subres, str) and len(elements) >= 1 and subres not in keywords:
+                        fname, card_keyword, is_feature = self.parse_feature_name(subres, parent_feature)
+                        
+                        if is_feature is True:
+                            
+                            if card_keyword in ['fcard', 'gcard']:
+                                ftype = card_keyword.capitalize()
+                            else:
+                                ftype = 'Value'
+                            
+                            subres = {fname: ftype}
+                            self.pattern['Features'].update({self.last_elem_id: subres})
+                            if self.is_term is True:
+                                subres[fname] = 'Fcard'
+                                res.update({index: subres})
+                                res.update({'Class': cname})
+                                self.pattern['FeaturesPrec'].update({fname: ['term']})
+                                self.pattern['Precedence'].update({id(constraint): res})
+                    res.update({index: subres})
+                if len(elements) > 1:
+                    res.update({'Class': cname})
+                    for md in res.values():
+                        if isinstance(md, dict):
+                            for fname in md.keys():
+                                if fname not in self.pattern['FeaturesPrec'].keys():
+                                    self.pattern['FeaturesPrec'].update({fname: [cname]})
+                                else:
+                                    self.pattern['FeaturesPrec'][fname].append(cname)
+                                if cname in self.prec_bool:
+                                    md[fname] = 'Fcard'
+                    self.pattern['Precedence'].update({id(constraint): res})
+                return id(constraint) if len(elements) > 1 else subres
+            else:
+                self.last_elem_id = id(constraint)
+                return constraint.op
+        else:
+            return constraint
+
+    def parse_feature_name(self, name, parent_feature):
+        if '\'' in name or '\"' in name:
+            return name, False, False
+        indices = {
+            'self': [],
+            'parent': [],
+            'fcard': [],
+            'gcard': [],
+            'gfcard': []
+        }
+        feature_indices = []
+        for index, part in enumerate(split:=name.split('.')):
+            if part in indices.keys():
+                indices[part].append(index)
+            else:
+                feature_indices.append(index)
+        for k, v in indices.items():
+            if repeats:=len(v) > 1 and k != 'parent':
+                print(f'Keyword {self} appears {repeats} times.')
+            
+        if len(indices['self']) > 1 and len(indices['parent']) > 1:
+            print('Keywords "self" and "parent" can not appear at the same time.')
+        
+        if len(indices['fcard'] + indices['gcard'] + indices['gfcard']) > 1:
+            print('Keywords "fcard", "gcard", and "gfcard" can not appear at the same time.')
+        
+        card_keyword = None
+        for keyword in ['fcard', 'gcard', 'gfcard']:
+            if len(indices[keyword]) > 0 and indices[keyword][0] != 0:
+                print(f'Wrong position of keyword! {keyword}.')
+            elif len(indices[keyword]) > 0:
+                card_keyword = keyword
+        rel_keyword = None
+        for keyword in ['self', 'parent']:
+            if len(indices[keyword]) > 0:
+                if not(indices[keyword][0] == 0 or (indices[keyword][0] == 1 and card_keyword is not None)):
+                    print(f'Wrong position of keyword!! {keyword}.')
+                rel_keyword = (keyword, len(indices[keyword]))
+            
+            if len(feature_indices) > 0:
+                for pos in indices[keyword]:
+                    if pos > feature_indices[0]:
+                        print(f'Wrong position of keyword!!! {keyword}.')
+        skip_chars_card = 1 if card_keyword is not None else 0
+        skip_chars_rel = rel_keyword[1] if rel_keyword is not None  else 0
+
+        par_split = parent_feature.split('.')
+        repl_chars_res = par_split[:len(par_split) - (rel_keyword[1] if rel_keyword is not None and rel_keyword[0] == 'parent' else 0)]
+        self_name = '.'.join(repl_chars_res + split[skip_chars_card + skip_chars_rel:])
+        full_name = '.'.join(split[skip_chars_card + skip_chars_rel:])
+        for check in [self_name, full_name, name]:
+            try:
+                self.read_metadata(check)
+                is_feature = True
+                res = check
+                break
+            except KeyError:
+                res = name
+                is_feature = False
+                # TODO proper logging
+                # print(f'{name} | {full_name} | {self_name} is not a correct feature | {par_split} | {repl_chars_res}')
+
+        return res, card_keyword, is_feature
+   
     def restore_stage_snap(self, step=None):
         """
         Function to restore stage snapshot by keyword.
@@ -1218,12 +1583,27 @@ class Waffle():
         RETURN
         Stage snapshot.
         """
-        snap = copy.deepcopy(self.stage_snap[step] if step is not None else self.last_snap)
-        for tlf, value in snap['Namespace'].items():
-            self.namespace[tlf]['Features'] = copy.deepcopy(value)
-        self.defined_features = copy.deepcopy(self.defined_features_backup)
-        logging.info("Namespace was restored due to unvalidated constraint.")
+        
+        self.metamodel = copy.deepcopy(self.stage_snap[step]['Metamodel'] if step is not None else self.last_snap['Metamodel'])
+        constr_meta = copy.deepcopy(self.stage_snap[step]['Constraints'] if step is not None else self.last_snap['Constraints'])
+        for k, v in constr_meta.items():
+            self.constraints[k].update({'Metadata': v})
+        print('===============!!!!!!!!!!!!!=============')
+        print(f'STEP {step}')
+        for k, v in self.stage_snap.items():
+            print(f'STAGE {k}')
+            for v1 in v['Constraints'].values():
+                pprint.pprint(v1['Mappings'])
 
+        if step is not None:
+            rm_steps = []
+            for snap_step in self.stage_snap.keys():
+                if int(snap_step) >= int(step):
+                    rm_steps.append(snap_step)
+            for rm_step in rm_steps:
+                del self.stage_snap[rm_step]
+        logging.info(f"Namespace was restored due to {'unvalidated constraint' if step is None else 'going to previous step'}.")
+        
     def save_stage_snap(self, step, data):
         """
         Function to read stage snapshot by keyword.
@@ -1232,15 +1612,18 @@ class Waffle():
         step (type = str): step's keyword.
         data (type = dict): fields for this step
         """
-        namespace = {}
-        for tlf, value in self.namespace.items():
-            namespace.update({tlf: copy.deepcopy(value['Features'])})
+        constr_meta = {}
+        for k, v in self.constraints.items():
+            constr_meta.update({k: v['Metadata']})
         self.last_snap = {
-            'Namespace': copy.deepcopy(namespace),
+            'Metamodel': copy.deepcopy(self.metamodel),
+            'Constraints': copy.deepcopy(constr_meta),
             'Fields': data
         }
-        self.stage_snap.update({step: self.last_snap})
+        self.stage_snap.update({step: copy.deepcopy(self.last_snap)})
 
+        
+    
     def save_json(self):
         """
         Prepare and save final result.
@@ -1248,9 +1631,10 @@ class Waffle():
         RETURN
         res (type = dict): final result
         """
-
-        res = copy.deepcopy(self.dot_to_json())
-
+        print('--------------------')
+        pprint.pprint(self.metamodel)
+        res = self.get_product(self.metamodel, {})
+        pprint.pprint(res)
         logging.info('Final result was successfully created.')
         logging.debug(f'Final Model {res}')
         with open('./core/output/configuration.json', 'w', encoding='utf-8') as f:
@@ -1260,1046 +1644,162 @@ class Waffle():
         # self.pickle_wfml_data()
         return res
 
-    def get_json(self):
-        return open('./core/output/configuration.json', 'r')
+    #merge function to  merge all sublist having common elements. 
+    def merge_common(self, lists): 
+        neigh = defaultdict(set) 
+        visited = set() 
+        for each in lists: 
+            for item in each: 
+                neigh[item].update(each) 
+        def comp(node, neigh = neigh, visited = visited, vis = visited.add): 
+            nodes = set([node]) 
+            next_node = nodes.pop 
+            while nodes: 
+                node = next_node() 
+                vis(node) 
+                nodes |= neigh[node] - visited 
+                yield node 
+        for node in neigh: 
+            if node not in visited: 
+                yield sorted(comp(node))
+    
+    def build_feature_metagraph_deps(self, feature, parent=None):
+        md = self.read_metadata(feature)
+        self.metagraph.append((f'{feature}-Fcard', f'{feature}-{'Gcard' if md['__self__']['Attribute'] is None else 'Value'}'))
+        if parent is not None:
+            md_par = self.read_metadata(parent)
+            self.metagraph.append((f'{parent}-{'Gcard' if md_par['__self__']['Attribute'] is None else 'Value'}', f'{feature}-Fcard'))
+        for key in md.keys():
+            if key != '__self__':
+                self.build_feature_metagraph_deps(f'{feature}.{key}', feature)
 
-    def dot_to_json(self):
-        """
-        Function to transform dot-split name to JSON tree-like structure.
+    def build_metagraph(self):
+        deps = []
+        indep_constraints = []
+        for tlf, md in self.metamodel.items():
+            if md['__self__']['Abstract'] is None:
+                self.build_feature_metagraph_deps(tlf)
+        for constraint in self.constraints.values():
+            par_feature = constraint['Metadata']['ParentFeature']
+            if self.metamodel[par_feature.split('.')[0]]['__self__']['Abstract'] is None:
+                flag = True
+                for v in constraint['Metadata']['Precedence'].values():
+                    for k1, v1 in v.items():
+                        if isinstance(v1, dict):
+                            assign_type = 'Assign' if k1 == 0 and v['Class'] == 'prec10' else 'Read'
+                            for k2, v2 in v1.items():
+                                constraint['Metadata'][assign_type][v2].append(k2)
+                        
+                        elif k1 == 1 and v['Class'] == 'prec50':    
+                            a = self.get_feature_childrens(list(v[2].keys())[0], True)
+                for k, v in constraint['Metadata']['Assign'].items():
+                    for feature in v:
+                        deps.append((f'{constraint['ID']}', f'{feature}-{k}'))
+                        flag = FloatingPointError
+                for k, v in constraint['Metadata']['Read'].items():
+                    deps.extend([(f'{x}-{k}', f'{constraint['ID']}') for x in v])
+                    deps.extend([(f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{x}-{k}') for x in v])
+                deps.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
+                if flag is True:
+                    indep_constraints.append(constraint['ID'])
 
-        RETURN
-        output (type = dict): dict object that represents JSON string.
-        """
-        output = {}
-
-        for tlf in self.namespace.keys():
-            for name, feature in self.namespace[tlf]['Features'].items():
-                abstract = False
-                split = name.split('.')
-                for index in range(1, len(split) + 1):
-                    subname = self.get_original_name('.'.join(split[:index]))
-                    if self.namespace[tlf]['Features'][subname]['Abstract'] is not None:
-                        abstract = True
-                if abstract is False:
-                    for mapping, mvalue in feature['MappingsV'].items():
-                        value = mvalue['Value']
-
-                        if self.feature_active_flag(mapping, self.namespace[tlf]['Features'], False) is True:
-                            path = mapping.split('.')
-                            flag = False
-                            for fname in self.namespace[tlf]['Features'].keys():
-                                if name in fname and name != fname:
-                                    flag = True
-                            if flag is False:
-                                if value is None:
-                                    res = {}
-                                else:
-                                    res = value
-                                target = reduce(lambda d, k: d.setdefault(k, {}), path[:-1], output)
-                                target[path[-1]] = res
-        return output
-
-    def reset(self):
-        """
-        Function to reset all attributes of Waffle class object.
-        """
-        self.namespace, self.cycles, self.stage_snap, self.last_snap, self.req_card = {}, {}, {}, {}, {}
-        self.description, self.model, self.tlf, self.rf, self.keyword, self.replace_feature = '', '', '', '', '', ''
-        self.cross_tree_dependencies, self.empty_stages, self.requirements = [], [], {}
-        self.defined_features = {
-            'Fcard': [],
-            'Gcard': [],
-            'Value': []
+        for dep in list(set(deps)):
+            self.metagraph.append(dep)
+        
+        flat_dict = {}
+        elem_pattern = {
+        'Before': [],
+        'After': []
         }
-        self.defined_features_backup = copy.deepcopy(self.defined_features)
-        self.step_to_define = {}
-        self.original_card_from_c = {'Fcard': {}, 'Gcard': {}}
-        self.exception_flag = False
-        self.constraint = None
-        self.tmp = False
-        self.obj_id = None
-        self.mode = None
-        self.cache = {}
-        self.cache_f = None
-        self.unique_key = ''
-        self.feature_analyzer = FeatureAnalyzer(self)
-        self.feature_initializer = FeatureInitializer(self)
-        self.boolean = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'term']
-        self.var_attrc = ['Fcard']
-        self.var_attrv = ['Value', 'Gcard']
+        for dep in self.metagraph:
+            for index, elem in enumerate(dep):
+                if elem not in flat_dict.keys():
+                    flat_dict.update({elem: copy.deepcopy(elem_pattern)})
+                connection = 'Before' if index == 0 else 'After'
+                flat_dict[elem][connection].append(dep[0 if connection == 'After' else 1])
+        
+        groups = []
+        for k, v in flat_dict.items():
+            if k.startswith('Constraint_'):
+                group = v['After']
+                group_filtered = []
+                for elem in group:
+                    include = True
+                    for elem_alt in group:
+                        if (a:=elem.split('-')[0]) in (b:=elem_alt.split('-')[0]) and a != b:
+                            include = False
+                    if include is True:
+                        group_filtered.append(elem)
+                groups.append(group_filtered)
+        self.groups = {}
+        for index, group in enumerate(list(self.merge_common(groups))):
+            self.groups.update({f'Inner_Waffle_Group_{index}': group})
+        
+        new_deps = []
+        rm_deps = []
+        rm_deps_dict = {}
+        for index, dep in enumerate(self.metagraph):
+            temp_dict = {}
+            upd_flag = False
+            for index_alt, elem in enumerate(dep):
+                
+                for group_name, group in self.groups.items():
+                    if elem in group:
+                        temp_dict.update({index_alt: group_name})
+                        upd_flag = True
+                        if index not in rm_deps:
+                            rm_deps.append(index)
+                            if group_name not in rm_deps_dict.keys():
+                                rm_deps_dict.update({group_name: []})
+                            rm_deps_dict[group_name].append(dep)
+                if index_alt not in temp_dict.keys():
+                    temp_dict.update({index_alt: elem})
+            if upd_flag is True:
+                new_deps.append((temp_dict[0], temp_dict[1]))    
+        for i in sorted(rm_deps, reverse=True):
+            del self.metagraph[i]
+        self.metagraph.extend(new_deps)
 
-        self.stages = {
-            "Generated": [],
-            "Original": []
-        }
-        self.iterable = {
-            "Stage": 0,
-            "UnvalidatedFeatures": []
-        }
+        self.seq, self.cycles = self.topo_sort(self.metagraph)
+        
+        for i_constr in indep_constraints:
+            self.seq.remove(i_constr)
+            index_last = 0
+            for dep in self.metagraph:
+                if i_constr == dep[1] and (check:=self.seq.index(dep[0])) > index_last:
+                    index_last = check
+            self.seq.insert(index_last + 1, i_constr)
 
-    def get_original_name(self, name):
-        """
-        Function to clear feature's name from suffixes.
-
-        INPUTS
-        name (type = str): feature's name.
-
-        RETURN
-        transformed name.
-        """
-        if name not in self.cache.keys():
-            split = name.split('.')
-            split = split[1:] if split[0] in ['fcard', 'gcard', 'Fcard', 'Gcard'] else split
-            construct = []
-            for part in split:
-                construct.append(re.sub(r'_[0-9]+', '', part))
-            original = '.'.join(construct)
-            self.cache.update({name: original})
-        else:
-            original = self.cache[name]
-        return original
-
-    def validate_feature(self, tlf, cards):
-        """
-        Function to validate all feature's constraints.
-
-        INPUTS
-        tlf (type = str): the name of top-level feature to validate.
-
-        RETURN
-        True if all constraints are valid
-        """
-        if self.debug_mode is True:
-            self.validate_constraints(tlf, cards)
-        else:
-            try:
-                self.validate_constraints(tlf, cards)
-            except Exception as e:
-                logging.info(f'! Exception happened during constraint validation: {e}.')
-                return e
-        return True
-
-    def get_error_message(self, message):
-        """
-        Function to create a formatted error message.
-
-        INPUTS
-        message (type = string): unformatted error message.
-
-        RETURN
-        msg (type = string): formatted error message.
-        """
-        ol = self._tx_position_end - self._tx_position
-        msg = ''.join((f'{message}.\n',
-                       f'Error position: Line {get_location(self)["line"]},',
-                       f' Column {get_location(self)["col"]}-{get_location(self)["col"] + ol}\n'))
-        return msg
-
-    def update_namespace(self, data):
-        """
-        Function to update namespace with new values.
-
-        INPUTS
-        data (type = dict): a collection of feature name - feature value elements to update.
-
-        """
-        for key, value in data.items():
-            field = key.split('.', 1)[0] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-            mapping = key.split('.', 1)[1] if key.split('.', 1)[0] in ('Fcard', 'Gcard') else key
-            fname = self.get_original_name(mapping)
-            tlf = fname.split('.')[0]
-
-            if field in self.var_attrc:
-                suffix = 'C'
-            elif field in self.var_attrv:
-                suffix = 'V'
-            else:
-                suffix = ''
-            if suffix == '':
-                namespace = self.namespace[tlf]['Features'][fname]
-            else:
-                namespace = self.namespace[tlf]['Features'][fname][f'Mappings{suffix}'][mapping]
-            namespace[field] = value
-
-            if field in ['Fcard', 'Gcard'] and key != 'Initial':
-                self.check_integrities(tlf)
-                self.activation_flag_update(self.namespace[tlf]['Features'], field, value, mapping)
-                if value in ['+', '*', '?'] and field == 'Fcard':
-                    init_ns = self.namespace[tlf]['Features'][fname]['InitialC']
-                    init_ns['Fcard'] = value
-                    init_ns['ActiveF'] = True
-                if value in ['or', 'xor'] and field == 'Gcard':
-                    init_ns = self.namespace[tlf]['Features'][fname]['InitialV']
-                    init_ns['Gcard'] = value
-
-            defined_features = self.defined_features[field]
-            if field not in defined_features:
-                defined_features.append(field)
-        self.defined_features_backup = copy.deepcopy(self.defined_features)
-
-    def get_feature(self, fname):
-        """
-        Function to read the value of any feature in the namespace.
-
-        INPUTS
-        fname (type = str): feature's name.
-
-        RETURN
-        list of feature attributes: ActiveF, ActiveG, Value.
-        """
-        field = fname.split('.', 1)[0] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else 'Value'
-        mapping = fname.split('.', 1)[1] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else fname
-        original = self.get_original_name(mapping)
-        tlf = original.split('.')[0]
-        suffix = 'C' if field == 'Fcard' else 'V'
-        res = self.namespace[tlf]['Features'][original][f'Mappings{suffix}'][mapping]
-        return res
-
-    def get_feature_input_type(self, fname):
-        """
-        Function to read the type of a feature (e.g., integer, string).
-
-        INPUTS
-        fname (type = str): feature's name.
-
-        RETURN
-        type of a feature.
-        """
-        mapping = fname.split('.', 1)[1] if fname.split('.', 1)[0] in ('Fcard', 'Gcard') else fname
-        original = self.get_original_name(mapping)
-        tlf = original.split('.')[0]
-        res = self.namespace[tlf]['Features'][original]['Type']
-        return res
-
-    def get_feature_childrens(self, fname, own_only_flag=True):
-        """
-        Function to read the value of some feature's childrens.
-
-        INPUTS
-        fname (type = str): feature's name.
-        own_only_flag (type = bool): flag to read values only one level lower in the hierarchy or not.
-
-        RETURN
-        dict with structure child name - child name attributes
-        """
-        res = {}
-        original = self.get_original_name(fname)
-        tlf = original.split('.')[0]
-        namespace = self.namespace[tlf]['Features']
-        for feature in namespace.values():
-            for mapping, mvalue in feature['MappingsV'].items():
-                is_child = (len(mapping.split('.')) - len(fname.split('.'))) == 1 if own_only_flag is True else (len(mapping.split('.')) - len(fname.split('.'))) >= 1
-                if mapping.startswith(f'{fname}.') and is_child is True:
-                    res.update({mapping: mvalue})
-        return res
-
-    def activation_flag_update(self, namespace, field, value, mapping=None):
-        """
-        Function to change activation flags according to cardinalities specified.
-
-        INPUTS
-        namespace (type = dict): tlf's namespace.
-        field (type = str): type of a feature (fcard, gcard).
-        value (type = Any): new cardinality value.
-        mapping (type = str): feature mapping to whom new value is related).
-
-        """
-        filter_field = value if field == 'Gcard' else mapping
-        if not isinstance(filter_field, list):
-            filter_field = [filter_field]
-        for feature, fvalue in namespace.items():
-            for suffix in ['C', 'V']:
-                for mapping, mvalue in fvalue[f'Mappings{suffix}'].items():
-                    if field == 'Gcard':
-                        if any(mapping.startswith(x.rsplit('.', 1)[0]) for x in filter_field):
-                            if (suffix == 'V' and len(mapping.split('.')) >= len(filter_field[0].split('.'))) or (suffix == 'C' and len(mapping.split('.')) > len(filter_field[0].split('.'))): 
-                                mvalue['ActiveG'] = False if all(x not in mapping for x in filter_field) else True
-                    elif field == 'Fcard' and value in ['*', '?', '+'] and suffix == 'C':
-                        mvalue['ActiveF'] = True
-                    else:
-                        mapping_sp = mapping.split('.')
-                        mapping_sp[-1] = self.get_original_name(mapping_sp[-1])
-                        mapping_or = '.'.join(mapping_sp)
-                        if len(mapping.split('.')) >= len(filter_field[0].split('.')) and any(mapping_or in x for x in filter_field):
-                            if value == 0 or not isinstance(value, int):
-                                mvalue['ActiveF'] = False
-                            elif value >= 1:
-                                if mapping == feature and len(fvalue[f'Mappings{suffix}'].keys()) > 1:
-                                    mvalue['ActiveF'] = False
-                                if len(fvalue[f'Mappings{suffix}'].keys()) == 1:
-                                    mvalue['ActiveF'] = True
-                                for x in filter_field:
-                                    if mapping in x:
-                                        y = x
-                                split = mapping.split(y)
-                                if len(split) > 1 and split[1] != '':
-                                    if split[1][0] == '_':
-                                        index = int(mapping.split(y)[1][1])
-                                        mvalue['ActiveF'] = False if index >= value else True
-
-    def get_mappings_for_constraint(self, constraint_data):
-        """
-        Function to get the list of valid mappings of all features in this constraint.
-
-        INPUTS
-        constraint_data (type = dict): constraint's metadata dict.
-
-        RETURN
-        constraint_ready (type = bool): flag, do all features in this constraint have specified cardinalities?
-        mappings (type = dict): mappings of all features
-        deactivated (type = bool): was constraint-related feature deactivated due to cardinalities specified.
-        """
-        mappings = {'Mappings': {'Assign': {}, 'Read': {}}, 'MappingsFull': {'Assign': {}, 'Read': {}}}
-        constraint_ready, deactivated = True, False
-        tlf = self.get_original_name(constraint_data['RelatedFeature'].split('.')[0])
-        namespace = self.namespace[tlf]['Features']
-        rfmappings = self.get_filtered_values(self.map_feature_cache(constraint_data['RelatedFeature'], False), namespace, undefined=False)
-        filtered_mappings = []
-        if rfmappings is not None:
-            for mapping in rfmappings['Value']:
-                if mapping in self.cache_f['MappingsV']:
-                    filtered_mappings.append(mapping)
-        if len(filtered_mappings) > 0:
-            for rfmapping in filtered_mappings:
-                orig = rfmapping.split('.')
-
-                for assign_type in ['Assign', 'Read']:
-                    for ftype in constraint_data[assign_type].keys():
-                        card_flag = True if ftype == 'Fcard' else False
-                        mapping_type = 'MappingsC' if ftype == 'Fcard' else 'MappingsV'
-                        for feature in constraint_data[assign_type][ftype]:
-                            tlf = self.get_original_name(feature.split('.')[0])
-                            namespace = self.namespace[tlf]['Features']
-
-                            fmappings = {'Mappings': {}, 'MappingsFull': {}}
-                            vmappings = self.get_filtered_values(self.map_feature_cache(feature, card_flag), namespace, undefined=False, card=card_flag)
-                            if vmappings is None:
-                                if assign_type == 'Read' and ftype == 'Value' or ftype == 'Gcard':
-                                    constraint_ready = False
-                                    logging.info('Constraint reads (gcard) values not available')
-                                vmappings = {'Value': []}
-                            fmappings.update({'Mappings': vmappings})
-                            fmappings.update({'MappingsFull': {'Value': self.map_feature_cache(feature, card_flag)}})
-                            for type in fmappings.keys():
-                                filtered_mappings = []
-                                if type == 'Mappings':
-                                    for mapping in fmappings[type]['Value']:
-                                        if mapping in self.cache_f[mapping_type]:
-                                            filtered_mappings.append(mapping)
-                                else:
-                                    filtered_mappings = fmappings[type]['Value']
-                                if filtered_mappings in [[], {'Assign': [], 'Read': []}] and (ftype != 'Fcard'):
-                                    logging.info(f'New disabling : {filtered_mappings}   --   {assign_type} | {ftype}')
-                                    constraint_ready = False
-                                for mapping in filtered_mappings:
-                                    split = mapping.split('.')
-                                    for index in range(0, len(split)):
-                                        fname = '.'.join(split[:index + 1])
-                                        relf = '.'.join(orig[:index + 1])
-                                        original = self.get_original_name(fname)
-                                        orig_relf = self.get_original_name(relf)
-                                        check = False if original == orig_relf and fname != relf else True
-                                        if check is True:
-                                            if original not in mappings[type][assign_type].keys():
-                                                mappings[type][assign_type].update({original: []})
-                                            if fname not in mappings[type][assign_type][original]:
-                                                mappings[type][assign_type][original].append(fname)
-                                            if index == len(split) - 1 and ftype == 'Value' and namespace[original]['MappingsV'][fname]['Value'] is None and assign_type == 'Read' and type == 'Mappings' and namespace[original]['Type'] is not None:
-                                                logging.info(f'Feature {fname} is not ready (mapping: {mapping}).')
-                                                constraint_ready = False
-                                            for constraint in self.namespace[tlf]['Constraints'].values():
-                                                if constraint['Validated'] is None:
-                                                    if original in constraint['Assign']['Fcard']:
-                                                        constraint_ready = False
-                                                        logging.info(f'Fcard Feature {fname} will be defined in constraint')
-                                        else:
-                                            break
-
-        else:
-            constraint_ready = False
-            deactivated = True
-            logging.info('Constraint deactivated')
-        return constraint_ready, mappings, deactivated
-
-    def filter_mappings_for_constraint(self, constraint, mappings):
-        """
-        Function to filter mappings combinations to avoid mapping overlays.
-        Example: there are feature a with cardinality 2 and features a.b and a.c with cardinalities 1.
-        Mappings are a.b:[a1.b, a2.b], a.c:[a1.c, a2.c]
-        Possible combinations are [(a1.b, a1.c), (a1.b, a2.c), (a2.b, a1.c), (a2.b, a2.c)]
-        Filtered combinations are [(a1.b, a1.c), (a2.b, a2.c)]
-
-        INPUTS
-        mappings (type = dict): dict, that contains all the mappings (read/assign), (fcard/gcard/value).
-
-        RETURN
-        dict of filtered mappings with the same structure as input mappings.
-        """
-        res = {'Assign': None, 'Read': None}
-        for assign_type in ['Assign', 'Read']:
-            combinations = itertools.product(*mappings[assign_type].values())
-            filtered_combinations = []
-            counter = 0
-            for comb in combinations:
-                counter += 1
-                rm = False
-                for part in comb:
-                    for x in comb:
-                        if self.get_original_name(x).startswith(self.get_original_name(part)) and len(x.split(".")) > len(part.split(".")):
-                            if not x.startswith(part):
-                                rm = True
-                                break
-                if rm is False and comb != ():
-                    filtered_combinations.append(comb)
-            logging.info(f'Unfiltered combinations for constraint {assign_type} {constraint} ({counter})')
-            logging.info(f'Filtered combinations for constraint {assign_type} {constraint} ({len(filtered_combinations)})')
-            res[assign_type] = filtered_combinations
-        return res
-
-    def validate_constraint(self, constraint, value):
-        """
-        Function that performs constraint checks and validation.
-
-        INPUTS
-        constraint (type = str): constraint's expression.
-        value (type = str): constraint's metadata.
-
-        RETURN
-        constraint_ready(type = bool): flag, was constraint validated
-        """
-        constraint_expression = f' \
-                {self.description.splitlines()[get_location(value["Constraint"])["line"] - 1].lstrip()}; '
-        self.rf = value['RelatedFeature']
-        logging.info(f'Constraint preprocessing for feature {self.rf}: {constraint_expression}')
-        constraint_ready, mappings, deactivated = self.get_mappings_for_constraint(value)
-        mtype = 'Mappings'
-        if value['HigherOperation'] in self.boolean and all(x in self.boolean for x in value['Operations']) and deactivated is False:
-            if all(x in self.cache_f['MappingsV'] for x in value['Read']['Value']):
-                constraint_ready = True
-                mtype = 'MappingsFull'
-            else:
-                constraint_ready = False
-        if constraint_ready is True:
-            self.tlf = self.get_original_name(value['RelatedFeature'].split('.')[0])
-            self.exception_flag = False
-            self.keyword = ''
-            logging.info(f'Constraint validation for feature {self.rf}: {constraint_expression}')
-            res = self.filter_mappings_for_constraint(constraint, mappings[mtype])
-            filtered_combinations = []
-            if len(res['Assign']) > 0:
-                if len(res['Assign']) != len(res['Read']) and len(res['Read']) > 1:
-                    raise Exception(f'Len of assign mappings ({len(res["Assign"])}) is not equal to len read mappings ({len(res["Read"])})')
-                elif len(res['Assign']) != len(res['Read']) and res['Read'] == []:
-                    filtered_combinations = res['Assign']
-                elif len(res['Assign']) != len(res['Read']) and len(res['Read']) == 1:
-                    for index in range(0, len(res['Assign'])):
-                        filtered_combinations.append(res['Assign'][index] + res['Read'][0])
+        for k, v in rm_deps_dict.items():
+            a, b = self.topo_sort(v)
+            c = [x for x in a if x.startswith('Constraint_')]
+            constr_names = []
+            constr_index = []
+            for index in range(self.seq.index(k), len(self.seq) - 1):
+                if self.seq[index + 1].startswith('Constraint_'):
+                    constr_names.append(self.seq[index + 1])
+                    constr_index.append(index + 1)
                 else:
-                    for index in range(0, len(res['Assign'])):
-                        filtered_combinations.append(res['Assign'][index] + res['Read'][index])
-            else:
-                filtered_combinations = res['Read']
-            constraint_obj = value['Constraint'].name
-            done = False
-            for comb in filtered_combinations:
-                up = []
-                for feature in comb:
-                    original = self.get_original_name(feature)
-                    for assign_type in ['Read', 'Assign']:
-                        for features in value[assign_type].values():
-                            if original in features and feature not in up:
-                                up.append(feature)
-                done = True
-                self.iterable['UnvalidatedFeatures'] = comb
-                constraint_obj.set_mappings(comb)
-                constraint_obj.parse()
-            if done is False:
-                constraint_obj.set_mappings([])
-                constraint_obj.parse()
-        else:
-            logging.info(f'Constraint {constraint} is not ready to validate')
-        return constraint_ready
+                    break
+            constr_names_new = []
+            for constr in c:
+                if constr in constr_names:
+                    constr_names_new.append(constr)
+            for enum_index, seq_index in enumerate(constr_index):
+                self.seq[seq_index] = constr_names_new[enum_index]
 
-    def validate_constraints(self, tlf, cards):
-        """
-        Function to validate all constraints of a defined top-level feature.
 
-        INPUTS
-        tlf (type = str): top-level feature's name.
+        pprint.pprint(self.seq)
+        pprint.pprint(self.groups)
 
-        """
-        self.cache_f = self.get_features_ready()
-        constraints = {}
-        constraints.update({'Dependent': self.namespace[tlf]['ConstraintsValidationOrder']})
-        constraints.update({'Independent': self.namespace[tlf]['IndependentConstraints']})
-        # TODO top-level constraints
-        # constraints.update({'TLF': self.namespace['TopLevelConstraints']})
-        validation_codes = []
-        for constraints_type, constraints_set in constraints.items():
-            for constraint in constraints_set:
-                constraint_metadata = self.namespace[tlf]['Constraints'][constraint]
-                complex_constraint = False
-                for assign_type in ['Assign', 'Read']:
-                    for type in constraint_metadata[assign_type].keys():
-                        if any(x in constraint_metadata[assign_type][type] for x in ['prec50', 'prec24']):
-                            complex_constraint = True
-                if constraint_metadata['Validated'] is False and not(cards is True and complex_constraint is True):
-                    validation_code = self.validate_constraint(constraint, constraint_metadata)
-                    if validation_code is False and constraints_type == 'Dependent':
-                        break
-                    elif validation_code is True:
-                        validation_codes.append(constraint)
-        for constraints_type, constraints_set in constraints.items():
-            for constraint in constraints_set:
-                if constraint in validation_codes:
-                    constraint_metadata = self.namespace[tlf]['Constraints'][constraint]
-                    constraint_metadata['Validated'] = True
+    def init_fcards(self):
+        for feature, card_md in self.initial_fcards.items():
+            self.handle_fcards(feature, card_md['MM'], card_md['Value'])
 
-    def map_feature_cache(self, fname, cardinalities=True):
-        """
-        Function to get all mappings for a feature.
-
-        INPUTS
-        fname (type = str): feature's name.
-        cardinalities (type = bool), flag to return fcard mappings or value mappings
-
-        RETURN
-        list of all mappings.
-        """
-        split = fname.split('.')
-        tlf = split[0]
-        original = self.get_original_name(fname)
-        suffix = 'C' if cardinalities is True else 'V'
-        res = list(self.namespace[tlf]['Features'][original][f'Mappings{suffix}'].keys())
-        if len(res) > 1:
-            res.remove(original)
-        return res
-
-    def map_feature(self, fname, cardinalities=True):
-        """
-        Function to define all mappings for a feature.
-
-        INPUTS
-        fname (type = str): feature's name.
-        cardinalities (type = bool), flag to return fcard mappings or value mappings
-
-        RETURN
-        list of all mappings
-        """
-        split = fname.split('.')
-        tlf = split[0]
-        names = []
-        for index in range(1, len(split) + 1):
-            name = '.'.join(split[:index])
-            fnamespace = self.namespace[tlf]['Features'][name]
-            names_temp = []
-            for key, value in fnamespace[f'MappingsC'].items():
-                if not (key == self.get_original_name(key) and len(fnamespace[f'MappingsC']) > 1):
-                    if index == len(split) and cardinalities is True:
-                        repeats = 1
-                    elif not isinstance(value['Fcard'], int):
-                        repeats = 0
-                    else:
-                        repeats = value['Fcard']
-                    if names != []:
-                        prev_names = names
-                    else:
-                        prev_names = [key]
-                    for prev_name in prev_names:
-                        if (prev_name in key and len(fnamespace[f'MappingsC']) > 1) or len(fnamespace[f'MappingsC']) == 1 or (cardinalities is True and index == len(split)):
-                            for i in range(0, repeats):
-                                full_name = prev_name if names == [] else f'{prev_name}.{split[index - 1]}'
-                                names_temp.append(f'{full_name}_{i}' if repeats > 1 or (cardinalities is False and f"{full_name}_{i}" in fnamespace[f'MappingsV'].keys()) else full_name)
-            names = list(dict.fromkeys(names_temp))
-        return names
-
-    def preprocess_step(self, tlf):
-        result = {}
-        if tlf in self.cycles.keys():
-            for cycle_part in self.cycles[tlf]:
-                result.update(self.preprocess_step_helper(cycle_part))
-        else:
-            result = self.preprocess_step_helper(tlf)
-        return result
-
-    def preprocess_step_helper(self, tlf):
-        """
-        Function to define the next step features for the current stage (top-level feature).
-
-        INPUTS
-        tlf (type = str): top-level feature's name.
-
-        RETURN
-        dict of structure fname - ftype
-        """
-
-        fcards, values = self.check_integrities(tlf)
-        undefined_values, undefined_values = {}, {}
-        undefined_cards = self.get_undefined_cards(fcards, values, tlf)
-        if undefined_cards is None:
-            undefined_values = self.get_filtered_values(values, self.namespace[tlf]['Features'])
-        self.step_to_define.update({'Cards': undefined_cards, 'Values': undefined_values})
-        logging.info(f'Stage: {tlf}, step: {self.step_to_define}')
-        return undefined_cards if undefined_cards is not None else undefined_values
-
-    def check_integrities(self, tlf):
-        """
-        Function to check the consistency of all namespace features.
-
-        INPUTS
-        tlf (type = str): top-level feature's name.
-
-        RETURN
-        fcards (type = list): list of all consistent fcards for tlf.
-        values (type = list): list of all consistent values for tlf.
-        """
-        fcards = self.check_integrity(tlf, True)
-        values = self.check_integrity(tlf, False)
-        return fcards, values
-
-    def check_integrity(self, tlf, cardinality=True):
-        result = []
-        namespace = self.namespace[tlf]['Features']
-        suffix = 'C' if cardinality is True else 'V'
-        for feature, value in namespace.items():
-            check = self.map_feature(feature, cardinality)
-            if check != []:
-                for key in check:
-                    if key not in value[f'Mappings{suffix}'].keys():
-                        if value[f'Mappings{suffix}'][feature]['ActiveF'] is True:
-                            value[f'Mappings{suffix}'][feature]['ActiveF'] = False
-                        value[f'Mappings{suffix}'].update({key: copy.deepcopy(value[f'Initial{suffix}'])})
-                result = result + check
-        return result
-
-    def get_features_ready(self):
-        """
-        Function to get all features with defined cardinalities.
-
-        INPUTS
-        tlf (type = str): top-level feature's name.
-
-        RETURN
-        ret (type = dict): lists of all consistent features for tlf.
-        """
-        ret = {
-            'MappingsV': [],
-            'MappingsC': []
-        }
-        for tlf in self.namespace.keys():
-            fcards, values = self.check_integrities(tlf)
-            undefined_cards = self.get_undefined_cards(fcards, values, tlf)
-            if undefined_cards is not None:
-                fcards, gcards = undefined_cards['Fcard'], undefined_cards['Gcard']
-            else:
-                fcards, gcards = [], []
-
-            for mapping_type in ['MappingsV', 'MappingsC']:
-                res = []
-                for feature, value in self.namespace[tlf]['Features'].items():
-                    for mapping in value[mapping_type].keys():
-                        flag = True
-                        for card in fcards:
-                            if card in mapping:
-                                flag = False
-                        for card in gcards:
-                            if (card in mapping and card != mapping and mapping_type == 'MappingsC') or (card in mapping and mapping_type == 'MappingsV'):
-                                flag = False
-                        if flag is True and mapping not in res:
-                            res.append(mapping)
-                ret[mapping_type].extend(res)
-        return ret
-
-    def get_undefined_cards(self, listc, listv, tlf, filter=True):
-        """
-        Function to get all undefined cardinalities for the top-level feature.
-
-        INPUTS
-        listc (type = list): list of all consistent fcards for tlf.
-        listv (type = list): list of all consistent values for tlf.
-        tlf (type = str): top-level feature's name
-        filter (type = bool): flag, do we filter cardinalities to define step.
-        Example: we have feature a with cardinality !(one or more) and feature a.b with the same cardinality.
-        If the filter flag is true, we will get only feature a as a result
-        Because now we can't define the cardinality of feature a.b correctly
-        If we define fcard.a = 2, then for feature a.b, we will need to define 2 cardinalities: a1.b and a2.b
-
-        RETURN
-        dict of all undefined cardinalities
-        """
-        result = {'Fcard': [], 'Gcard': []}
-        namespace = self.namespace[tlf]['Features']
-        fcards = self.get_undefined_fcards(listc, namespace)
-        gcards = self.get_undefined_gcards(listv, namespace)
-        if filter is True:
-            for card_type in result.keys():
-                card_type_list = fcards if card_type == 'Fcard' else gcards
-                another_type_list = fcards if card_type == 'Gcard' else gcards
-                for celement in card_type_list:
-                    flag = True
-                    for aelement in another_type_list:
-                        if aelement in celement or self.get_original_name(aelement) in celement:
-                            flag = False
-                        if card_type == 'Fcard' and aelement in celement and (len(celement.split('.')) - len(aelement.split('.')) == 1):
-                            result[card_type].append(celement)
-                        elif card_type == 'Gcard' and celement in aelement and len(aelement.split('.')) - len(celement.split('.')) == 1:
-                            flag = False
-                    for aelement in card_type_list:
-                        if (aelement in celement and aelement != celement) or (self.get_original_name(aelement) in celement and self.get_original_name(aelement) != celement and self.get_original_name(aelement) != self.get_original_name(celement)):
-                            if len(aelement.split('.')) != len(celement.split('.')):
-                                flag = False
-                    if flag is True and celement not in result[card_type]:
-                        result[card_type].append(celement)
-        else:
-            result.update({'Fcard': fcards, 'Gcard': gcards})
-        return result if result != {'Fcard': [], 'Gcard': []} else None
-
-    def feature_active_flag(self, fname, namespace, card):
-        """
-        Function to check the active state of the feature.
-
-        INPUTS
-        fname (type = str): feature's name.
-        namespace (type = dict): namespace of corresponding top-level feature
-        card (type = bool): flag to check activation for fcards
-
-        RETURN
-        bool, is feature active
-        """
-        suffix = 'C' if card is True else 'V'
-        #suffix = 'V'
-        shift = 0 if card is True else 0
-        split = fname.split('.')
-        feature_active_flag = True
-        for index in range(0, len(split) - shift):
-            split_c = fname.split('.')
-            if card is True:
-                split_c[index] = self.get_original_name(split_c[index])
-            name = '.'.join(split_c[:index + 1])
-            original = self.get_original_name(name)
-            feature_active_flag = (namespace[original][f'Mappings{suffix}'][name]['ActiveF'] and namespace[original][f'Mappings{suffix}'][name]['ActiveG'])
-            if feature_active_flag is False:
-                break
-        return feature_active_flag
-
-    def get_undefined_fcards(self, list, namespace):
-        """
-        Function to get all undefined feature cardinalities for a top-level feature.
-
-        INPUTS
-        list (type = list): list of all consistent fcards for tlf.
-        namespace (type = dict): namespace of corresponding top-level feature
-
-        RETURN
-        result (type = list): list of all undefined feature cardinalities.
-        """
-        result = []
-        for feature in list:
-            original = self.get_original_name(feature)
-            feature_active_flag = self.feature_active_flag(feature, namespace, True)
-            fcard_value = namespace[original]['MappingsC'][feature]['Fcard']
-            if not isinstance(fcard_value, int) and feature_active_flag is True:
-                result.append(feature)
-        return result
-
-    def get_undefined_gcards(self, list, namespace):
-        """
-        Function to get all undefined group cardinalities for a top-level feature.
-
-        INPUTS
-        list (type = list): list of all consistent values for tlf.
-        namespace (type = dict): namespace of corresponding top-level feature
-
-        RETURN
-        result (type = list): list of all undefined group cardinalities.
-        """
-        result = []
-        for feature in list:
-            gcard_to_define = False
-            original = self.get_original_name(feature)
-            feature_active_flag = self.feature_active_flag(feature, namespace, False)
-            gcard_value = namespace[original]['MappingsV'][feature]['Gcard']
-            if feature_active_flag is True:
-                if gcard_value in ['or', 'mux', 'xor']\
-                        or isinstance(gcard_value, int)\
-                        or re.match(r'^\d+$', str(gcard_value)):
-                    gcard_to_define = True
-                elif isinstance(gcard_value, str):
-                    gcard_to_define = True
-                    strspl = gcard_value.split(',')
-                    for lexem in strspl:
-                        if not (re.match(r'(\d+\.\.)+\d+', lexem) or re.match(r'^\d+$', lexem)):
-                            gcard_to_define = False
-                if gcard_to_define is True:
-                    result.append(feature)
-        return result
-
-    def get_filtered_values(self, list, namespace, undefined=True, card=False):
-        """
-        Function filter mappings for every feature from the list.
-
-        INPUTS
-        list (type = list): list of all consistent values for tlf.
-        namespace (type = dict): namespace of corresponding top-level feature
-        undefined (type = bool): flag, is a feature still undefined
-        card (type = bool): flag to filter mappings for fcards
-
-        RETURN
-
-        result (type = dict): list of all filtered mappings.
-        """
-        result = {'Value': []}
-        for feature in list:
-            original = self.get_original_name(feature)
-            feature_active_flag = self.feature_active_flag(feature, namespace, card)
-            mappings = 'MappingsV' if card is False else 'MappingsC'
-            ftype = 'Fcard' if card is True else 'Value'
-            feature_value = namespace[original][mappings][feature][ftype]
-            feature_type = namespace[original]['Type']
-            if feature_active_flag is True:
-                if card is False and ((feature_value is None and undefined is True and feature_type not in [None, 'predefined']) or undefined is False):
-                    result['Value'].append(feature)
-                elif card is True:
-                    result['Value'].append(feature)
-        return result if result != {'Value': []} else None
-
-    def cross_tree_dependencies_handler(self):
-        """
-        Function to define all cross-tree dependencies.
-        """
-        logging.info('Detecting cross-tree constraints.')
-        self.cross_tree_dependencies = []
-
-        for tlf, tlf_value in self.namespace.items():
-            if tlf_value['Features'][tlf]['Abstract'] is None:
-                for constraint in tlf_value['Constraints'].values():
-                    self.obj_id = None
-                    self.constraint = constraint
-                    self.constraint_expression = \
-                        f'{self.description.splitlines()[get_location(constraint["Constraint"])["line"] - 1].lstrip()}; '
-                    self.constraint['Expression'] = self.constraint_expression
-                    self.tlf = tlf
-                    self.rf = constraint['RelatedFeature']
-                    constraint['Constraint'].name.cross_tree_check(api=self)
-                    self.define_conditions_set(constraint)
-        logging.info('Processing cross-tree dependencies: Starting')
-        self.cross_tree_dependencies.sort()
-        self.cross_tree = list(k for k, _ in itertools.groupby(self.cross_tree_dependencies))
-        self.tmp = True
-        logging.info('Processing cross-tree dependencies: Done')
-
-    def define_conditions_set(self, constraint):
-        """
-        Function to define a truth table for specified constraint.
-
-        INPUTS
-        constraint (type = ExpressionElement): constraint object.
-        """
-        base = []
-        self.requirements.update({constraint['Expression']: []})
-        for feature_type in ['Read', 'Assign']:
-            for value in constraint[feature_type].values():
-                base = [*base, *value]
-        base_filtered = []
-        for feature in base:
-            for prec, values in constraint['Pattern'].items():
-                if feature in values and prec not in self.boolean:
-                    base_filtered.append(feature)
-        base_conditions = list(itertools.product([False, True],
-                                                    repeat=len(base)))
-        base = [fruit for fruit in base if fruit not in base_filtered]
-        for conditions_set in base_conditions:
-            combination = {}
-            for index, var in enumerate(base):
-                if constraint['HigherOperation'] in self.boolean:
-                    combination.update({var: conditions_set[index]})
-                else:
-                    combination.update({var: True})
-            for feature in base_filtered:
-                if feature not in combination.keys():
-                    combination.update({feature: True})
-            if combination not in constraint['TruthTable']:
-                self.truth_table = combination
-                self.mode = 'Validate'
-                res = constraint['Constraint'].name.parse()
-                if res is True:
-                    constraint['TruthTable'].append(combination)
-                    self.requirements[constraint['Expression']].append(combination)
-                self.mode = None
-        unique = [dict(t) for t in {tuple(d.items()) for d in constraint['TruthTable']}]
-        constraint['TruthTable'] = unique
-
-    def define_sequence_for_deps(self, dependencies):
-        """
-        Function to define a sequence of execution by topological sorting.
-
-        INPUTS
-        dependencies (type = list): list of dependencies.
-
-        RETURN
-        cycles (type = dict): dict of cycles and elements it contains.
-        res (type = list): sequence of dependencies elements to execute.
-        """
-        # Create networkx graph object
-        G = nx.DiGraph(dependencies)
-        index = 0
-        remove_dependencies = []
-        cycles = {}
-        # Find all cycles in graph. Create list of cycle dependencies.
-        for cycle in nx.simple_cycles(G):
-            index += 1
-            cycles.update({f'cycle{index}': cycle})
-            logging.debug(f'Cycle cycle{index} contain elements: {cycle}')
-            for dep in dependencies:
-                if dep[0] in cycle and dep[1] not in cycle:
-                    dep[0] = f'cycle{index}'
-                elif dep[0] not in cycle and dep[1] in cycle:
-                    dep[1] = f'cycle{index}'
-                elif dep[0] in cycle and dep[1] in cycle:
-                    remove_dependencies.append(dep)
-        for dep in remove_dependencies:
-            try:
-                dependencies.remove(dep)
-            except ValueError:
-                logging.debug(f'Dependency {dep} already removed.')
-        # Perform topological sort for dependencies.
-        res = self.topological_sort(dependencies)
-        res.reverse()
-        return cycles, res
-
-    def topological_sort(self, dependency_pairs):
-        """
-        Subfunction to define sequence of features to validate. The analogue of directed graph path.
-
-        INPUTSe
-        dependency_pairs: list of cross-tree dependencies pairs.
-
-        RETURN
-        ordered (type = list): sequence of independent features to validate.
-        cyclic (type = list): list of cyclic features.
-        """
-        logging.info('Topological sorting: Starting')
-        num_heads = defaultdict(int)
-        tails = defaultdict(list)
-        for h, t in dependency_pairs:
-            num_heads[t] += 1
-            tails[h].append(t)
-
-        ordered = [h for h in tails if h not in num_heads]
-        for h in ordered:
-            for t in tails[h]:
-                num_heads[t] -= 1
-                if not num_heads[t]:
-                    ordered.append(t)
-        logging.info('Topological sorting: Done')
-        return ordered
-
-    def staging(self, cross_tree_dependencies: list):
-        """
-        Function to define sequence of features to validate.
-
-        INPUTS
-        cross_tree_dependencies: list of cross-tree dependencies.
-
-        RETURN
-        ret_val (type = list): sequence of features to validate.
-        """
-        logging.info('Performing staging algorithm: Starting')
-        # Define cross-tree and independent features
-        all_features = list(self.namespace.keys())
-        features_from, features_to = ([] for _ in range(2))
-        for dep in cross_tree_dependencies:
-            features_from.append(dep[0])
-            features_to.append(dep[1])
-        independent_features = [x for x in all_features if x not in features_from
-                                and x not in features_to
-                                and self.namespace[x]['Features'][x]['Abstract'] is None]
-
-        self.cycles, res = self.define_sequence_for_deps(cross_tree_dependencies)
-        independent_features.reverse()
-        result = res + independent_features if res is not None else independent_features
-
-        # Add independent cycles
-        index = 0
-        for cycle in self.cycles:
-            raise Exception(f'Cycled features are currently disabled. Pleace check cycle(s) {list(self.cycles.items())}')
-            index += 1
-            if f'cycle{index}' not in result:
-                result.append(f'cycle{index}')
-        logging.info(f'There are {len(res)} stages for cross-tree dependencies: {res}')
-        logging.info(f'Cycled features: {self.cycles}')
-        logging.info(f'Additional independent features: {independent_features}')
-        logging.info(f'Final result: {result}')
-        logging.info('Performing staging algorithm: Done')
-        return result
-
-    def cardinality_solver(self, feature, card_value: int):
-        """
-        Function to check, is target value allowed by cardinality record ot not.
-
-        INPUTS
-        feature (type = feature): feature to check cardinality value (get it`s cardinality record).
-        card_type (type = str): feature or group cardinality.
-        card_value (type = int): cardinality value to check.
-
-        RETURN
-        True (type = bool): if check was successfull;
-        Raise Exception if not.
-        """
-        card_type = feature.split('.')[0]
-        suffix = 'C' if card_type == 'Fcard' else 'V'
-        original_name = self.get_original_name(feature)
-        tlf = original_name.split('.')[0]
-        original_card = self.namespace[tlf]['Features'][original_name][f'Initial{suffix}'][card_type]
-        if original_card is None:
-            return True
-        if card_type == 'Fcard':
-            x = card_value
-        elif card_type == 'Gcard' and isinstance(card_value, str):
-            x = 1
-        elif card_type == 'Gcard' and isinstance(card_value, list):
-            x = len(card_value)
-        else:
-            raise Exception('Wrong cardinality value')
-        res = []
-        # Transform special cardinality values to simple constraint. Fullfill match groups.
-        if original_card == '*':
-            res.append(['x>=0'])
-        elif original_card in ['+', 'or']:
-            res.append('x>=1')
-        elif original_card in ['?', 'mux']:
-            res.append(['x>=0', 'x<=1'])
-        elif original_card == 'xor':
-            res.append('x==1')
-        elif type(original_card) == int or re.match(r'^\d+$', original_card):
-            res.append(f'x=={original_card}')
-        else:
-            strspl = original_card.split(',')
-            for lexem in strspl:
-                if re.match(r'(\d+\.\.)+(\d+|\*)', lexem):
-                    lexspl = lexem.split('..')
-                    res.append([f'x>={lexspl[0]}', f'x<={lexspl[1]}'] if lexspl[1] != '*' else [f'x>={lexspl[0]}'])
-                else:
-                    res.append(f'x=={lexem}')
-        match_group_res = []
-
-        # Check all match groups
-        for match_group in res:
-            if type(match_group) == list:
-                subres = []
-                for match in match_group:
-                    subres.append(pd.eval(match))
-                match_group_res.append(all(subres))
-            else:
-                match_group_res.append(pd.eval(match_group))
-        result = any(match_group_res)
-
-        if result is True:
-            logging.debug(f'Result: {x} lies in interval {original_card}')
-            return True
-        else:
-            logging.debug(f'Result: {x} not lies in interval {original_card}')
-            return Exception(f'Result: {x} not lies in interval {original_card}')
+    def disable_abstract_features(self):
+        for metadata in self.metamodel.values():
+            if metadata['__self__']['Abstract'] is not None:
+                metadata['__self__'].update({'Active': False})
 
     def initialize_product(self, description: dict):
         """
@@ -2311,8 +1811,8 @@ class Waffle():
         RETURN
         stages (type = list): sequence of feature to perform constraint solving.
         """
-        self.debug_mode = False
         self.reset()
+        self.debug_mode = False  
         self.description = description
         # Read language grammar and create textX metamodel object from it.
         this_folder = dirname(__file__)
@@ -2327,26 +1827,18 @@ class Waffle():
         # Reset shared info variables and create textX model object from description.
 
         self.model = mm.model_from_str(self.description)
-        self.namespace = self.feature_initializer.initialize_namespace(self.model)
-        self.cross_tree_dependencies_handler()
-        stages = self.staging(self.cross_tree)
-        self.feature_analyzer.analyze_feature_model(stages)
-        for a, feature in self.namespace.items():
-            for sequence_number in feature['ConstraintsValidationOrder']:
-                logging.debug('_______________')
-                logging.debug(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
-                logging.debug(feature['Constraints'][sequence_number]['Assign'])
-                logging.debug(feature['Constraints'][sequence_number]['Read'])
-                logging.debug(feature['Constraints'][sequence_number]['Pattern'])
-                logging.debug(feature['Constraints'][sequence_number]['Operations'])
-            for sequence_number in feature['IndependentConstraints']:
-                logging.debug('------------------')
-                logging.debug(f'Feature: {a}({feature["Constraints"][sequence_number]["RelatedFeature"]}) constraint {sequence_number}: {feature["Constraints"][sequence_number]["Expression"]}')
-                logging.debug(feature['Constraints'][sequence_number]['Assign'])
-                logging.debug(feature['Constraints'][sequence_number]['Read'])
-                logging.debug(feature['Constraints'][sequence_number]['Pattern'])
-                logging.debug(feature['Constraints'][sequence_number]['Operations'])
-        return stages
-        # Export both metamodel and model in .dot format for class diagram construction.
-        # metamodel_export(mm, join(this_folder, 'output/metamodel.dot'))
-        # model_export(model, join(this_folder, 'output/model.dot'))
+
+        for parse_type in ['Feature', 'Constraint']:
+            for element in self.model.elements:
+                if self.cname(element) == 'Feature':
+                    self.parse_feature(element, parse_type=parse_type)
+        self.define_inheritance()
+        self.disable_abstract_features()
+        
+        self.build_metagraph()
+        self.init_fcards()
+        pprint.pprint(self.metamodel)
+        for constraint in self.constraints.values():
+            pprint.pprint(constraint)
+        
+        return self.seq

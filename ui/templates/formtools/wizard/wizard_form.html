@@ -62,10 +62,10 @@
 <hr style="margin-top: 40px;">
 </table>
 {% if wizard.steps.prev %}
-    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.first }}">
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" value="{{ wizard.steps.first }}">
         first step
     </button>
-    <button formnovalidate="formnovalidate" name="wizard_goto_step" disabled value="{{ wizard.steps.prev }}">
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" value="{{ wizard.steps.prev }}">
         prev step
     </button> 
 {% endif %}
