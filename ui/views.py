@@ -417,21 +417,29 @@ def initial_page(request, *args, **kwargs):
         # Create a form instance and populate it with data from the request (binding):
         form = ModelInputForm(request.POST)
         if form.is_valid():
-            global model_stages, validated_steps, step_current, factory_forms, tlf, init_factory_forms, successfully_validated_steps, valid
-            valid = True
-            step_current, tlf = None, None
-            validated_steps, model_stages, factory_forms = [], [], []
-            successfully_validated_steps = []
-            init_factory_forms = {}
             model = form.cleaned_data['model_field']
-            logging.info(f'Model: {model}')
-            model_stages_unfiltered = api.initialize_product(model)
-            for stage in model_stages_unfiltered:
-                if not stage.startswith('Constraint_'):
-                    factory_forms.append(WizardStepForm)
-                    init_factory_forms.update({stage: 0})
-                    model_stages.append(stage)
-            return HttpResponseRedirect(reverse('factory_wizard'))
+            if 'Manual' in request.POST.keys():
+                global model_stages, validated_steps, step_current, factory_forms, tlf, init_factory_forms, successfully_validated_steps, valid
+                valid = True
+                step_current, tlf = None, None
+                validated_steps, model_stages, factory_forms = [], [], []
+                successfully_validated_steps = []
+                init_factory_forms = {}
+                
+                logging.info(f'Model: {model}')
+                model_stages_unfiltered = api.initialize_product(model)
+                for stage in model_stages_unfiltered:
+                    if not stage.startswith('Constraint_'):
+                        factory_forms.append(WizardStepForm)
+                        init_factory_forms.update({stage: 0})
+                        model_stages.append(stage)
+                return HttpResponseRedirect(reverse('factory_wizard'))
+            else:
+                api.generate_product(model)
+                res = api.save_json()
+                return render(request, 'done.html', {
+                    'form_data': res,
+                })
 
     elif request.method == 'GET':
         form = ModelInputForm()

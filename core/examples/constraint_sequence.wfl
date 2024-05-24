@@ -1,9 +1,14 @@
 
 a {
-    n -> integer
+    a -> integer
     b -> predefined
     c -> predefined
     d -> predefined
-    [n > 2]
-
+    [a > 2]
+    [c > 1]
+    [a > b]
+    [if a > 2 then c = 2 else c = 4]
+    [b > c]
+    [b = c + 1]
+    [d = 2]
 }
