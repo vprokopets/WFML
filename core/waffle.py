@@ -592,7 +592,6 @@ class prec10(ExpressionElement):
         fname = self.get_value(self.res[0], 'Fname')
         field = self.get_value(self.res[0], 'Ftype')
         value = self.get_value(self.res[2])
-        print(self.res)
         self.api.update_metadata(fname, field, value)
 
         return True
@@ -1239,7 +1238,9 @@ class Waffle:
                             matched_features.append(x)
         print(f'MATCHED FEATURES: {matched_features} | {tlf_features_to_configure}')
         for mapping in constraint['Metadata']['Mappings'].values():
-            mapping['Active'] = False if any([mf in mapping['Comb'].values() for mf in matched_features]) else True              
+            parent_feature = mapping['Comb'][constraint['Metadata']['ParentFeature']]
+            parent_check = self.read_metadata(parent_feature)['__self__']['Active']
+            mapping['Active'] = False if any([mf in mapping['Comb'].values() for mf in matched_features]) or parent_check is False else True              
     
     def filter_combinations(self, combinations):
         res = []
@@ -1671,6 +1672,9 @@ class Waffle:
         for key in md.keys():
             if key != '__self__':
                 self.build_feature_metagraph_deps(f'{feature}.{key}', feature)
+
+    def get_json(self):
+        return open('./core/output/configuration.json', 'r')
 
     def build_metagraph(self):
         deps = []
