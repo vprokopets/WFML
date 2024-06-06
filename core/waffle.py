@@ -708,36 +708,21 @@ class prec50(ExpressionElement):
         print('------------------------------')
         for index, part in enumerate(self.op):
             try:
-                print(f'Part {index}: {part.parse(self.mapping_md, self.constr_md)}')
+                print(f'Part {index} | {part}: {part.parse(self.mapping_md, self.constr_md)}')
             except AttributeError:
-                print(f'Part {index}: {part} is a {type(part)}')
-        right = self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
-        self.api.keyword = ''
+                print(f'Part {index} | {part}: AttributeError: {type(part)}')
+        right = self.op[2].parse(self.mapping_md, self.constr_md)['Fname']
         left = self.get_value(self.op[1].parse(self.mapping_md, self.constr_md))
+
+        print(left)
+        a = self.api.get_feature_childrens(right, True)
+        b = [x for x in a if x.rsplit('.')[-1] == left]
+        values = []
+        for feature in b:
+            values.append(self.api.read_metadata(feature, 'Value'))
         logging.debug(f'Level 5.0 Operation unique x in y.')
-        ret = self.find_unique(right, left)
-
+        ret = list(set(values))
         return ret
-
-    def find_unique(self, input, key, res=None):
-        """
-        Function to find all unique elements in list (no repeats).
-
-        INPUTS
-        input (type = dict): feature's namespace.
-        key (type = dict): keyword to filter.
-
-        RETURN
-        res (type = list): list of filtered features.
-        """
-        if res is None:
-            res = []
-        if input is not None:
-            for feature, namespace in input.items():
-                if feature.split('.')[-1] == key:
-                    if namespace['Value'] is not None and namespace['Value'] not in res:
-                        res.append(namespace['Value'])
-        return res
 
 
 class prec5(ExpressionElement):
@@ -1590,12 +1575,6 @@ class Waffle:
         constr_meta = copy.deepcopy(self.stage_snap[step]['Constraints'] if step is not None else self.last_snap['Constraints'])
         for k, v in constr_meta.items():
             self.constraints[k].update({'Metadata': v})
-        print('===============!!!!!!!!!!!!!=============')
-        print(f'STEP {step}')
-        for k, v in self.stage_snap.items():
-            print(f'STAGE {k}')
-            for v1 in v['Constraints'].values():
-                pprint.pprint(v1['Mappings'])
 
         if step is not None:
             rm_steps = []
@@ -1688,17 +1667,20 @@ class Waffle:
                 flag = True
                 for v in constraint['Metadata']['Precedence'].values():
                     for k1, v1 in v.items():
-                        if isinstance(v1, dict):
+                        if isinstance(v1, dict) and not (k1 == 2 and v['Class'] == 'prec50'):
                             assign_type = 'Assign' if k1 == 0 and v['Class'] == 'prec10' else 'Read'
                             for k2, v2 in v1.items():
                                 constraint['Metadata'][assign_type][v2].append(k2)
                         
                         elif k1 == 1 and v['Class'] == 'prec50':    
                             a = self.get_feature_childrens(list(v[2].keys())[0], True)
+                            b = [x for x in a if x.rsplit('.')[-1] == v[1]]
+                            for feature in b:
+                                constraint['Metadata']['Read']['Value'].append(feature)
                 for k, v in constraint['Metadata']['Assign'].items():
                     for feature in v:
                         deps.append((f'{constraint['ID']}', f'{feature}-{k}'))
-                        flag = FloatingPointError
+                        flag = False
                 for k, v in constraint['Metadata']['Read'].items():
                     deps.extend([(f'{x}-{k}', f'{constraint['ID']}') for x in v])
                     deps.extend([(f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{x}-{k}') for x in v])
@@ -1708,7 +1690,7 @@ class Waffle:
 
         for dep in list(set(deps)):
             self.metagraph.append(dep)
-        
+
         flat_dict = {}
         elem_pattern = {
         'Before': [],
