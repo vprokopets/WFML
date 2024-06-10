@@ -61,7 +61,7 @@ class ExpressionElement(object):
         for index, mapping in enumerate(mappings:=constr_md['Mappings'].values()):
             pprint.pprint(mapping)
             if mapping['Active'] is True and mapping['Validated'] is False:
-                mapping_md = {
+                self.mapping_md = {
                     'Index': index,
                     'Current': mapping['Comb'],
                     'Total': len(mapping['Comb']),
@@ -69,7 +69,7 @@ class ExpressionElement(object):
                     'ExceptionFlag': False
                 }
                 # print(f'Parsing mapping {index + 1} of {len(mappings)} | Mapping values: {list(mapping['Comb'].values())}')
-                self.parse(mapping_md, constr_md)
+                self.parse(self.mapping_md, constr_md)
         for mapping in mappings:
             mapping['Validated'] = True
     
@@ -1341,24 +1341,28 @@ class Waffle:
             if ((elem:=self.seq[index]).startswith('Constraint_')):
                 for constraint in self.constraints.values():
                     if constraint['ID'] == elem:
-                        constr_md = constraint['Metadata']
-                        print(f'Evaluating constraint {constr_md['Expression']}')
+                        self.constr_md = constraint['Metadata']
+                        print(f'Evaluating constraint {self.constr_md['Expression']}')
                         self.get_constraint_mappings(constraint)
-                        pprint.pprint(constr_md)
+                        pprint.pprint(self.constr_md)
+                        self.constr_err_md = {}
                         if self.debug_mode is False:
 
                             try:
-                                constraint['Object'].name.parse_constraint(constr_md)
+                                constraint['Object'].name.parse_constraint(self.constr_md)
                             except Exception as e:
+                                mapping_md = constraint['Object'].name.mapping_md
+                                for feature in mapping_md['Current'].values():
+                                    self.constr_err_md.update({feature: self.read_metadata(feature)})
                                 logging.exception("Something awful happened!")
                                 return e
                         else:
-                            constraint['Object'].name.parse_constraint(constr_md)
+                            constraint['Object'].name.parse_constraint(self.constr_md)
                         break
             else:
                 break
         return True
-    
+
     def cname(self, obj):
         """
         Function to return class name of object.

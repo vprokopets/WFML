@@ -79,6 +79,8 @@ class WizardStepForm(forms.Form):
                             self.up.update({key: err})
                 if self.up == {}:
                     res = api.validate_constraints(tlf)
+                    self.error_md = api.constr_err_md
+                    self.constr_md = api.constr_md
                     if res is not True:
                         fields = self.fields.keys()
                         msg, elems = res.args
