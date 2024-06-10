@@ -1352,8 +1352,9 @@ class Waffle:
                                 constraint['Object'].name.parse_constraint(self.constr_md)
                             except Exception as e:
                                 mapping_md = constraint['Object'].name.mapping_md
-                                for feature in mapping_md['Current'].values():
-                                    self.constr_err_md.update({feature: self.read_metadata(feature)})
+                                for feature, mapping in mapping_md['Current'].items():
+                                    if feature in self.constr_md['FeaturesPrec'].keys():
+                                        self.constr_err_md.update({feature: self.read_metadata(mapping)})
                                 logging.exception("Something awful happened!")
                                 return e
                         else:
@@ -1661,6 +1662,7 @@ class Waffle:
 
     def build_metagraph(self):
         deps = []
+        par_deps = []
         indep_constraints = []
         for tlf, md in self.metamodel.items():
             if md['__self__']['Abstract'] is None:
@@ -1688,6 +1690,7 @@ class Waffle:
                 for k, v in constraint['Metadata']['Read'].items():
                     deps.extend([(f'{x}-{k}', f'{constraint['ID']}') for x in v])
                     deps.extend([(f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{x}-{k}') for x in v])
+                par_deps.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
                 deps.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
                 if flag is True:
                     indep_constraints.append(constraint['ID'])
@@ -1701,11 +1704,12 @@ class Waffle:
         'After': []
         }
         for dep in self.metagraph:
-            for index, elem in enumerate(dep):
-                if elem not in flat_dict.keys():
-                    flat_dict.update({elem: copy.deepcopy(elem_pattern)})
-                connection = 'Before' if index == 0 else 'After'
-                flat_dict[elem][connection].append(dep[0 if connection == 'After' else 1])
+            if dep not in par_deps:
+                for index, elem in enumerate(dep):
+                    if elem not in flat_dict.keys():
+                        flat_dict.update({elem: copy.deepcopy(elem_pattern)})
+                    connection = 'Before' if index == 0 else 'After'
+                    flat_dict[elem][connection].append(dep[0 if connection == 'After' else 1])
         
         groups = []
         for k, v in flat_dict.items():
@@ -1748,7 +1752,6 @@ class Waffle:
         for i in sorted(rm_deps, reverse=True):
             del self.metagraph[i]
         self.metagraph.extend(new_deps)
-
         self.seq, self.cycles = self.topo_sort(self.metagraph)
         
         for i_constr in indep_constraints:
