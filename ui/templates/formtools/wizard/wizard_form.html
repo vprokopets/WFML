@@ -14,7 +14,7 @@
 
 {% block content %}
 <main style="margin-left: 1.5%; margin-top: 10px; margin-right: 1.5%;">
-<p>Stage {{ wizard.form.stage }} of {{ wizard.form.stages_number }}; Step {{wizard.form.stage_step}}</p>
+<p>Stage {{ wizard.form.stage }} of {{ wizard.form.stages_number }}; Step {{wizard.form.stage_step}}; Previous configured step {{wizard.form.prev_step}}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
 <table>
@@ -65,7 +65,7 @@
     <button formnovalidate="formnovalidate" name="wizard_goto_step" value="{{ wizard.steps.first }}">
         first step
     </button>
-    <button formnovalidate="formnovalidate" name="wizard_goto_step" value="{{ wizard.steps.prev }}">
+    <button formnovalidate="formnovalidate" name="wizard_goto_step" value="{{ wizard.steps.prev }}"> <!-- wizard.form.prev_step - to activate fast backtracking (currently works not well)-->
         prev step
     </button> 
 {% endif %}

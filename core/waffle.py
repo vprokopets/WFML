@@ -11,8 +11,7 @@ from pysat.solvers import Solver
 from collections import defaultdict
 from functools import reduce
 from os.path import join, dirname
-from textx import metamodel_from_file, get_location, get_metamodel
-from textx.export import metamodel_export, model_export
+from textx import metamodel_from_file, get_location
 
 from core.graph import Graph
 
@@ -56,10 +55,9 @@ class ExpressionElement(object):
         return msg
 
     def parse_constraint(self, constr_md):
-        # print('Inner constraint function')
-        # pprint.pprint(constr_md['Mappings'].values())
+        logging.debug('Inner constraint function')
+        logging.debug(constr_md['Mappings'].values())
         for index, mapping in enumerate(mappings:=constr_md['Mappings'].values()):
-            pprint.pprint(mapping)
             if mapping['Active'] is True and mapping['Validated'] is False:
                 self.mapping_md = {
                     'Index': index,
@@ -68,7 +66,6 @@ class ExpressionElement(object):
                     'All': [x['Comb'] for x in mappings],
                     'ExceptionFlag': False
                 }
-                # print(f'Parsing mapping {index + 1} of {len(mappings)} | Mapping values: {list(mapping['Comb'].values())}')
                 self.parse(self.mapping_md, constr_md)
         for mapping in mappings:
             mapping['Validated'] = True
@@ -258,7 +255,6 @@ class prec23(ExpressionElement):
 
         # Perform IF expression check.
         statement = self.op[1].parse(self.mapping_md, self.constr_md)
-        print(f'IF ELSE STATEMENT {statement}')
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
             self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
@@ -570,11 +566,11 @@ class prec11(ExpressionElement):
         left, operation, right = self.boolify(self.res[0]), self.res[1], self.boolify(self.res[2])
         if operation == 'requires':
             ret = not left or (left and right)
-            print(f'REQUIRES CHECK {left} | {right} | {ret}')
+            logging.debug(f'REQUIRES CHECK {left} | {right} | {ret}')
             self.check_exception(ret, 'Required feature does not exist')
         elif operation == 'excludes':
             ret = not (left and right)
-            print(f'EXCLUDES CHECK {left} | {right} | {ret}')
+            logging.debug(f'EXCLUDES CHECK {left} | {right} | {ret}')
             self.check_exception(ret, 'One of the features under excludes constraint should not exist')
         return ret
 
@@ -705,16 +701,9 @@ class prec50(ExpressionElement):
                             operation result in opposite case.
         """
         self.api.keyword = 'AllFeatures'
-        print('------------------------------')
-        for index, part in enumerate(self.op):
-            try:
-                print(f'Part {index} | {part}: {part.parse(self.mapping_md, self.constr_md)}')
-            except AttributeError:
-                print(f'Part {index} | {part}: AttributeError: {type(part)}')
         right = self.op[2].parse(self.mapping_md, self.constr_md)['Fname']
         left = self.get_value(self.op[1].parse(self.mapping_md, self.constr_md))
 
-        print(left)
         a = self.api.get_feature_childrens(right, True)
         b = [x for x in a if x.rsplit('.')[-1] == left]
         values = []
@@ -881,10 +870,12 @@ class term(ExpressionElement):
             fname = mapping_md['Current'][(orig:=list(obj_md.keys())[0])]
             ftype = list(obj_md.values())[0]
             ret = self.api.read_metadata(fname)['__self__']
+            childs = self.api.get_feature_childrens(fname)
             ret.update({'GFcard': len(set(itertools.chain.from_iterable([sub[orig]] for sub in mapping_md['All']))),
                          'Fname': fname,
                          'Ftype': ftype,
-                         'IsFeature': True})
+                         'IsFeature': True,
+                         'Childs': childs})
             if mapping_md['ExceptionFlag'] is False:
                 self.exception, mapping_md['ExceptionFlag'] = True, True
                 self.check_exception(self.boolify(ret), f'Expression {fname}')
@@ -953,7 +944,8 @@ class Waffle:
             'Expression': '',
             'Precedence': {},
             'Features': {},
-            'FeaturesPrec': {}
+            'FeaturesPrec': {},
+            'Childs': []
         }
 
     def initialize_feature(self, name, fcard, gcard, value, abstract, inheritance, attribute, constraints):
@@ -1014,7 +1006,6 @@ class Waffle:
 
     def define_inheritance(self, constr):
         seq, _ = self.topo_sort(self.inheritance, rev=True)
-        print('-----------------------')
         for feature in seq:
             md = self.read_metadata(feature)
             if (super_feature:=md['__self__']['Inheritance']) is not None:
@@ -1026,16 +1017,14 @@ class Waffle:
                     md.update(md_copy)
                 if constr_copy is not None and constr == 'Constraint':
                     for constr in constr_copy:
-                        print(f'{feature} | {constr} | {md['__self__']['Constraints']}')
                         if md['__self__']['Constraints'] is None:
                             md['__self__']['Constraints'] = []
                         if constr not in md['__self__']['Constraints']:
-                            print(self.constraints.keys())
                             constr_md = self.constraints[constr]
                             md['__self__']['Constraints'].append(self.parse_constraint(constr_md['Object'], feature)['ID'])
 
     def update_metadata(self, name, field, value):
-        print(f'Updating field {field} for feature {name} with value {value}')
+        logging.debug(f'Updating field {field} for feature {name} with value {value}')
         md = self.read_metadata(name)
         if field == 'Value' and 'Array' in (attr_type:=md['__self__']['Attribute']):
             try:
@@ -1221,7 +1210,6 @@ class Waffle:
                     for x in v:
                         if x in tlf_features_to_configure[kw] and self.get_original(x) not in constraint['Metadata']['Assign']['Fcard']:
                             matched_features.append(x)
-        print(f'MATCHED FEATURES: {matched_features} | {tlf_features_to_configure}')
         for mapping in constraint['Metadata']['Mappings'].values():
             parent_feature = mapping['Comb'][constraint['Metadata']['ParentFeature']]
             parent_check = self.read_metadata(parent_feature)['__self__']['Active']
@@ -1333,7 +1321,6 @@ class Waffle:
                     subres = self.get_undefined_features(tlf, v, layer + 1, fname, all_features)
                     for md_type in res.keys():
                         res[md_type].extend(subres[md_type])
-        print(f'Undefined features: {res}')
         return res
 
     def validate_constraints(self, step):
@@ -1342,9 +1329,8 @@ class Waffle:
                 for constraint in self.constraints.values():
                     if constraint['ID'] == elem:
                         self.constr_md = constraint['Metadata']
-                        print(f'Evaluating constraint {self.constr_md['Expression']}')
+                        logging.info(f'Evaluating constraint {self.constr_md['Expression']}')
                         self.get_constraint_mappings(constraint)
-                        pprint.pprint(self.constr_md)
                         self.constr_err_md = {}
                         if self.debug_mode is False:
 
@@ -1464,17 +1450,20 @@ class Waffle:
                 for index, op in enumerate(elements):
                     subres = self.parse_constraint_helper(op, parent_feature)
                     if isinstance(subres, str) and len(elements) >= 1 and subres not in keywords:
-                        fname, card_keyword, is_feature = self.parse_feature_name(subres, parent_feature)
-                        
+                        fnames, card_keyword, childs_keyword, is_feature = self.parse_feature_name(subres, parent_feature)
                         if is_feature is True:
-                            
-                            if card_keyword in ['fcard', 'gcard']:
-                                ftype = card_keyword.capitalize()
-                            else:
-                                ftype = 'Value'
-                            
-                            subres = {fname: ftype}
+                            subres = {}
+                            for index, fname in enumerate(fnames): 
+                                if childs_keyword is True and fname == fnames[0]:
+                                    ftype = 'Childs'
+                                elif card_keyword in ['fcard', 'gcard']:
+                                    ftype = card_keyword.capitalize()
+                                else:
+                                    ftype = 'Value'
+                                
+                                subres.update({fname: ftype})
                             self.pattern['Features'].update({self.last_elem_id: subres})
+                            
                             if self.is_term is True:
                                 subres[fname] = 'Fcard'
                                 res.update({index: subres})
@@ -1505,6 +1494,7 @@ class Waffle:
         if '\'' in name or '\"' in name:
             return name, False, False
         indices = {
+            'childs': [],
             'self': [],
             'parent': [],
             'fcard': [],
@@ -1519,31 +1509,31 @@ class Waffle:
                 feature_indices.append(index)
         for k, v in indices.items():
             if repeats:=len(v) > 1 and k != 'parent':
-                print(f'Keyword {self} appears {repeats} times.')
+                logging.error(f'Keyword {k} appears {repeats} times.')
             
         if len(indices['self']) > 1 and len(indices['parent']) > 1:
-            print('Keywords "self" and "parent" can not appear at the same time.')
+            logging.error('Keywords "self" and "parent" can not appear at the same time.')
         
-        if len(indices['fcard'] + indices['gcard'] + indices['gfcard']) > 1:
-            print('Keywords "fcard", "gcard", and "gfcard" can not appear at the same time.')
+        if len(indices['fcard'] + indices['gcard'] + indices['gfcard'] + indices['childs']) > 1:
+            logging.error('Keywords "fcard", "gcard", and "gfcard" can not appear at the same time.')
         
         card_keyword = None
-        for keyword in ['fcard', 'gcard', 'gfcard']:
+        for keyword in ['fcard', 'gcard', 'gfcard', 'childs']:
             if len(indices[keyword]) > 0 and indices[keyword][0] != 0:
-                print(f'Wrong position of keyword! {keyword}.')
+                logging.error(f'Wrong position of keyword! {keyword}.')
             elif len(indices[keyword]) > 0:
                 card_keyword = keyword
         rel_keyword = None
         for keyword in ['self', 'parent']:
             if len(indices[keyword]) > 0:
                 if not(indices[keyword][0] == 0 or (indices[keyword][0] == 1 and card_keyword is not None)):
-                    print(f'Wrong position of keyword!! {keyword}.')
+                    logging.error(f'Wrong position of keyword!! {keyword}.')
                 rel_keyword = (keyword, len(indices[keyword]))
             
             if len(feature_indices) > 0:
                 for pos in indices[keyword]:
                     if pos > feature_indices[0]:
-                        print(f'Wrong position of keyword!!! {keyword}.')
+                        logging.error(f'Wrong position of keyword!!! {keyword}.')
         skip_chars_card = 1 if card_keyword is not None else 0
         skip_chars_rel = rel_keyword[1] if rel_keyword is not None  else 0
 
@@ -1561,9 +1551,16 @@ class Waffle:
                 res = name
                 is_feature = False
                 # TODO proper logging
-                # print(f'{name} | {full_name} | {self_name} is not a correct feature | {par_split} | {repl_chars_res}')
-
-        return res, card_keyword, is_feature
+                # logging.error(f'{name} | {full_name} | {self_name} is not a correct feature | {par_split} | {repl_chars_res}')
+        if card_keyword == 'childs':
+            childs = self.get_feature_childrens(res)
+            res = [res] + childs
+            card_keyword = 'fcard'
+            childs_keyword = True
+        else:
+            res = [res]
+            childs_keyword = False
+        return res, card_keyword, childs_keyword, is_feature
    
     def restore_stage_snap(self, step=None):
         """
@@ -1676,6 +1673,8 @@ class Waffle:
                         if isinstance(v1, dict) and not (k1 == 2 and v['Class'] == 'prec50'):
                             assign_type = 'Assign' if k1 == 0 and v['Class'] == 'prec10' else 'Read'
                             for k2, v2 in v1.items():
+                                if v2 == 'Childs':
+                                    v2 = 'Fcard'
                                 constraint['Metadata'][assign_type][v2].append(k2)
                         
                         elif k1 == 1 and v['Class'] == 'prec50':    
@@ -1781,8 +1780,8 @@ class Waffle:
                 self.seq[seq_index] = constr_names_new[enum_index]
 
 
-        # pprint.pprint(self.seq)
-        # pprint.pprint(self.groups)
+        logging.debug(self.seq)
+        logging.debug(self.groups)
 
     def init_fcards(self):
         for feature, card_md in self.initial_fcards.items():
@@ -1830,9 +1829,9 @@ class Waffle:
 
         self.build_metagraph()
         self.init_fcards()
-        # pprint.pprint(self.metamodel)
-        # for constraint in self.constraints.values():
-        #     pprint.pprint(constraint)
+        logging.debug(self.metamodel)
+        for constraint in self.constraints.values():
+            logging.debug(constraint)
         
         return self.seq
 

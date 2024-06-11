@@ -1,24 +1,23 @@
 import copy
 import logging
-import pprint
 import mimetypes
+
+from collections import OrderedDict
 from core.waffle import Waffle
-from django.shortcuts import redirect, render
+from django import forms
 from django.http import HttpResponseRedirect
 from django.http.response import HttpResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from formtools.wizard.views import CookieWizardView
-from django import forms
-from collections import OrderedDict
 
 # profiling library
 import cProfile
-import pstats
-import io
-from pstats import SortKey
+
 profiling = False
 factory_forms = None
 validated_steps = []
+prev_steps = ['0']
 successfully_validated_steps = []
 model_stages = []
 init_factory_forms = {}
@@ -42,8 +41,8 @@ class WizardStepForm(forms.Form):
         cd (type = dict): cleaned data, that was printed to form fields.
         """
         global valid, validated_steps, successfully_validated_steps
-        print(f'Validating form {self.__dict__}')
-        print(f'VALID STATE: {valid} | {validated_steps} | {successfully_validated_steps}')
+        logging.info(f'Validating form {self.__dict__}')
+        logging.debug(f'VALID STATE: {valid} | {validated_steps} | {successfully_validated_steps}')
         if valid is True or (len(validated_steps) > 1 and self.prefix not in successfully_validated_steps):
             if profiling is True:
                 ob = cProfile.Profile()
@@ -57,9 +56,9 @@ class WizardStepForm(forms.Form):
                 self.cleaned_data
                 cd = copy.copy(self.cleaned_data)
                 self.up = {}
-                logging.info(f'Cleaned Data: {cd}')
-                logging.info(f'Label: {self.label}')
-                print(f'COUNTER {id(self)}: {self.counter}')
+                logging.debug(f'Cleaned Data: {cd}')
+                logging.debug(f'Label: {self.label}')
+                logging.debug(f'Counter {id(self)}: {self.counter}')
                 # Write data from form fields to global namespace.
                 for key, value in cd.items():
                     split = key.split('.', 1)
@@ -94,8 +93,6 @@ class WizardStepForm(forms.Form):
                                         self.add_error(field, f'This field returned error: {msg}')
                         api.restore_stage_snap()
                     else:
-                        print('==================================================')
-
                         if self.prefix not in successfully_validated_steps:
                             successfully_validated_steps.append(self.prefix)
                 else:
@@ -178,7 +175,7 @@ class WizardClass(CookieWizardView):
         """
 
         # Create form object.
-        global model_stages, step_current, tlf, init_factory_forms
+        global model_stages, step_current, tlf, init_factory_forms, prev_steps, successfully_validated_steps
         if step is None:
             step = self.steps.current
         step_current = step
@@ -186,7 +183,7 @@ class WizardClass(CookieWizardView):
         self.form = super(WizardClass, self).get_form(step, data, files)
 
         self.current_step = model_stages[int(step)]
-        print(f'Current Step {self.current_step} | #{int(step)}')
+        logging.debug(f'Current Step {self.current_step} | #{int(step)} | {prev_steps} | {successfully_validated_steps}')
         tlf = self.current_step
 
         self.form.stages_number = len(init_factory_forms)
@@ -217,8 +214,12 @@ class WizardClass(CookieWizardView):
                 self.construct_step_form(element, files)
         else:
             self.construct_step_form(self.current_step, files)
-        print(f"FINISH constructiong form {self.current_step}")
-        print('-----------------------------------------------------------')
+        logging.info(f"FINISH constructiong form {self.current_step}")
+    
+        if (step_current in successfully_validated_steps or step_current in prev_steps) and len(prev_steps) > 1:
+            del prev_steps[-1]
+        self.form.prev_step = prev_steps[-1]
+
         return self.form
 
     def construct_step_form(self, step_id, files):
@@ -234,11 +235,11 @@ class WizardClass(CookieWizardView):
         if snap_name not in api.stage_snap.keys():
             data = api.get_undefined_features(tlf)
             api.save_stage_snap(snap_name, data)
-            print(f'GOING FORWARD STEP {snap_name}')
+            logging.debug(f'GOING FORWARD STEP {snap_name}')
         else:
             data = api.stage_snap[snap_name]['Fields']
             if files is None:
-                print(f'RETURN TO PREV STEP {snap_name}')
+                logging.debug(f'RETURN TO PREV STEP {snap_name}')
                 api.restore_stage_snap(snap_name)
                 self.form.full_clean()
                 data = api.get_undefined_features(tlf)
@@ -246,8 +247,7 @@ class WizardClass(CookieWizardView):
         if data is None:
             return
         
-        print(f'DATA {data} | tlf1 {step_id} | tlf {tlf} | step {step_current} | {type(self.form)} | {snap_name} - {api.stage_snap.keys()} | {files}')
-        #pprint.pprint(api.metamodel)
+        logging.debug(f'DATA {data} | tlf1 {step_id} | tlf {tlf} | step {step_current} | {type(self.form)} | {snap_name} - {api.stage_snap.keys()} | {files}')
         data_filtered = {
             'Fcard': [],
             'Gcard': [],
@@ -322,8 +322,6 @@ class WizardClass(CookieWizardView):
             # Create appropriate fields in form.
             value = api.read_metadata(gcard, 'Gcard')
             options_full = api.get_feature_childrens(gcard)
-            print('GCARD OPTIONS!!!!!!!!!!!!!!!!!!!!!!')
-            print(options_full)
             options = [x.rsplit('.', 1)[-1] for x in options_full]
             choises_list = []
             for option in options:
@@ -349,10 +347,12 @@ class WizardClass(CookieWizardView):
         # (if available).
         res = False
         skip = True
-        global validated_steps, valid
+        global validated_steps, valid, prev_steps
         valid = True
         if '0' not in validated_steps:
             validated_steps.append('0')
+        if self.steps.current not in prev_steps:
+            prev_steps.append(self.steps.current)
         while res is False:
             logging.info(f'Rendering next step {self.steps.next}.')
             next_step = self.steps.next
@@ -373,7 +373,7 @@ class WizardClass(CookieWizardView):
         
         if next_step not in validated_steps:
             validated_steps.append(next_step)
-        print(f'STEP {next_step} | {validated_steps} | {id(self)}')
+        logging.info(f'STEP {next_step} | {validated_steps} | {id(self)}')
         return self.render(new_form, **kwargs)
 
     def render_done(self, form, **kwargs):
