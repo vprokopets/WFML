@@ -1492,7 +1492,7 @@ class Waffle:
 
     def parse_feature_name(self, name, parent_feature):
         if '\'' in name or '\"' in name:
-            return name, False, False
+            return name, False, False, False
         indices = {
             'childs': [],
             'self': [],
