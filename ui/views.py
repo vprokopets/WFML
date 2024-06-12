@@ -42,7 +42,7 @@ class WizardStepForm(forms.Form):
         """
         global valid, validated_steps, successfully_validated_steps
         logging.info(f'Validating form {self.__dict__}')
-        logging.debug(f'VALID STATE: {valid} | {validated_steps} | {successfully_validated_steps}')
+        logging.debug(f'VALID STATE: {valid} | {validated_steps} | {self.prefix} - {successfully_validated_steps}')
         if valid is True or (len(validated_steps) > 1 and self.prefix not in successfully_validated_steps):
             if profiling is True:
                 ob = cProfile.Profile()
@@ -77,24 +77,7 @@ class WizardStepForm(forms.Form):
                         if err is not None:
                             self.up.update({key: err})
                 if self.up == {}:
-                    res = api.validate_constraints(tlf)
-                    self.error_md = api.constr_err_md
-                    self.constr_md = api.constr_md
-                    if res is not True:
-                        fields = self.fields.keys()
-                        msg, elems = res.args
-                        if not any([elem in fields or f'Fcard.{elem}' in fields or f'Gcard.{elem}' in fields for elem in elems]):
-                            self.add_error(None, f'There is an error: {msg}')
-                        else:
-                            for elem in elems:
-                                attr_type = api.read_metadata(elem, 'Attribute')
-                                for field in self.fields.keys():
-                                    if attr_type != 'predefined' and (elem == field or f'Fcard.{elem}' == field or f'Gcard.{elem}' == field):
-                                        self.add_error(field, f'This field returned error: {msg}')
-                        api.restore_stage_snap()
-                    else:
-                        if self.prefix not in successfully_validated_steps:
-                            successfully_validated_steps.append(self.prefix)
+                    self.validation_pipeline()
                 else:
                     for k, v in self.up.items():
                         self.add_error(k, f'This field returned error: {v}')
@@ -104,9 +87,30 @@ class WizardStepForm(forms.Form):
                 return cd
             
             except AttributeError:
-                pass
+                self.validation_pipeline()
         else:
             valid = True
+
+    def validation_pipeline(self): 
+        res = api.validate_constraints(tlf)
+        self.error_md = api.constr_err_md
+        self.constr_md = api.constr_md
+        if res is not True:
+            fields = self.fields.keys()
+            msg, elems = res.args
+            if not any([elem in fields or f'Fcard.{elem}' in fields or f'Gcard.{elem}' in fields for elem in elems]):
+                self.add_error(None, f'There is an error: {msg}')
+            else:
+                for elem in elems:
+                    attr_type = api.read_metadata(elem, 'Attribute')
+                    for field in self.fields.keys():
+                        if attr_type != 'predefined' and (elem == field or f'Fcard.{elem}' == field or f'Gcard.{elem}' == field):
+                            self.add_error(field, f'This field returned error: {msg}')
+            api.restore_stage_snap()
+        else:
+            if self.prefix not in successfully_validated_steps:
+                successfully_validated_steps.append(self.prefix)
+
 
         # # Assign unvalidated parameters error to appropriate fields.
         # for param in self.up:
@@ -364,6 +368,7 @@ class WizardClass(CookieWizardView):
             if new_form.fields != {} or skip is False or next_step == self.steps.last or 'Inner_Waffle_Group_' in model_stages[int(next_step)]:
                 res = True
             else:
+                new_form.clean()
                 if next_step not in validated_steps:
                     validated_steps.append(next_step)
             # change the stored current step

@@ -910,6 +910,7 @@ class Waffle:
         self.metamodel, self.stage_snap, self.last_snap = {}, {}, {}
         self.exception_flag = False
         self.initial_fcards, self.groups = {}, {}
+        self.constr_err_md, self.constr_md = {}, {}
         self.inheritance = []
         self.metagraph = []
         self.features_to_configure = {}
@@ -1159,8 +1160,8 @@ class Waffle:
                             features_arr.append(ftr)
 
                 features[keyword].extend(features_arr)
-        features['Fcard'].append(constraint['Metadata']['ParentFeature'])     
-   
+        features['Fcard'].append(constraint['Metadata']['ParentFeature'])
+
         features_to_configure = []
         for tlf in self.metamodel.keys():
             features_to_configure.append(self.get_undefined_features(tlf, all_features=True))
@@ -1190,7 +1191,6 @@ class Waffle:
             part = list(set(part))
         combinations = itertools.product(*all_mappings_list)
         filtered_combinations = self.filter_combinations(combinations)
-
         for comb in filtered_combinations:
             if str(comb) not in constraint['Metadata']['Mappings'].keys():
                 subres = {}
@@ -1201,7 +1201,6 @@ class Waffle:
                     'Active': True,
                     'Validated': False
                 }})
-
         matched_features = []
         for k, v in flat_mappings.items():
             keywords = ['Gcard', 'Value'] if k == 'Value' else ['Fcard']
@@ -1213,7 +1212,7 @@ class Waffle:
         for mapping in constraint['Metadata']['Mappings'].values():
             parent_feature = mapping['Comb'][constraint['Metadata']['ParentFeature']]
             parent_check = self.read_metadata(parent_feature)['__self__']['Active']
-            mapping['Active'] = False if any([mf in mapping['Comb'].values() for mf in matched_features]) or parent_check is False else True              
+            mapping['Active'] = False if any([mf in mapping['Comb'].values() for mf in matched_features]) or parent_check is False else True          
     
     def filter_combinations(self, combinations):
         res = []
@@ -1257,9 +1256,11 @@ class Waffle:
     
     def handle_gcards(self, name, md, value):
         if value not in ['xor', 'or']:
+            if not isinstance(value, list):
+                value = [value]
             for k, v in md.items():
                 if k != '__self__' :
-                    v['__self__']['ActiveG'] = True if k.rsplit('.', 1)[-1] == value else False
+                    v['__self__']['ActiveG'] = True if any([k.rsplit('.', 1)[-1] == x for x in value]) else False
                     self.update_active_state(f'{name}.{k}')
             
             # TODO update card check mechanism
@@ -1284,6 +1285,7 @@ class Waffle:
     def update_active_state(self, name):
         md = self.read_metadata(name)['__self__']
         md['Active'] = md['ActiveF'] and md['ActiveG'] if md['Abstract'] is None else False
+        logging.debug(f'Update active state for {name}: {md['ActiveF']} | {md['ActiveG']} | {md['Active']}')
 
     def get_product(self, md, res):
         for k, v in md.items():
@@ -1324,13 +1326,17 @@ class Waffle:
         return res
 
     def validate_constraints(self, step):
+        logging.info(f'Validating constraints for {step}')
         for index in range(self.seq.index(step) + 1, len(self.seq)):
             if ((elem:=self.seq[index]).startswith('Constraint_')):
                 for constraint in self.constraints.values():
                     if constraint['ID'] == elem:
                         self.constr_md = constraint['Metadata']
+                        print('================================================')
                         logging.info(f'Evaluating constraint {self.constr_md['Expression']}')
+                        
                         self.get_constraint_mappings(constraint)
+                        pprint.pprint(self.constr_md)
                         self.constr_err_md = {}
                         if self.debug_mode is False:
 
