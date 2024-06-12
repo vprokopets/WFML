@@ -1167,7 +1167,7 @@ class Waffle:
         for k, v in features.items():
             for feature in set(v):
                 if feature in constraint['Metadata']['FeaturesPrec'].keys():
-                    filter = False if any([x in self.prec_bool for x in constraint['Metadata']['FeaturesPrec'][feature]]) or feature in constraint['Metadata']['Read']['Fcard'] else True
+                    filter = False if any([x in self.prec_bool for x in constraint['Metadata']['FeaturesPrec'][feature]]) or feature in constraint['Metadata']['Read']['Fcard'] or feature in constraint['Metadata']['Assign']['Fcard'] else True
                 else:
                     filter = True
                 if feature not in all_mappings.keys():
