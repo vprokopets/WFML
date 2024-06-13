@@ -22,7 +22,7 @@ keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
             'or', 'product', 'res', 'some', 'sum', 'then', 'xor', '_', 'fcard', 'gcard', 'waffle.error']
 
 # Logging configuration.
-logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
 
 
 class ExpressionElement(object):
@@ -1190,7 +1190,12 @@ class Waffle:
         for part in all_mappings_list:
             part = list(set(part))
         combinations = itertools.product(*all_mappings_list)
+
+        logging.debug(f'Mapping combinations for constraint {constraint['Metadata']['Expression']}')
+
         filtered_combinations = self.filter_combinations(combinations)
+        logging.debug('---------------------------------')
+        logging.debug(pprint.pformat(filtered_combinations))
         for comb in filtered_combinations:
             if str(comb) not in constraint['Metadata']['Mappings'].keys():
                 subres = {}
@@ -1201,6 +1206,7 @@ class Waffle:
                     'Active': True,
                     'Validated': False
                 }})
+
         matched_features = []
         for k, v in flat_mappings.items():
             keywords = ['Gcard', 'Value'] if k == 'Value' else ['Fcard']
@@ -1217,6 +1223,8 @@ class Waffle:
     def filter_combinations(self, combinations):
         res = []
         for comb in combinations:
+            logging.debug('____________________________')
+            logging.debug(comb)
             valid_elems = {}
             valid_comb = True
             for elem in comb:
@@ -1227,16 +1235,18 @@ class Waffle:
                         valid_elems.update({fname_orig: fname})
                     else:
                         if valid_elems[fname_orig] != fname:
+                            logging.debug(f'COMBINATION {comb} is not valid due to {valid_elems[fname_orig]} != {fname} | {fname_orig}')
                             valid_comb = False
+            logging.debug(f'Adding combination {comb}')
             if valid_comb is True:
                 res.append(comb)
         return res
     
-    def get_feature_childrens(self, feature, full_tree=False):
+    def get_feature_childrens(self, feature, full_tree=False, filter_active=True):
         md = self.read_metadata(feature)
         res = []
         for k, v in md.items():
-            if k != '__self__' and v['__self__']['Active'] is True:
+            if k != '__self__' and (v['__self__']['Active'] is True or filter_active is False):
                 if full_tree is True:
                     res.extend(self.get_feature_childrens(f'{feature}.{k}', True))
                 res.append(f'{feature}.{k}')
@@ -1326,17 +1336,14 @@ class Waffle:
         return res
 
     def validate_constraints(self, step):
-        logging.info(f'Validating constraints for {step}')
         for index in range(self.seq.index(step) + 1, len(self.seq)):
             if ((elem:=self.seq[index]).startswith('Constraint_')):
                 for constraint in self.constraints.values():
                     if constraint['ID'] == elem:
                         self.constr_md = constraint['Metadata']
-                        print('================================================')
-                        logging.info(f'Evaluating constraint {self.constr_md['Expression']}')
-                        
+                        logging.debug('======================================================')
+                        logging.info(f'Evaluating constraint {self.constr_md['Expression']}')   
                         self.get_constraint_mappings(constraint)
-                        pprint.pprint(self.constr_md)
                         self.constr_err_md = {}
                         if self.debug_mode is False:
 
@@ -1559,7 +1566,7 @@ class Waffle:
                 # TODO proper logging
                 # logging.error(f'{name} | {full_name} | {self_name} is not a correct feature | {par_split} | {repl_chars_res}')
         if card_keyword == 'childs':
-            childs = self.get_feature_childrens(res)
+            childs = self.get_feature_childrens(res, filter_active=False)
             res = [res] + childs
             card_keyword = 'fcard'
             childs_keyword = True
@@ -1677,11 +1684,17 @@ class Waffle:
                 for v in constraint['Metadata']['Precedence'].values():
                     for k1, v1 in v.items():
                         if isinstance(v1, dict) and not (k1 == 2 and v['Class'] == 'prec50'):
-                            assign_type = 'Assign' if k1 == 0 and v['Class'] == 'prec10' else 'Read'
+                            assign_type = 'Assign' if (k1 == 0 and v['Class'] == 'prec10') or (k1 == 1 and v['Class'] == 'precc11' and v1 == 'excludes') else 'Read'
                             for k2, v2 in v1.items():
                                 if v2 == 'Childs':
                                     v2 = 'Fcard'
-                                constraint['Metadata'][assign_type][v2].append(k2)
+                                    childs = self.get_feature_childrens(k2, filter_active=False)
+                                    for child in childs:
+                                        if child not in constraint['Metadata'][assign_type][v2]:
+                                            constraint['Metadata'][assign_type][v2].append(child)
+                                else:
+                                    if k2 not in constraint['Metadata'][assign_type][v2]:
+                                        constraint['Metadata'][assign_type][v2].append(k2)
                         
                         elif k1 == 1 and v['Class'] == 'prec50':    
                             a = self.get_feature_childrens(list(v[2].keys())[0], True)
@@ -1785,9 +1798,9 @@ class Waffle:
             for enum_index, seq_index in enumerate(constr_index):
                 self.seq[seq_index] = constr_names_new[enum_index]
 
-
-        logging.debug(self.seq)
-        logging.debug(self.groups)
+        logging.debug(pprint.pformat(self.metagraph))
+        logging.debug(pprint.pformat(self.seq))
+        logging.debug(pprint.pformat(self.groups))
 
     def init_fcards(self):
         for feature, card_md in self.initial_fcards.items():
@@ -1835,9 +1848,11 @@ class Waffle:
 
         self.build_metagraph()
         self.init_fcards()
-        logging.debug(self.metamodel)
+        logging.debug('General metamodel:')
+        logging.debug(pprint.pformat(self.metamodel))
+        logging.debug('Metamodels for constraints')
         for constraint in self.constraints.values():
-            logging.debug(constraint)
+            logging.debug(pprint.pformat(constraint))
         
         return self.seq
 
