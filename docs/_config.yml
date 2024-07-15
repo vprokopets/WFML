@@ -1,0 +1,4 @@
+theme: minima
+title: Waffle (former WFML)
+author: Volodymyr Prokopets (volodymyr.prokopets@tu-dresden.de)
+description: Feature modeling language and a corresponding tool for variability management of highly configurable software systems.
