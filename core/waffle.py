@@ -21,9 +21,6 @@ keywords = ['abstract', 'all', 'assert', 'disj', 'else', 'enum',
             'minimize', 'mux', 'no', 'not', 'one', 'opt',
             'or', 'product', 'res', 'some', 'sum', 'then', 'xor', '_', 'fcard', 'gcard', 'waffle.error']
 
-# Logging configuration.
-logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
-
 
 class ExpressionElement(object):
     def __init__(self, **kwargs):
@@ -64,7 +61,8 @@ class ExpressionElement(object):
                     'Current': mapping['Comb'],
                     'Total': len(mapping['Comb']),
                     'All': [x['Comb'] for x in mappings],
-                    'ExceptionFlag': False
+                    'ExceptionFlag': False,
+                    'FilterFlag': None
                 }
                 self.parse(self.mapping_md, constr_md)
         for mapping in mappings:
@@ -82,8 +80,8 @@ class ExpressionElement(object):
         if len(self.op) == 1:
             ret = self.op[0].parse(self.mapping_md, self.constr_md)
         else:
-            if mapping_md['ExceptionFlag'] is False:
-                self.exception, mapping_md['ExceptionFlag'] = True, True
+            if self.mapping_md['ExceptionFlag'] is False:
+                self.exception, self.mapping_md['ExceptionFlag'] = True, True
             if self.api.cname(self) != 'prec23':
                 self.res = [self.op[x].parse(self.mapping_md, self.constr_md) if isinstance(self.op[x], ExpressionElement) else self.op[x] for x in range(len(self.op))]
             ret = self.value
@@ -187,10 +185,22 @@ class ExpressionElement(object):
 
     def get_value(self, feature_metadata, ftype = None):
         if isinstance(feature_metadata, dict):
+            if self.mapping_md['FilterFlag'] is not None and feature_metadata['IsFeature'] is True:
+                feature_metadata = self.filter_stub(feature_metadata)
             ftype = "Value" if feature_metadata['IsFeature'] is False else ftype
             return feature_metadata[feature_metadata['Ftype'] if ftype is None else ftype]
         else:
             return feature_metadata
+    
+    def filter_stub(self, feature_metadata):
+        if feature_metadata['Fname'] in self.mapping_md['FilterFlag'].keys():
+            feature_metadata_new = self.api.read_metadata(self.mapping_md['FilterFlag'][feature_metadata['Fname']])['__self__']
+            feature_metadata_new.update({
+                'IsFeature': True,
+                'Ftype': feature_metadata['Ftype'],
+            })
+            logging.debug(f'Feature metadata was successfully swapped from {feature_metadata['Fname']} to {feature_metadata_new}')
+        return feature_metadata_new
 
 class prec24(ExpressionElement):
     @property
@@ -203,9 +213,7 @@ class prec24(ExpressionElement):
                             operation result in opposite case.
         """
         logging.info(f'Level 24 Operation filter x where y.')
-        self.api.keyword = 'ChildNamespace'
         key, condition = self.get_value(self.op[1].parse(self.mapping_md, self.constr_md)), self.op[2]
-        self.api.keyword = ''
         return self.filter(condition, key)
 
     def filter(self, condition, key):
@@ -220,19 +228,12 @@ class prec24(ExpressionElement):
         res (type = list): list of filtered features.
         """
         res = []
-        self.api.keyword = 'ReplaceFeature'
-        keys = list(key.keys())
-        tmp = []
-        for item in keys:
-            data = self.api.namespace[self.api.tlf]['Features'][self.api.get_original_name(item)]['MappingsV'][item]
-            if data['ActiveF'] is True and data['ActiveG'] is True:
-                tmp.append(item)
-        for item in keys:
-            self.api.replace_feature = item
-            if self.get_value(condition.parse(self.mapping_md, self.constr_md)) is True:
-                res.append(item)
-
-        self.api.keyword = ''
+        for k, v in self.constr_md['FilterStub'].items():
+            for mapping, md in v.items():
+                self.mapping_md['FilterFlag'] = {k: mapping}
+                if self.get_value(condition.parse(self.mapping_md, self.constr_md)) is True:
+                    res.append(md['initial'])
+        self.mapping_md['FilterFlag'] = None
         logging.debug(f'filter Result: {res}')
         return res
 
@@ -255,6 +256,7 @@ class prec23(ExpressionElement):
 
         # Perform IF expression check.
         statement = self.op[1].parse(self.mapping_md, self.constr_md)
+        self.exception, self.mapping_md['ExceptionFlag'] = False, False
         # If 'IF' expression was true, ther perform THEN expression.
         if statement is True:
             self.get_value(self.op[2].parse(self.mapping_md, self.constr_md))
@@ -527,7 +529,6 @@ class prec12(ExpressionElement):
         """
         for l, op, r in zip(self.res[0::2], self.res[1::2], self.res[2::2]):
             left, operation, right = self.get_value(l), op, self.get_value(r)
-            left, right = [self.get_value(feature) for feature in [left, right]]
             logging.info(f'Level 12 comparison {left} {operation} {right} operation')
             if operation == '<':
                 ret = left < right
@@ -902,7 +903,8 @@ class term(ExpressionElement):
 
 
 class Waffle:
-    def __init__(self) -> None:
+    def __init__(self, debug_mode) -> None:
+        self.debug_mode = debug_mode
         self.reset()
     
     def reset(self):
@@ -946,7 +948,8 @@ class Waffle:
             'Precedence': {},
             'Features': {},
             'FeaturesPrec': {},
-            'Childs': []
+            'Childs': [],
+            'FilterStub': {}
         }
 
     def initialize_feature(self, name, fcard, gcard, value, abstract, inheritance, attribute, constraints):
@@ -1005,39 +1008,28 @@ class Waffle:
                 return False
         return True
 
-    def define_inheritance(self, constr):
+    def define_inheritance(self, parsing_objects):
         seq, _ = self.topo_sort(self.inheritance, rev=True)
         for feature in seq:
             md = self.read_metadata(feature)
             if (super_feature:=md['__self__']['Inheritance']) is not None:
                 md_copy = copy.deepcopy(self.read_metadata(super_feature))
-                constr_copy = md_copy['__self__']['Constraints']
+                constr_copy = copy.deepcopy(md_copy['__self__']['Constraints'])
                 
                 del md_copy['__self__']
-                if constr == 'Feature':
+                if parsing_objects == 'Feature':
                     md.update(md_copy)
-                if constr_copy is not None and constr == 'Constraint':
-                    for constr in constr_copy:
+                if constr_copy is not None and parsing_objects == 'Constraint':
+                    for constraint in constr_copy:
                         if md['__self__']['Constraints'] is None:
                             md['__self__']['Constraints'] = []
-                        if constr not in md['__self__']['Constraints']:
-                            constr_md = self.constraints[constr]
+                        if constraint not in md['__self__']['Constraints']:
+                            constr_md = self.constraints[constraint]
                             md['__self__']['Constraints'].append(self.parse_constraint(constr_md['Object'], feature)['ID'])
 
     def update_metadata(self, name, field, value):
         logging.debug(f'Updating field {field} for feature {name} with value {value}')
         md = self.read_metadata(name)
-        if field == 'Value' and 'Array' in (attr_type:=md['__self__']['Attribute']):
-            try:
-                value = value.replace(' ','').split(',')
-                if attr_type == 'floatArray':
-                    for v in value:
-                        v = float(v)
-                elif attr_type == 'integerArray':
-                    for v in value:
-                        v = int(v)
-            except Exception as e:
-                return e
         md['__self__'][field] = value
         if field == 'Inheritance':
             self.inheritance.append((name, value))
@@ -1375,7 +1367,7 @@ class Waffle:
         """
         return obj.__class__.__name__
 
-    def parse_feature(self, feature, parent_name=None, parse_type='Feature', abstract=False):
+    def parse_feature(self, feature, parent_name=None, parsing_objects='Feature', abstract=False):
         """
         ! This method is recursive.
 
@@ -1395,10 +1387,10 @@ class Waffle:
         for child_obj in feature.nested:
             for children in child_obj.child:
                 if self.cname(children) == 'Feature':
-                    self.parse_feature(children, feature_name, parse_type, abstract)
-                elif self.cname(children) == 'Constraint' and parse_type == 'Constraint':
+                    self.parse_feature(children, feature_name, parsing_objects, abstract)
+                elif self.cname(children) == 'Constraint' and parsing_objects == 'Constraint':
                     constraints.append(self.parse_constraint(children, feature_name)['ID'])
-        if parse_type == 'Feature':
+        if parsing_objects == 'Feature':
             if feature.super is not None and feature.reference is not None:
                 raise Exception(f'Super feature and Reference feature could not appear at the same time for {feature_name}')
             if feature_name == 'Context' and feature.fcard not in [None, 1]:
@@ -1411,7 +1403,7 @@ class Waffle:
                                     inheritance=feature.super,
                                     attribute=feature.type,
                                     constraints=None)
-        elif parse_type == 'Constraint' and constraints != []:
+        elif parsing_objects == 'Constraint' and constraints != []:
             self.update_metadata(feature_name, 'Constraints', constraints)
 
     def parse_constraint(self, constraint, parent_feature):
@@ -1430,7 +1422,6 @@ class Waffle:
         self.parse_constraint_helper(constraint.name, parent_feature)
 
         constraint.name.connect_waffle(self)
-
         constraint = {
             'Object': constraint,
             'Metadata': copy.deepcopy(self.pattern),
@@ -1463,12 +1454,14 @@ class Waffle:
                 for index, op in enumerate(elements):
                     subres = self.parse_constraint_helper(op, parent_feature)
                     if isinstance(subres, str) and len(elements) >= 1 and subres not in keywords:
-                        fnames, card_keyword, childs_keyword, is_feature = self.parse_feature_name(subres, parent_feature)
+                        fnames, card_keyword, childs_keyword, fname_keyword, is_feature = self.parse_feature_name(subres, parent_feature)
                         if is_feature is True:
                             subres = {}
                             for index, fname in enumerate(fnames): 
                                 if childs_keyword is True and fname == fnames[0]:
                                     ftype = 'Childs'
+                                elif fname_keyword is True:
+                                    ftype = 'Fname'
                                 elif card_keyword in ['fcard', 'gcard']:
                                     ftype = card_keyword.capitalize()
                                 else:
@@ -1505,15 +1498,17 @@ class Waffle:
 
     def parse_feature_name(self, name, parent_feature):
         if '\'' in name or '\"' in name:
-            return name, False, False, False
+            return [name], False, False, False, False
         indices = {
             'childs': [],
             'self': [],
             'parent': [],
+            'fname': [],
             'fcard': [],
             'gcard': [],
             'gfcard': []
         }
+        childs_keyword, fname_keyword = False, False
         feature_indices = []
         for index, part in enumerate(split:=name.split('.')):
             if part in indices.keys():
@@ -1527,11 +1522,11 @@ class Waffle:
         if len(indices['self']) > 1 and len(indices['parent']) > 1:
             logging.error('Keywords "self" and "parent" can not appear at the same time.')
         
-        if len(indices['fcard'] + indices['gcard'] + indices['gfcard'] + indices['childs']) > 1:
-            logging.error('Keywords "fcard", "gcard", and "gfcard" can not appear at the same time.')
+        if len(indices['fcard'] + indices['gcard'] + indices['gfcard'] + indices['childs'] + indices['fname']) > 1:
+            logging.error('Keywords "fcard", "gcard", "fname", "childs", and "gfcard" can not appear at the same time.')
         
         card_keyword = None
-        for keyword in ['fcard', 'gcard', 'gfcard', 'childs']:
+        for keyword in ['fcard', 'gcard', 'gfcard', 'childs', 'fname']:
             if len(indices[keyword]) > 0 and indices[keyword][0] != 0:
                 logging.error(f'Wrong position of keyword! {keyword}.')
             elif len(indices[keyword]) > 0:
@@ -1570,10 +1565,13 @@ class Waffle:
             res = [res] + childs
             card_keyword = 'fcard'
             childs_keyword = True
+        elif card_keyword == 'fname':
+            res = [res]
+            card_keyword = 'fcard'
+            fname_keyword = True
         else:
             res = [res]
-            childs_keyword = False
-        return res, card_keyword, childs_keyword, is_feature
+        return res, card_keyword, childs_keyword, fname_keyword, is_feature
    
     def restore_stage_snap(self, step=None):
         """
@@ -1684,8 +1682,10 @@ class Waffle:
                 for v in constraint['Metadata']['Precedence'].values():
                     for k1, v1 in v.items():
                         if isinstance(v1, dict) and not (k1 == 2 and v['Class'] == 'prec50'):
-                            assign_type = 'Assign' if (k1 == 0 and v['Class'] == 'prec10') or (k1 == 1 and v['Class'] == 'precc11' and v1 == 'excludes') else 'Read'
+                            assign_type = 'Assign' if (k1 == 0 and v['Class'] == 'prec10') or (k1 == 1 and v['Class'] == 'prec11' and v1 == 'excludes') else 'Read'
                             for k2, v2 in v1.items():
+                                if v2 == 'Fname':
+                                    v2 = 'Fcard'
                                 if v2 == 'Childs':
                                     v2 = 'Fcard'
                                     childs = self.get_feature_childrens(k2, filter_active=False)
@@ -1695,12 +1695,32 @@ class Waffle:
                                 else:
                                     if k2 not in constraint['Metadata'][assign_type][v2]:
                                         constraint['Metadata'][assign_type][v2].append(k2)
-                        
+                        elif k1 == 1 and v['Class'] == 'prec24':
+                            pass
+                        elif k1 == 2 and v['Class'] == 'prec24':
+                            for k2, v2 in constraint['Metadata']['Precedence'][v1].items():
+                                if isinstance(v2, dict):
+                                    for k3, v3 in v2.items():
+                                        split_check = k3.split(f'{par_feature}.')
+                                        second_part = split_check[-1] if len(split_check) > 1 else None
+                                        first_part = v[1]
+                                        for k4, v4 in first_part.items():
+                                            if v4 != 'Childs':
+                                                full_name = f'{k4}.{second_part}' if second_part is not None else k4
+                                                try:
+                                                    check_name = self.read_metadata(full_name)
+                                                    constraint['Metadata'][assign_type][v3].append(full_name)
+                                                    if k3 not in constraint['Metadata']['FilterStub'].keys():
+                                                        constraint['Metadata']['FilterStub'].update({k3: {}})
+                                                    constraint['Metadata']['FilterStub'][k3].update({full_name: {'initial': k4, 'additional': second_part}})
+                                                except KeyError:
+                                                    pass
+                                                
                         elif k1 == 1 and v['Class'] == 'prec50':    
                             a = self.get_feature_childrens(list(v[2].keys())[0], True)
                             b = [x for x in a if x.rsplit('.')[-1] == v[1]]
                             for feature in b:
-                                constraint['Metadata']['Read']['Value'].append(feature)
+                                constraint['Metadata']['Read']['Value'].append(feature) 
                 for k, v in constraint['Metadata']['Assign'].items():
                     for feature in v:
                         deps.append((f'{constraint['ID']}', f'{feature}-{k}'))
@@ -1715,7 +1735,6 @@ class Waffle:
 
         for dep in list(set(deps)):
             self.metagraph.append(dep)
-
         flat_dict = {}
         elem_pattern = {
         'Before': [],
@@ -1771,7 +1790,8 @@ class Waffle:
             del self.metagraph[i]
         self.metagraph.extend(new_deps)
         self.seq, self.cycles = self.topo_sort(self.metagraph)
-        
+        pprint.pprint(self.seq)
+        print('-=============================-')
         for i_constr in indep_constraints:
             self.seq.remove(i_constr)
             index_last = 0
@@ -1779,7 +1799,6 @@ class Waffle:
                 if i_constr == dep[1] and (check:=self.seq.index(dep[0])) > index_last:
                     index_last = check
             self.seq.insert(index_last + 1, i_constr)
-
         for k, v in rm_deps_dict.items():
             a, b = self.topo_sort(v)
             c = [x for x in a if x.startswith('Constraint_')]
@@ -1796,8 +1815,10 @@ class Waffle:
                 if constr in constr_names:
                     constr_names_new.append(constr)
             for enum_index, seq_index in enumerate(constr_index):
-                self.seq[seq_index] = constr_names_new[enum_index]
-
+                if enum_index < len(constr_names_new):
+                    self.seq[seq_index] = constr_names_new[enum_index]
+        pprint.pprint(self.groups)
+        pprint.pprint(self.seq)
         logging.debug(pprint.pformat(self.metagraph))
         logging.debug(pprint.pformat(self.seq))
         logging.debug(pprint.pformat(self.groups))
@@ -1822,7 +1843,7 @@ class Waffle:
         stages (type = list): sequence of feature to perform constraint solving.
         """
         self.reset()
-        self.debug_mode = False  
+
         self.description = description
         # Read language grammar and create textX metamodel object from it.
         this_folder = dirname(__file__)
@@ -1838,11 +1859,11 @@ class Waffle:
 
         self.model = mm.model_from_str(self.description)
 
-        for parse_type in ['Feature', 'Constraint']:
+        for parsing_objects in ['Feature', 'Constraint']:
             for element in self.model.elements:
                 if self.cname(element) == 'Feature':
-                    self.parse_feature(element, parse_type=parse_type)
-            self.define_inheritance(parse_type)
+                    self.parse_feature(element, parsing_objects=parsing_objects)
+            self.define_inheritance(parsing_objects)
 
         self.disable_abstract_features()
 

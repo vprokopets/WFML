@@ -1,6 +1,7 @@
 import copy
 import logging
 import mimetypes
+import pprint
 
 from collections import OrderedDict
 from core.waffle import Waffle
@@ -14,6 +15,9 @@ from formtools.wizard.views import CookieWizardView
 # profiling library
 import cProfile
 
+debug_mode = False
+
+
 profiling = False
 factory_forms = None
 validated_steps = []
@@ -23,15 +27,41 @@ model_stages = []
 init_factory_forms = {}
 valid = False
 tlf = None
-api = Waffle()
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
+if debug_mode is True:
+    logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
+else:
+    logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
+api = Waffle(debug_mode)
+
 
 class WizardStepForm(forms.Form):
     """
     Form that is used to construct and validate each wizard step.
     Each wizard step represent top-level feature in model.
     """
+
+    def parse_form_manually(self):
+        self.manually_cleaned_data = {}
+        for k, v in self.data.items():
+            if k.startswith(self.data['return_class-current_step']):
+                
+                attr_type = api.read_metadata(k.split('-')[-1], 'Attribute')
+
+                if attr_type == 'floatArray':
+                    value = v.replace(' ','').split(',')
+                    for v in value:
+                        v = float(v)
+                elif attr_type == 'integerArray':
+                    value = v.replace(' ','').split(',')
+                    for v in value:
+                        v = int(v)
+                elif attr_type == 'integer':
+                    v = int(v)
+                elif attr_type == 'float':
+                    v = float(v)
+                
+                self.manually_cleaned_data.update({k.split('-')[-1]: v})
 
     def clean(self):
         """
@@ -52,9 +82,10 @@ class WizardStepForm(forms.Form):
             except Exception:
                 self.counter = 0
             try:
+                self.parse_form_manually()
                 self.counter += 1
-                self.cleaned_data
-                cd = copy.copy(self.cleaned_data)
+                self.manually_cleaned_data
+                cd = copy.deepcopy(self.manually_cleaned_data)
                 self.up = {}
                 logging.debug(f'Cleaned Data: {cd}')
                 logging.debug(f'Label: {self.label}')
