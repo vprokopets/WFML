@@ -1014,18 +1014,24 @@ class Waffle:
             md = self.read_metadata(feature)
             if (super_feature:=md['__self__']['Inheritance']) is not None:
                 md_copy = copy.deepcopy(self.read_metadata(super_feature))
-                constr_copy = copy.deepcopy(md_copy['__self__']['Constraints'])
-                
-                del md_copy['__self__']
                 if parsing_objects == 'Feature':
+                    del md_copy['__self__']
                     md.update(md_copy)
-                if constr_copy is not None and parsing_objects == 'Constraint':
-                    for constraint in constr_copy:
-                        if md['__self__']['Constraints'] is None:
-                            md['__self__']['Constraints'] = []
-                        if constraint not in md['__self__']['Constraints']:
+                if parsing_objects == 'Constraint':
+                    self.recursive_inheritance(md_copy, feature, md)
+
+    def recursive_inheritance(self, md, inh_feature, inh_md):
+        for k, v in md.items():
+            if k == '__self__':
+                if v['Constraints'] is not None:
+                    for constraint in v['Constraints']:
+                        if inh_md['__self__']['Constraints'] is None:
+                            inh_md['__self__']['Constraints'] = []
+                        if constraint not in inh_md['__self__']['Constraints']:
                             constr_md = self.constraints[constraint]
-                            md['__self__']['Constraints'].append(self.parse_constraint(constr_md['Object'], feature)['ID'])
+                            inh_md['__self__']['Constraints'].append(self.parse_constraint(constr_md['Object'], inh_feature)['ID'])
+            else:
+                self.recursive_inheritance(v, f'{inh_feature}.{k}', inh_md[k])
 
     def update_metadata(self, name, field, value):
         logging.debug(f'Updating field {field} for feature {name} with value {value}')
@@ -1740,6 +1746,7 @@ class Waffle:
         'Before': [],
         'After': []
         }
+        
         for dep in self.metagraph:
             if dep not in par_deps:
                 for index, elem in enumerate(dep):
@@ -1747,11 +1754,12 @@ class Waffle:
                         flat_dict.update({elem: copy.deepcopy(elem_pattern)})
                     connection = 'Before' if index == 0 else 'After'
                     flat_dict[elem][connection].append(dep[0 if connection == 'After' else 1])
-        
+        pprint.pprint(flat_dict)
         groups = []
         for k, v in flat_dict.items():
             if k.startswith('Constraint_'):
                 group = v['After']
+                group_b = v['Before']
                 group_filtered = []
                 for elem in group:
                     include = True
@@ -1762,9 +1770,11 @@ class Waffle:
                         group_filtered.append(elem)
                 groups.append(group_filtered)
         self.groups = {}
+        print('++++++++++++++++++++')
+        
         for index, group in enumerate(list(self.merge_common(groups))):
             self.groups.update({f'Inner_Waffle_Group_{index}': group})
-        
+        print(self.groups)
         new_deps = []
         rm_deps = []
         rm_deps_dict = {}
@@ -1817,8 +1827,15 @@ class Waffle:
             for enum_index, seq_index in enumerate(constr_index):
                 if enum_index < len(constr_names_new):
                     self.seq[seq_index] = constr_names_new[enum_index]
+        logging.debug('-----------------------------------')
+        logging.debug(pprint.pformat(self.inheritance))
         pprint.pprint(self.groups)
-        pprint.pprint(self.seq)
+        print('-------------CONFIGURATION SEQUENCE------------------')
+        for part in self.seq:
+            if part.startswith('Constraint'):
+                print(self.constraints[part]['Metadata']['Expression'])
+            else:
+                print(part)
         logging.debug(pprint.pformat(self.metagraph))
         logging.debug(pprint.pformat(self.seq))
         logging.debug(pprint.pformat(self.groups))
@@ -1874,7 +1891,6 @@ class Waffle:
         logging.debug('Metamodels for constraints')
         for constraint in self.constraints.values():
             logging.debug(pprint.pformat(constraint))
-        
         return self.seq
 
     def PySAT_solver(self):

@@ -3,20 +3,20 @@ abstract Region {
 }
 
 abstract SamplingStrategy {
-    Region -> string
+    RegionID -> string
     test -> integer
     xor Strategy {
         Sobol
         MersenneTwister
     }
     [test > 2]
-   [Region in Context.ExperimentRegions.Regionss]
+   [RegionID in Context.ExperimentRegions.Regionss]
 }
 
 Context {
     ExperimentRegions {
         Regionss -> array
-		//[fcard.Regions = size Regionss]
+		[fcard.Regions = size Regionss]
 		Regions: Region
     }
 }

@@ -45,21 +45,28 @@ class WizardStepForm(forms.Form):
         self.manually_cleaned_data = {}
         for k, v in self.data.items():
             if k.startswith(self.data['return_class-current_step']):
-                
-                attr_type = api.read_metadata(k.split('-')[-1], 'Attribute')
-
-                if attr_type == 'floatArray':
-                    value = v.replace(' ','').split(',')
-                    for v in value:
-                        v = float(v)
-                elif attr_type == 'integerArray':
-                    value = v.replace(' ','').split(',')
-                    for v in value:
+                name = k.split('-')[-1]
+                if name.startswith('Fcard.') or name.startswith('Gcard.'):
+                    try:
                         v = int(v)
-                elif attr_type == 'integer':
-                    v = int(v)
-                elif attr_type == 'float':
-                    v = float(v)
+                    except ValueError:
+                        pass
+                else:
+                    attr_type = api.read_metadata(k.split('-')[-1], 'Attribute')
+                    if attr_type == 'floatArray':
+                        value = v.replace(' ','').split(',')
+                        for v in value:
+                            v = float(v)
+                    elif attr_type == 'integerArray':
+                        value = v.replace(' ','').split(',')
+                        for v in value:
+                            v = int(v)
+                    elif attr_type == 'array':
+                        v = v.replace(' ','').split(',')
+                    elif attr_type == 'integer':
+                        v = int(v)
+                    elif attr_type == 'float':
+                        v = float(v)
                 
                 self.manually_cleaned_data.update({k.split('-')[-1]: v})
 
@@ -102,7 +109,6 @@ class WizardStepForm(forms.Form):
                     else:
                         name = key
                         field = 'Value'
-
                     if self.up == {}:
                         err = api.update_metadata(name, field, value)
                         if err is not None:
