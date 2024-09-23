@@ -58,21 +58,18 @@ class WizardStepForm(forms.Form):
                         pass
             else:
                 attr_type = api.read_metadata(k, 'Attribute')
-                if attr_type == 'floatArray':
-                    value = v.replace(' ','').split(',')
-                    for v in value:
-                        v = float(v)
-                elif attr_type == 'integerArray':
-                    value = v.replace(' ','').split(',')
-                    for v in value:
-                        v = int(v)
+                if any([x in attr_type for x in ['array', 'Array']]):
+                    v = v.replace(' ','').split(',')
+                    if attr_type == 'floatArray':
+                        v = [float(x) for x in v]
+                    elif attr_type == 'integerArray':
+                        v = [int(x) for x in v]
                 elif attr_type == 'array':
                     v = v.replace(' ','').split(',')
                 elif attr_type == 'integer':
                     v = int(v)
                 elif attr_type == 'float':
                     v = float(v)
-            
             self.manually_cleaned_data.update({k: v})
 
     def clean(self):
