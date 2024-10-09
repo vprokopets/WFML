@@ -1,20 +1,99 @@
-abstract A {
-	a -> integer
-	[a > 1]
-}
-abstract B : A {
-	b -> integer
-	[b > 2]
-}
-abstract C : A {
-	c -> integer
-	[c > 3]
+// ----------------------Abstract features-----------------------
+
+abstract Hyperparameter {
+  Type -> predefined
+  Level -> integer
+  [if gcard.Context.SearchSpace.Structure == Flat then Level == 0]
 }
 
-abstract D {
-    d -> integer
-    [d > 4]
+abstract Category {
+  Type -> predefined
+  [Type = "Category"]
 }
-F: D {
-    xor E ->> A
+
+abstract CategoricalHyperparameter : Hyperparameter {
+  Categories -> predefined
+  Default -> string
+  [Default in Categories]
+  [Categories = (filter self.childs where Type == "Category")]
+}
+
+abstract NominalHyperparameter: CategoricalHyperparameter {
+  [Type = "NominalHyperparameter"]
+}
+abstract OrdinalHyperparameter: CategoricalHyperparameter {
+  [Type = "OrdinalHyperparameter"]
+}
+
+abstract NumericHyperparameter: Hyperparameter
+
+abstract FloatHyperparameter: NumericHyperparameter {
+  Lower -> float
+  Upper -> float
+  Default -> float
+  [Default >= Lower]
+  [Default <= Upper]
+  [Type = "FloatHyperparameter"]
+  [fcard.StopCondition.Instance.AdaptiveSC = 0]
+}
+abstract IntegerHyperparameter: NumericHyperparameter {
+  Lower -> integer
+  Upper -> integer
+  Default -> integer
+  [Default >= Lower]
+  [Default <= Upper]
+  [Type = "IntegerHyperparameter"]
+}
+
+abstract Objective {
+    Name -> predefined
+    DataType -> predefined
+    Minimization -> predefined
+    MinExpectedValue -> predefined
+    MaxExpectedValue -> predefined
+}
+abstract SC {
+  Type -> predefined
+  Name -> string
+}
+// ------------------------Context Model------------------------
+Context {
+  TaskConfiguration {
+    TaskName -> predefined
+    [TaskName = "test"]
+    MaxTimeToRunTask -> integer
+    TimeUnit -> string
+    [TimeUnit in {"seconds", "minutes", "hours", "days"}]
+    Scenario
+    Objectives {
+      // objectives
+      Y1 : Objective {
+        [Name = "Y1"]
+        [DataType = "float"]
+        [Minimization = true]
+        [MinExpectedValue = 0]
+        [MaxExpectedValue = 100]
+      }
+      /*
+      Y2 : Objective {
+        [Name = "Y2"]
+        [DataType = "float"]
+        [Minimization = true]
+        [MinExpectedValue = 0]
+        [MaxExpectedValue = 100]
+      }
+      */
+    }
+  }
+
+  SearchSpace {
+    // parameters
+    X1 : FloatHyperparameter
+    X2 : IntegerHyperparameter
+    xor Structure {
+      Flat
+      Hierarchical
+    }
+    [fcard.ConfigurationSelection.Predictor.Model = size unique Level at self]
+  }
 }

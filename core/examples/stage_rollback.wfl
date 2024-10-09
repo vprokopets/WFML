@@ -1,0 +1,9 @@
+X {
+	A ? {
+        [self requires X.E.G]
+		[self excludes X.E.G]
+	}
+	E ? {
+		G
+	}
+}

@@ -1,133 +1,22 @@
-SamplingStrategy {
-    Region -> string
-    Strategy {
+abstract Region {
+	sa: SamplingStrategy
+}
+
+abstract SamplingStrategy {
+    RegionID -> string
+    test -> integer
+    xor Strategy {
         Sobol
         MersenneTwister
     }
-   [Region in Context.ExperimentRegions.Regions]
-   [size Context.ExperimentRegions.Regions == size unique 'Region' at self]
-}
-
-// -------------------------Parameters---------------------------
-abstract Hyperparameter {
-    Type -> predefined
-    Region -> predefined
-    [Region = TopLevel]
-    [if parent.Type == "Category" then Region = fname.parent else Region = parent.Region]
-}
-
-abstract Category {
-    Type -> predefined
-    Region -> predefined
-    [Type = "Category"]
-    [Region = parent.Region]
-}
-
-abstract ParentCategoricalHyperparameter : Hyperparameter {
-	Categories -> predefined
-    Default -> string    
-    [Default in Categories]
-	[Type = "ParentCategoricalHyperparameter"]
-    [Categories = (filter childs.self where Type == "Category")]    
-}
-
-abstract CategoricalHyperparameter : Hyperparameter {
-    Categories -> predefined
-    Default -> string 
-    [Default in Categories] 
-}
-
-abstract NominalHyperparameter: CategoricalHyperparameter {
-    [Type = "NominalHyperparameter"]
-}
-
-abstract OrdinalHyperparameter: CategoricalHyperparameter {
-    [Type = "OrdinalHyperparameter"]
-}
-
-abstract NumericHyperparameter: Hyperparameter
-
-abstract FloatHyperparameter: NumericHyperparameter {
-    Lower -> float
-    Upper -> float
-    Default -> float
-    [Default >= Lower]
-    [Default <= Upper]
-    [Type = "FloatHyperparameter"]
-}
-
-abstract IntegerHyperparameter: NumericHyperparameter {
-    Lower -> integer
-    Upper -> integer
-    Default -> integer
-    [Default >= Lower]
-    [Default <= Upper]
-    [Type = "IntegerHyperparameter"]
-}
-abstract Objective{
-    Name -> predefined
-    DataType -> predefined
-    Minimization -> predefined
-    MinExpectedValue -> predefined
-    MaxExpectedValue -> predefined
+    [test > 2]
+   [RegionID in Context.ExperimentRegions.Regionss]
 }
 
 Context {
-    Experiment {
-        Title -> predefined
-        [Title = 'EnergyConsumption']
-        TaskConfiguration {
-            TaskName -> predefined
-            [TaskName = 'energy_consumption']
-            MaxTimeToRunTask -> predefined
-            [MaxTimeToRunTask = 10]
-
-            Scenario {
-                FromFile {
-                    WsFile -> predefined
-                    [WsFile = 'search_space_96/Radix-500mio_full.csv']
-                }
-            }
-            Objectives {
-                Energy : Objective {
-                    [Name = "energy"]
-                    [DataType = float]
-                    [Minimization = true]
-                    [MinExpectedValue = 0]
-                    [MaxExpectedValue = 150000.0]
-                }
-                Time : Objective {
-                    [Name = "time"]
-                    [DataType = float]
-                    [Minimization = true]
-                    [MinExpectedValue = 0]
-                    [MaxExpectedValue = 150000.0]
-                }
-            }
-        }
-
-        SearchSpace {
-            Type -> predefined
-            Region -> predefined
-            [Type = "SearchSpace"]
-            [Region = "TopLevel"]
-
-            LLH: ParentCategoricalHyperparameter {
-				jMetalPy_SA: Category {
-					parameter: IntegerHyperparameter
-				}
-				jMetal_ES: Category {
-					parameter: IntegerHyperparameter
-				}
-				jMetalPy_ES: Category {
-					parameter: IntegerHyperparameter
-				}
-			}
-        }
-    }
     ExperimentRegions {
-        Regions -> predefined
-        [Regions = unique Region at Context.Experiment.SearchSpace]
-        [fcard.SamplingStrategy = size Regions]
+        Regionss -> array
+		[fcard.Regions = size Regionss]
+		Regions: Region
     }
 }
