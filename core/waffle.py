@@ -498,7 +498,7 @@ class prec13(ExpressionElement):
                 elif operation == 'some':
                     if number > 1:
                         ret = True
-
+                # TODO Add ALL quantifier
                 # Raise exception if result is False and exception flag was taken by this operation.
                 if ret is False and self.exception_flag is True:
                     raise Exception(f'Expression operation {operation} {mapping_current} was not satisfied.')
@@ -1353,13 +1353,22 @@ class Waffle:
                                     if feature in self.constr_md['FeaturesPrec'].keys():
                                         self.constr_err_md.update({feature: self.read_metadata(mapping)})
                                 logging.exception("Something awful happened!")
-                                return e
+                                try:
+                                    msg, elems = e.args
+                                    ret = e
+                                    exception_type = 'Waffle validation error'
+                                except ValueError:
+                                    msg = constraint['Object'].name.get_error_message(f'{e}')
+                                    values = constraint['Object'].name.mapping_md['Current'].values()
+                                    ret = Exception(msg, list(values))
+                                    exception_type = 'Python exception'
+                                return ret, exception_type
                         else:
                             constraint['Object'].name.parse_constraint(self.constr_md)
                         break
             else:
                 break
-        return True
+        return True, None
 
     def cname(self, obj):
         """

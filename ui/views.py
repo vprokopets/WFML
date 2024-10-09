@@ -131,20 +131,20 @@ class WizardStepForm(forms.Form):
             valid = True
 
     def validation_pipeline(self): 
-        res = api.validate_constraints(tlf)
+        res, exception_type = api.validate_constraints(tlf)
         self.error_md = api.constr_err_md
         self.constr_md = api.constr_md
         if res is not True:
             fields = self.fields.keys()
             msg, elems = res.args
             if not any([elem in fields or f'Fcard.{elem}' in fields or f'Gcard.{elem}' in fields for elem in elems]):
-                self.add_error(None, f'There is an error: {msg}')
+                self.add_error(None, f'{exception_type}: {msg}')
             else:
                 for elem in elems:
                     attr_type = api.read_metadata(elem, 'Attribute')
                     for field in self.fields.keys():
                         if attr_type != 'predefined' and (elem == field or f'Fcard.{elem}' == field or f'Gcard.{elem}' == field):
-                            self.add_error(field, f'This field returned error: {msg}')
+                            self.add_error(field, f'{exception_type}: {msg}')
             api.restore_stage_snap()
         else:
             if self.prefix not in successfully_validated_steps:
