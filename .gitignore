@@ -133,3 +133,6 @@ dmypy.json
 
 # Output folder
 /core/output/**
+
+# Idea
+.idea

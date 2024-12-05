@@ -1,0 +1,4 @@
+A {
+  Weights -> floatArray
+  [size Weights == 2]
+}
