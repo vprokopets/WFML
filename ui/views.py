@@ -340,7 +340,7 @@ class WizardClass(CookieWizardView):
         }
         for feature_type, features in form_data.items():
             for feature_name in features:
-                if f'{feature_name}-{feature_type}' in features_involved:
+                if f'{api.get_original(feature_name)}-{feature_type}' in features_involved:
                     data_filtered[feature_type].append(feature_name)
         logging.debug(f'Filtered features: {data_filtered}')
 
