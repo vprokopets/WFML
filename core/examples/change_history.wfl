@@ -1,0 +1,12 @@
+feature {
+	subfeature ? {
+		subsubfeature {
+			a -> integer
+			b -> integer
+		}
+	}
+	subfeature2 {
+		c -> integer
+		d -> integer
+	}
+}

@@ -1,7 +1,9 @@
 import copy
 import logging
 import mimetypes
-import pprint
+import json
+import io
+import pstats
 
 from collections import OrderedDict
 from core.waffle import Waffle
@@ -16,6 +18,7 @@ from formtools.wizard.views import CookieWizardView
 import cProfile
 
 debug_mode = False
+debug_logger = True
 
 
 profiling = False
@@ -28,22 +31,42 @@ init_factory_forms = {}
 valid = False
 tlf = None
 
-if debug_mode is True:
-    logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
+if debug_logger is True:
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(pathname)s:%(lineno)d - %(funcName)s(): %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
 else:
-    logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
 api = Waffle(debug_mode)
 
 
 class WizardStepForm(forms.Form):
     """
     Form that is used to construct and validate each wizard step.
-    Each wizard step represent top-level feature in model.
     """
+
+    def clean(self):
+        """
+        Hook for doing any extra form-wide cleaning after Field.clean() has been
+        called on every field. Any ValidationError raised by this method will
+        not be associated with a particular field; it will have a special-case
+        association with the field named '__all__'.
+        """
+        logging.debug('CLEAN FUNCTION CALL')
+        return self.cleaned_data
+
+    def is_valid(self):
+        self.validate()
+        """Return True if the form has no errors, or False otherwise."""
+        return self.is_bound and not self.errors
 
     def parse_form_manually(self):
         self.manually_cleaned_data = {}
-        for k, v in self.cleaned_data.items():
+        input_data = {}
+        for k, v in self.data.items():
+            if (k.startswith((prefix := f'{self.prefix}-'))):
+                logging.debug(f'Parsing input form {k} with value {v}')
+                input_data.update({k.split(prefix)[-1]: v})
+        logging.debug(f'Input for manual processing {input_data}')
+        for k, v in input_data.items():
             if k.startswith('Fcard.') or k.startswith('Gcard.'):
                 if isinstance(v, list):
                     for index, value in enumerate(v):
@@ -58,21 +81,28 @@ class WizardStepForm(forms.Form):
                         pass
             else:
                 attr_type = api.read_metadata(k, 'Attribute')
+                logging.debug(f'Attribute type for field {k}: {attr_type}')
                 if any([x in attr_type for x in ['array', 'Array']]):
-                    v = v.replace(' ','').split(',')
+                    v = v.replace(' ', '').split(',')
                     if attr_type == 'floatArray':
                         v = [float(x) for x in v]
                     elif attr_type == 'integerArray':
                         v = [int(x) for x in v]
                 elif attr_type == 'array':
-                    v = v.replace(' ','').split(',')
+                    v = v.replace(' ', '').split(',')
                 elif attr_type == 'integer':
                     v = int(v)
                 elif attr_type == 'float':
                     v = float(v)
+                elif attr_type == 'boolean':
+                    if v == 'True':
+                        v = True
+                    elif v == 'False':
+                        v = False
+
             self.manually_cleaned_data.update({k: v})
 
-    def clean(self):
+    def validate(self):
         """
         Function to validate wizard step form.
 
@@ -80,57 +110,51 @@ class WizardStepForm(forms.Form):
         cd (type = dict): cleaned data, that was printed to form fields.
         """
         global valid, validated_steps, successfully_validated_steps
-        logging.info(f'Validating form {self.__dict__}')
-        logging.debug(f'VALID STATE: {valid} | {validated_steps} | {self.prefix} - {successfully_validated_steps}')
-        if valid is True or (len(validated_steps) > 1 and self.prefix not in successfully_validated_steps):
-            if profiling is True:
-                ob = cProfile.Profile()
-                ob.enable()
-            try:
-                self.counter
-            except Exception:
-                self.counter = 0
-            try:
-                self.parse_form_manually()
-                self.counter += 1
-                self.manually_cleaned_data
-                cd = copy.deepcopy(self.manually_cleaned_data)
-                self.up = {}
-                logging.debug(f'Cleaned Data: {cd}')
-                logging.debug(f'Label: {self.label}')
-                logging.debug(f'Counter {id(self)}: {self.counter}')
-                # Write data from form fields to global namespace.
-                for key, value in cd.items():
-                    split = key.split('.', 1)
-                    if split[0] in ['Fcard', 'Gcard']:
-                        name = split[1]
-                        field = split[0]
-                        res, err = api.check_card_value(name, value, field)
-                        if res is False:
-                            self.up.update({key: err})
-                    else:
-                        name = key
-                        field = 'Value'
-                    if self.up == {}:
-                        err = api.update_metadata(name, field, value)
-                        if err is not None:
-                            self.up.update({key: err})
-                if self.up == {}:
-                    self.validation_pipeline()
-                else:
-                    for k, v in self.up.items():
-                        self.add_error(k, f'This field returned error: {v}')
-                    api.restore_stage_snap()
-                valid = True
-                
-                return cd
-            
-            except AttributeError:
-                self.validation_pipeline()
-        else:
-            valid = True
+        logging.info(f'Validating form with validation state "{valid}": {self.__dict__}. ')
+        if profiling is True:
+            ob = cProfile.Profile()
+            ob.enable()
 
-    def validation_pipeline(self): 
+        self.parse_form_manually()
+        api.current_stage = tlf
+        cd = copy.deepcopy(self.manually_cleaned_data)
+        self.up = {}
+        logging.debug(f'Label: {self.label}')
+        logging.debug(f'Cleaned Data: {cd}')
+        # Write data from form fields to global namespace.
+        for key, value in cd.items():
+            split = key.split('.', 1)
+            if split[0] in ['Fcard', 'Gcard']:
+                name = split[1]
+                field = split[0]
+                res, err = api.check_card_value(name, value, field)
+                if res is False:
+                    self.up.update({key: err})
+            else:
+                name = key
+                field = 'Value'
+            if self.up == {}:
+                err = api.update_metadata(name, field, value)
+                if err is not None:
+                    self.up.update({key: err})
+        if self.up == {}:
+            self.validation_pipeline()
+        else:
+            for k, v in self.up.items():
+                self.add_error(k, f'This field returned error: {v}')
+            api.restore_stage_snap()
+        valid = True
+        if profiling is True:
+            ob.disable()
+            sec = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(ob, stream=sec).sort_stats(sortby)
+            ps.print_stats()
+
+            logging.debug(sec.getvalue())
+        return cd
+
+    def validation_pipeline(self):
         res, exception_type = api.validate_constraints(tlf)
         self.error_md = api.constr_err_md
         self.constr_md = api.constr_md
@@ -149,7 +173,6 @@ class WizardStepForm(forms.Form):
         else:
             if self.prefix not in successfully_validated_steps:
                 successfully_validated_steps.append(self.prefix)
-
 
         # # Assign unvalidated parameters error to appropriate fields.
         # for param in self.up:
@@ -172,15 +195,6 @@ class WizardStepForm(forms.Form):
         #             api.namespace[element]['Validated'] = True
         #     else:
         #         api.namespace[self.label]['Validated'] = True
-        # if profiling is True:
-        #     ob.disable()
-        #     sec = io.StringIO()
-        #     sortby = SortKey.CUMULATIVE
-        #     ps = pstats.Stats(ob, stream=sec).sort_stats(sortby)
-        #     ps.print_stats()
-
-        #     logging.debug(sec.getvalue())
-        
 
 
 class ModelInputForm(forms.Form):
@@ -205,6 +219,12 @@ class WizardClass(CookieWizardView):
 
         return render(self.request, 'done.html', {
             'form_data': res,
+            'history': json.dumps(api.configuration_history, indent=4),
+            'history_selected': {},
+            'collapsable': list(api.configuration_history.keys()),
+            'metadata': json.dumps(api.metamodel, indent=4),
+            'metadata_selected': {},
+            'selected_feature': None
         })
 
     def get_form(self, step=None, data=None, files=None):
@@ -222,11 +242,11 @@ class WizardClass(CookieWizardView):
         if step is None:
             step = self.steps.current
         step_current = step
-        logging.info(f'Wizard step {step}.')
+
         self.form = super(WizardClass, self).get_form(step, data, files)
 
         self.current_step = model_stages[int(step)]
-        logging.debug(f'Current Step {self.current_step} | #{int(step)} | {prev_steps} | {successfully_validated_steps}')
+        logging.info(f'Wizard step {step} | {self.current_step}.')
         tlf = self.current_step
 
         self.form.stages_number = len(init_factory_forms)
@@ -243,22 +263,9 @@ class WizardClass(CookieWizardView):
         self.form.label = self.current_step
         self.form.head = ''
         self.form.step_id = id(self)
-        logging.info(f'Current step: {step} {self.current_step}')
-        
-        #TODO cycle handling
-        # cycles = api.cycles
-        cycles = {}
-        # If step contains cycle, then get all cycle items and perform field initialization for all of them.
-        if self.current_step in cycles.keys():
-            for element in cycles[self.current_step]:
-                self.construct_step_form(element, files)
-        elif 'Inner_Waffle_Group' in self.current_step:
-            for element in api.groups[self.current_step]:
-                self.construct_step_form(element, files)
-        else:
-            self.construct_step_form(self.current_step, files)
-        logging.info(f"FINISH constructiong form {self.current_step}")
-    
+
+        self.construct_step_form(self.current_step, files)
+
         if (step_current in successfully_validated_steps or step_current in prev_steps) and len(prev_steps) > 1:
             del prev_steps[-1]
         self.form.prev_step = prev_steps[-1]
@@ -272,66 +279,87 @@ class WizardClass(CookieWizardView):
         INPUTS
         tlf (type = string): name of top-level feature.
         """
-        tlf = api.get_original(step_id.split('-')[0].split('.')[0])
-        snap_name = step_current
-        
-        if snap_name not in api.stage_snap.keys():
-            data = api.get_undefined_features(tlf)
-            api.save_stage_snap(snap_name, data)
-            logging.debug(f'GOING FORWARD STEP {snap_name}')
+        logging.info(f'Preparing form for {step_id}...')
+        form_data = None
+        tlf_involved = []
+        features_involved = []
+        # TODO cycle handling
+        # cycles = api.cycles
+        cycles = {}
+        # If step contains cycle, then get all cycle items and perform field initialization for all of them.
+        if self.current_step in cycles.keys():
+            for element in (cycle_elems := cycles[self.current_step]):
+                tlf_involved.append(api.get_original(element.split('-')[0].split('.')[0]))
+                features_involved.append(element)
+            logging.debug(f'Making cycle form group {self.current_step} || {cycle_elems}')
+        elif 'Inner_Waffle_Group' in self.current_step:
+            for element in (group_elems := api.groups[self.current_step]):
+                tlf_involved.append(api.get_original(element.split('-')[0].split('.')[0]))
+                features_involved.append(element)
+            logging.debug(f'Making form group {self.current_step} || {group_elems}')
         else:
-            data = api.stage_snap[snap_name]['Fields']
+            tlf_involved.append(api.get_original(step_id.split('-')[0].split('.')[0]))
+            features_involved.append(step_id)
+            logging.debug(f'Making single form {self.current_step}')
+
+        if step_current not in api.stage_snap.keys():
+            form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
+            for tlf in tlf_involved:
+                unconfigured_features = api.get_undefined_features(tlf)
+                for ftype, features in unconfigured_features.items():
+                    for feature in features:
+                        if feature not in form_data[ftype]:
+                            form_data[ftype].append(feature)
+            api.save_stage_snap(step_current, form_data)
+            logging.debug(f'Initializing form for {step_current}')
+        else:
+            form_data = api.stage_snap[step_current]['Fields']
             if files is None:
-                logging.debug(f'RETURN TO PREV STEP {snap_name}')
-                api.restore_stage_snap(snap_name)
+                logging.debug(f'Updating form for {step_current}')
+                api.restore_stage_snap(step_current)
+                logging.debug('Namespace was restored')
                 self.form.full_clean()
-                data = api.get_undefined_features(tlf)
-                api.save_stage_snap(snap_name, data)
-        if data is None:
+                logging.debug(f'Cleaning form {step_current}')
+                form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
+                for tlf in tlf_involved:
+                    unconfigured_features = api.get_undefined_features(tlf)
+                    for ftype, features in unconfigured_features.items():
+                        for feature in features:
+                            if feature not in form_data[ftype]:
+                                form_data[ftype].append(feature)
+                api.save_stage_snap(step_current, form_data)
+        if form_data is None:
             return
-        
-        logging.debug(f'DATA {data} | tlf1 {step_id} | tlf {tlf} | step {step_current} | {type(self.form)} | {snap_name} - {api.stage_snap.keys()} | {files}')
+
+        logging.debug(f'DATA {form_data} | tlf {tlf_involved} | step {step_current}')
+        logging.debug(f'Features involved: {features_involved}')
         data_filtered = {
             'Fcard': [],
             'Gcard': [],
             'Value': []
         }
-        feature_type = step_id.split('-')[1]
-        feature_name = step_id.split('-')[0]
-        for elem in data[feature_type]:
-            if api.get_original(elem) == feature_name:
-                data_filtered[feature_type].append(elem)
-        if len(data_filtered['Fcard']) > 0 or len(data_filtered['Gcard']) > 0:
-            self.construct_feature_cardinality_form(data_filtered['Fcard'])
-            self.construct_group_cardinality_form(data_filtered['Gcard'])
+        for feature_type, features in form_data.items():
+            for feature_name in features:
+                if f'{feature_name}-{feature_type}' in features_involved:
+                    data_filtered[feature_type].append(feature_name)
+        logging.debug(f'Filtered features: {data_filtered}')
+
+        self.construct_feature_cardinality_forms(data_filtered['Fcard'])
+        self.construct_group_cardinality_forms(data_filtered['Gcard'])
+        self.construct_attribute_value_forms(data_filtered['Value'])
+
+        if 'Inner_Waffle_Group' in self.current_step:
+            self.form.head = 'Combined step for constraint feature group'
+        elif len(data_filtered['Value']) > 0:
+            self.form.head = 'Values configuration for subtree of feature'
+        elif len(data_filtered['Fcard']) > 0 or len(data_filtered['Gcard']) > 0:
             self.form.head = 'Cardinalities configuration for subtree of feature'
         else:
-            self.form.head = 'Values configuration for subtree of feature'
-            for feature in data_filtered['Value']:
-                # Generated list is used to prevent field multiplication during form revalidation.
-                # During form initialization if fcard of field > 1, then copies of this field are generated.
-                # During revalidation (in the end), this code is reexecuted one more time, so we need to prevent
-                # multiplication of generated fields.
-                feature_type = api.read_metadata(feature, 'Attribute')
-                # Check if this field is allowed by chosen group cardinality.
-                if feature_type == 'integer':
-                    self.form.fields[feature] = forms.IntegerField(label=f'{feature}  (Type: {feature_type})')
-                elif feature_type == 'float':
-                    self.form.fields[feature] = forms.FloatField(label=f'{feature} (Type: {feature_type})')
-                elif feature_type == 'string' or \
-                        feature_type == 'array' or \
-                        feature_type == 'integerArray' or \
-                        feature_type == 'floatArray':
-                    self.form.fields[feature] = forms.CharField(label=f'{feature} (Type: {feature_type})')
-                elif feature_type == 'boolean':
-                    choises_list = []
-                    for v in [True, False]:
-                        choises_list.append((v, v))
-                    self.form.fields[feature] = forms.ChoiceField(label=f'{feature} (Type: {feature_type})', choices=choises_list, widget=forms.RadioSelect)
-                # Sort fields by names. This will group generated fields.
-                self.form.fields = OrderedDict(sorted(self.form.fields.items()))
+            self.form.head = 'Empty step'
 
-    def construct_feature_cardinality_form(self, feature_cardinalities):
+        logging.info(f"Finish preparing form {self.current_step}")
+
+    def construct_feature_cardinality_forms(self, feature_cardinalities):
         """
         Function to define a feature cardinality fields a wizard form.
 
@@ -353,7 +381,7 @@ class WizardClass(CookieWizardView):
                 label=f'Feature Cardinality for feature {fcard}. Allowed values: {allowed}'
             )
 
-    def construct_group_cardinality_form(self, group_cardinalities):
+    def construct_group_cardinality_forms(self, group_cardinalities):
         """
         Function to define a group cardinality fields a wizard form.
 
@@ -379,7 +407,40 @@ class WizardClass(CookieWizardView):
                 self.form.fields[f'Gcard.{gcard}'] = forms.MultipleChoiceField(label=f'Gcard.{gcard}', choices=choises_list,
                                                                                widget=forms.CheckboxSelectMultiple)
             # Fix for lowercase label
-            self.form.fields[f'Gcard.{gcard}'].label = f'Group cardinality for feature {gcard} (Type: {value if value in ['xor', 'or'] else f'or with interval(s) {value}'})'
+            self.form.fields[f'Gcard.{gcard}'].label = (f'Group cardinality for feature {gcard} '
+                                                        f'(Type: {value if value in ['xor', 'or'] else f'or with interval(s) {value}'})')
+
+    def construct_attribute_value_forms(self, attribute_values):
+        for feature in attribute_values:
+            feature_type = api.read_metadata(feature, 'Attribute')
+            # Check if this field is allowed by chosen group cardinality.
+            if feature_type == 'integer':
+                self.form.fields[feature] = forms.IntegerField(label=f'{feature}  (Type: {feature_type})')
+            elif feature_type == 'float':
+                self.form.fields[feature] = forms.FloatField(label=f'{feature} (Type: {feature_type})')
+            elif feature_type == 'string' or \
+                    feature_type == 'array' or \
+                    feature_type == 'integerArray' or \
+                    feature_type == 'floatArray':
+                self.form.fields[feature] = forms.CharField(label=f'{feature} (Type: {feature_type})')
+            elif feature_type == 'boolean':
+                choises_list = []
+                for v in [True, False]:
+                    choises_list.append((v, v))
+                self.form.fields[feature] = forms.ChoiceField(label=f'{feature} (Type: {feature_type})',
+                                                              choices=choises_list,
+                                                              widget=forms.RadioSelect)
+            # Sort fields by names. This will group generated fields.
+            self.form.fields = OrderedDict(sorted(self.form.fields.items()))
+
+    def process_step(self, form):
+        """
+        This method is used to postprocess the form data. By default, it
+        returns the raw `form.data` dictionary.
+        """
+        # form.validate()
+        logging.debug('PROCESS STEP FUNCTION CALL')
+        return self.get_form_step_data(form)
 
     def render_next_step(self, form, **kwargs):
         """
@@ -407,14 +468,12 @@ class WizardClass(CookieWizardView):
             if new_form.fields != {} or skip is False or next_step == self.steps.last or 'Inner_Waffle_Group_' in model_stages[int(next_step)]:
                 res = True
             else:
-                new_form.clean()
                 if next_step not in validated_steps:
                     validated_steps.append(next_step)
             # change the stored current step
             self.storage.current_step = next_step
         if next_step in validated_steps:
             valid = False
-        
         if next_step not in validated_steps:
             validated_steps.append(next_step)
         logging.info(f'STEP {next_step} | {validated_steps} | {id(self)}')
@@ -471,7 +530,7 @@ def initial_page(request, *args, **kwargs):
                 validated_steps, model_stages, factory_forms = [], [], []
                 successfully_validated_steps = []
                 init_factory_forms = {}
-                
+
                 logging.info(f'Model: {model}')
                 model_stages_unfiltered = api.initialize_product(model)
                 for stage in model_stages_unfiltered:
@@ -528,3 +587,22 @@ def download_file(request):
     response['Content-Disposition'] = "attachment; filename=%s" % filename
     # Return the response value
     return response
+
+def configure_metadata_output(request):
+    if request.method == 'POST':
+        selected_feature = request.POST.get('feature-list')
+        print(f'POST: {selected_feature}')
+        history_selected = json.dumps(api.configuration_history[selected_feature], indent=4)
+        metadata_selected = json.dumps(api.read_metadata(selected_feature.split('-')[0]), indent=4)
+    else:
+        history_selected, metadata_selected = {}, {}
+        selected_feature = None
+    return render(request, 'done.html', {
+        'form_data': api.save_json(),
+        'history': json.dumps(api.configuration_history, indent=4),
+        'history_selected': history_selected,
+        'collapsable': list(api.configuration_history.keys()).sort(),
+        'metadata': json.dumps(api.metamodel, indent=4),
+        'metadata_selected': metadata_selected,
+        'selected_feature': selected_feature.split('-')[0]
+    })

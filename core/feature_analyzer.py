@@ -64,8 +64,9 @@ class FeatureAnalyzer:
                     for assign_feature in constraints[assign_constraint]['Assign'][assign_type]:
                         for read_type in ['Fcard', 'Gcard', 'Value']:
                             for read_feature in value['Read'][read_type]:
-                                if (assign_feature == read_feature or f'{assign_feature}.' in read_feature) and [assign_constraint, constraint] not in dependencies \
-                                        and assign_constraint != constraint:
+                                if ((assign_feature == read_feature or f'{assign_feature}.' in read_feature)
+                                        and [assign_constraint, constraint] not in dependencies
+                                        and assign_constraint != constraint):
                                     dependencies.append([assign_constraint, constraint])
         cycles, dependent_constraints = self.api.define_sequence_for_deps(dependencies)
         dependent_constraints.reverse()

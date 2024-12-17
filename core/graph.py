@@ -5,7 +5,7 @@ class Graph:
         self.graph = defaultdict(list)
         self.cycle_handling = 'None'  # None/Simple/Complex
         self.cycles = {}
- 
+
     def add_edge(self, edge):
         self.graph[edge[1]]
         if edge[1] not in self.graph[edge[0]]:
@@ -16,7 +16,7 @@ class Graph:
         # Mark the current node as visited and add it to the recursion stack
         visited[node] = True
         rec_stack[node] = True
-        
+
         # Recur for all the neighboring vertices
         for neighbor in self.graph[node]:
             # If neighbor is not visited, then recur for it
@@ -67,8 +67,8 @@ class Graph:
                 break
             for index, cycle in enumerate(cycles):
                 deps = []
-                
-                for element in (cycle_elems:=list(cycle.keys())):
+
+                for element in (cycle_elems := list(cycle.keys())):
                     deps = list(set(deps + self.graph[element]))
                     del self.graph[element]
                 cycle_name = f'cycle_{index}'
@@ -93,5 +93,5 @@ class Graph:
         for element in list(self.graph.keys()):
             if visited[element] is False:
                 self.sort_vert(element, visited, stack)
-        
+
         return stack, cycles
