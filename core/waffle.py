@@ -189,9 +189,15 @@ class ExpressionElement(object):
             return feature_metadata
 
     def get_value(self, feature_metadata, ftype=None):
+        logging.debug(f'Getting feature data for {feature_metadata}')
         if isinstance(feature_metadata, dict):
-            if self.mapping_md['FilterFlag'] is not None and feature_metadata['IsFeature'] is True:
-                feature_metadata = self.filter_stub(feature_metadata)
+            if self.mapping_md['FilterFlag'] is not None and 'Fname' in feature_metadata.keys():
+                feature_metadata_new = self.filter_stub(feature_metadata)
+                if feature_metadata != feature_metadata_new:
+                    feature_metadata = feature_metadata_new
+                    logging.debug('SWAP HERE')
+                else:
+                    return feature_metadata['Fname']
             ftype = "Value" if feature_metadata['IsFeature'] is False else ftype
             return feature_metadata[feature_metadata['Ftype'] if ftype is None else ftype]
         else:
@@ -204,8 +210,10 @@ class ExpressionElement(object):
                 'IsFeature': True,
                 'Ftype': feature_metadata['Ftype'],
             })
-            logging.debug((f'Feature metadata was successfully swapped from {feature_metadata['Fname']}'
+            logging.debug((f'Feature metadata was successfully swapped from {feature_metadata['Fname']} '
                           f'to {feature_metadata_new}'))
+        else:
+            feature_metadata_new = feature_metadata
         return feature_metadata_new
 
 class prec24(ExpressionElement):
@@ -233,6 +241,7 @@ class prec24(ExpressionElement):
         RETURN
         res (type = list): list of filtered features.
         """
+        logging.debug('Auxiliary filtering function (prec24)')
         res = []
         for k, v in self.constr_md['FilterStub'].items():
             for mapping, md in v.items():
@@ -556,6 +565,7 @@ class prec12(ExpressionElement):
         logging.debug("Level 12 boolean comparison operation entry point")
         for left_operand, op, right_operand in zip(self.res[0::2], self.res[1::2], self.res[2::2]):
             left, operation, right = self.get_value(left_operand), op, self.get_value(right_operand)
+            logging.debug(f'Evaluating {left} {operation} {right}')
             if operation == '<':
                 ret = left < right
             elif operation == '>':
@@ -747,8 +757,8 @@ class prec50(ExpressionElement):
         values = []
         for feature in b:
             values.append(self.api.read_metadata(feature, 'Value'))
-        logging.debug(f"Level 5 unique {left} in {right} result: {ret}")
         ret = list(set(values))
+        logging.debug(f"Level 5 unique {left} in {right} result: {ret}")
         return ret
 
 
@@ -905,9 +915,15 @@ class term(ExpressionElement):
             for pattern in repl:
                 op = op.replace(pattern, '')
             res = [self.autoconvert(x) for x in op.split(',')] if is_list is True else self.autoconvert(op)
+            if self.mapping_md['FilterFlag'] is not None:
+                op = self.get_value({'Fname': res, 'Ftype': 'Value', 'IsFeature': False})
+                if res != op:
+                    logging.debug(f'Filter term successfully swapped from {res} to {op}')
+                    res = op
 
         else:
             res = op
+
         logging.debug(f'Term object {res}')
         return res
 
@@ -1024,9 +1040,9 @@ class Waffle:
 
         mm.update({'__self__': {
             'DeactStandard': False,
-            'ActiveF': True if fcard != 0 else False,
+            'ActiveF': True,
             'ActiveG': True,
-            'Active': True if fcard != 0 else False,
+            'Active': True,
             'Fcard': fcard if fcard is not None else 1,
             'Gcard': gcard if gcard is not None else 'all',
             'Value': value,
@@ -1115,8 +1131,6 @@ class Waffle:
                     nfname = f'{prefix}.{fname}' if prefix is not None else f'{parent_feature}.{fname}'
                     if f'{nfname}-{'Fcard'}' not in self.configuration_history.keys():
                         self.configuration_history.update({f'{nfname}-{'Fcard'}': []})
-                    print('----------UPDATE--------------------')
-                    print(f'{nfname}-{'Fcard'}')
                     self.configuration_history[f'{nfname}-{'Fcard'}'].append({
                         "Type": 'Fcard',
                         "Value": 0,
@@ -1270,6 +1284,19 @@ class Waffle:
                     if mapps not in all_mappings[feature]:
                         all_mappings[feature].append(mapps)
                 flat_mappings[k].extend(full_mapps)
+        # -------------hotfix for unique x in y--------------------
+        hotfix = True
+        if hotfix is True:
+            rm_mappings = []
+            for k_prec, v_prec in constraint['Metadata']['Precedence'].items():
+                if v_prec['Class'] == 'prec50':
+                    for k_map, v_map in all_mappings.items():
+                        if k_map.startswith(list(v_prec[2].keys())[0]) and k_map.rsplit('.')[-1] == v_prec[1] and v_map == []:
+                            rm_mappings.append(k_map)
+
+            for feature in rm_mappings:
+                del all_mappings[feature]
+        # ---------------------------------------------------------
         all_mappings_list = list(all_mappings.values())
         for part in all_mappings_list:
             part = list(set(part))
@@ -1436,9 +1463,23 @@ class Waffle:
                         res[md_type].extend(subres[md_type])
         return res
 
-    def validate_constraints(self, step):
+    def get_next_constraints(self, step):
+        ret = []
         for index in range(self.seq.index(step) + 1, len(self.seq)):
             if ((elem := self.seq[index]).startswith('Constraint_')):
+                for constraint in self.constraints.values():
+                    if constraint['ID'] == elem:
+                        ret.append({'Parent Feature': constraint['Metadata']['ParentFeature'],
+                                    'Expression': constraint['Metadata']['Expression']})
+            else:
+                break
+        return ret
+
+    def validate_constraints(self, step):
+        print('---------------------Validating constraints-------------------------')
+        for index in range(self.seq.index(step) + 1, len(self.seq)):
+            if ((elem := self.seq[index]).startswith('Constraint_')):
+                logging.debug(f'Constraint {elem}')
                 for constraint in self.constraints.values():
                     if constraint['ID'] == elem:
                         self.constr_md = constraint['Metadata']
@@ -1822,6 +1863,7 @@ class Waffle:
                             pass
                         elif k1 == 2 and v['Class'] == 'prec24':
                             for k2, v2 in constraint['Metadata']['Precedence'][v1].items():
+                                # TODO test this condition set
                                 if isinstance(v2, dict):
                                     for k3, v3 in v2.items():
                                         split_check = k3.split(f'{par_feature}.')
@@ -1839,7 +1881,21 @@ class Waffle:
                                                     constraint['Metadata']['FilterStub'][k3].update(constr_data)
                                                 except KeyError:
                                                     pass
-
+                                elif isinstance(v2, str):
+                                    first_part = v[1]
+                                    second_part = v2
+                                    for k4, v4 in first_part.items():
+                                        if v4 != 'Childs':
+                                            full_name = f'{k4}.{second_part}' if second_part is not None else k4
+                                            try:
+                                                self.read_metadata(full_name)
+                                                constraint['Metadata'][assign_type]['Value'].append(full_name)
+                                                if second_part not in constraint['Metadata']['FilterStub'].keys():
+                                                    constraint['Metadata']['FilterStub'].update({second_part: {}})
+                                                constr_data = {full_name: {'initial': k4, 'additional': second_part}}
+                                                constraint['Metadata']['FilterStub'][second_part].update(constr_data)
+                                            except KeyError:
+                                                pass
                         elif k1 == 1 and v['Class'] == 'prec50':
                             a = self.get_feature_childrens(list(v[2].keys())[0], True)
                             b = [x for x in a if x.rsplit('.')[-1] == v[1]]
@@ -2009,120 +2065,3 @@ class Waffle:
         for constraint in self.constraints.values():
             logging.debug(pprint.pformat(constraint))
         return self.seq
-
-    def PySAT_solver(self):
-        """
-        This is a WebAssembly power Python shell,
-        where you can try the examples in the browser:
-        1. Type code in the input cell and press
-            Shift + Enter to execute;
-        2. Or copy paste the code, and click on
-            the "Run" button in the toolbar
-        3. By the way, TAB-based autocompletion works!
-        """
-
-        # create a satisfiable CNF formula "(-x1 ∨ x2) ∧ (-x1 ∨ -x2)":
-        cnf = CNF(from_clauses=[[1, 2]])
-
-        # create a SAT solver for this formula:
-        with Solver(bootstrap_with=cnf) as solver:
-            # 1.1 call the solver for this formula:
-            print('formula is', f'{"s" if solver.solve() else "uns"}atisfiable')
-            print(solver.solve())
-            # 1.2 the formula is satisfiable and so has a model:
-            print('and the model is:', solver.get_model())
-
-            # # 2.1 apply the MiniSat-like assumption interface:
-            # print('formula is',
-            #     f'{"s" if solver.solve(assumptions=[1, 2]) else "uns"}atisfiable',
-            #     'assuming x1 and x2')
-
-            # # 2.2 the formula is unsatisfiable,
-            # # i.e. an unsatisfiable core can be extracted:
-            # print('and the unsatisfiable core is:', solver.get_core())
-
-    def generate_product(self, description):
-
-        self.descr_temp = """
-feature_model {
-    Duck -> string ?
-    Witch -> string ?
-    Floats -> string ?
-    [(Duck and Witch) or (!Duck and Floats)]
-}
-"""
-        self.default_values = {
-            'Fcard': {
-                '*': {
-                    'Type': 'IntRange',
-                    'LowerBoundary': 0,
-                    'UpperBoundary': 5
-                },
-                '+': {
-                    'Type': 'IntRange',
-                    'LowerBoundary': 1,
-                    'UpperBoundary': 5
-                },
-                '?': {
-                    'Type': 'Explicit',
-                    'Values': [0, 1]
-                }
-            },
-            'Gcard': {
-                'xor': {
-                    'Type': 'Explicit',
-                    'Values': [0, 1]
-                }
-            },
-            'Attribute': {
-                'integer': {
-                    'Type': 'IntRange',
-                    'LowerBoundary': 0,
-                    'UpperBoundary': 5
-                },
-                'float': {
-                    'Type': 'FloatRange',
-                    'LowerBoundary': 0,
-                    'UpperBoundary': 5
-                }
-            }
-        }
-        self.initialize_product(self.descr_temp)
-        self.constraint_sat_problems = {}
-        self.PySAT_solver()
-        print(self.seq)
-        print('============================================')
-        fid = 1
-        for x in self.seq:
-            if 'Inner_Waffle_Group' in x:
-                print('--------------------INNER WAFFLE GROUP-----------------------')
-
-                sat = {
-                    x: {
-                        'Elems': {},
-                        'Constraints': [],
-                        'SAT': []
-                    }
-                }
-                for index in range(self.seq.index(x) + 1, len(self.seq)):
-                    if ((elem := self.seq[index]).startswith('Constraint_')):
-                        constr_md = self.constraints[elem]['Metadata']
-                        constr_dict = {
-                            'Name': elem,
-                            'Parent': fid
-                        }
-                        print(self.constraints[elem])
-                        print(constr_dict)
-                        if constr_md['ParentFeature'] not in sat[x]['Elems'].values():
-                            sat[x]['Elems'].update({fid: constr_md['ParentFeature']})
-                            fid += 1
-                        for assign_type in ['Assign', 'Read']:
-                            for feature_type in ['Fcard', 'Gcard', 'Value']:
-                                for feature in constr_md[assign_type][feature_type]:
-                                    if feature not in sat[x]['Elems'].values():
-                                        sat[x]['Elems'].update({fid: feature})
-                                        fid += 1
-                        for op in constr_md['Precedence'].values():
-                            print(op)
-                print('-------------------------------------------')
-                print(sat)

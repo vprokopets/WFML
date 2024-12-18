@@ -21,7 +21,7 @@ class Graph:
         # Mark the current node as visited and add it to the recursion stack
         visited[node] = True
         rec_stack[node] = True
-        
+
         # Recur for all the neighboring vertices
         for neighbor in self.graph[node]:
             # If neighbor is not visited, then recur for it

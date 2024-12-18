@@ -78,7 +78,16 @@
 </form>
 
 <br>
-<button type="button" class="collapsible">Constraint metadata</button>
+
+<button type="button" class="collapsible">Constraints to be validated after this step</button>
+<div class="result">
+  <pre id="json">{{wizard.form.next_constraints | pprint}}</pre>
+</div>
+
+<br>
+<br>
+
+<button type="button" class="collapsible">Constraint metadata (for unvalidated constraint)</button>
 <div class="result">
   <pre id="json">{{wizard.form.constr_md | pprint}}</pre>
 </div>
@@ -86,7 +95,7 @@
 <br>
 <br>
 
-<button type="button" class="collapsible">Step metadata</button>
+<button type="button" class="collapsible">Step metadata (for unvalidated constraint)</button>
 <div class="result">
   <pre id="json">{{wizard.form.error_md | pprint}}</pre>
 </div>

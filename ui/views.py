@@ -18,7 +18,7 @@ from formtools.wizard.views import CookieWizardView
 import cProfile
 
 debug_mode = False
-debug_logger = True
+debug_logger = False
 
 
 profiling = False
@@ -54,6 +54,7 @@ class WizardStepForm(forms.Form):
         return self.cleaned_data
 
     def is_valid(self):
+        logging.debug('VALIDATION FUNCTION CALL')
         self.validate()
         """Return True if the form has no errors, or False otherwise."""
         return self.is_bound and not self.errors
@@ -357,6 +358,7 @@ class WizardClass(CookieWizardView):
         else:
             self.form.head = 'Empty step'
 
+        self.form.next_constraints = api.get_next_constraints(self.current_step)
         logging.info(f"Finish preparing form {self.current_step}")
 
     def construct_feature_cardinality_forms(self, feature_cardinalities):
@@ -468,6 +470,7 @@ class WizardClass(CookieWizardView):
             if new_form.fields != {} or skip is False or next_step == self.steps.last or 'Inner_Waffle_Group_' in model_stages[int(next_step)]:
                 res = True
             else:
+                new_form.is_valid()
                 if next_step not in validated_steps:
                     validated_steps.append(next_step)
             # change the stored current step
