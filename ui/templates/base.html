@@ -4,6 +4,7 @@
 <html lang="en">
 <head>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="shortcut icon" type="image/svg" href="{% static '/images/favicon.svg' %}" >
   {% block head %}{% endblock head %}
 </head>
 <style>
@@ -87,7 +88,7 @@ progress[value] {
     {% endblock header %}
     <div class="homepage">
       <a href="http://127.0.0.1:8000/wizard/initialize/">
-        {% include 'img/WFMLlogo.svg' %}
+          {% include 'img/logo-new.svg' %}
       </a>
     </div>
   </h1>
@@ -100,7 +101,7 @@ progress[value] {
 
 <footer class="footer">
   <div class="grid-child Description" style="text-align: right; padding-left: 50%;">
-    WFML - DSL that aims at variability management of dynamic multi-model surrogate optimization.
+    Waffle - DSL that aims at variability management of highly-configurable software systems.
 </div>
 
 <div class="grid-child Links">

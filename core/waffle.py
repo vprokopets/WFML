@@ -977,6 +977,7 @@ class Waffle:
         self.exception_flag = False
         self.current_stage = None
         self.initial_fcards, self.groups = {}, {}
+        self.group_constraints = {}
         self.constr_err_md, self.constr_md = {}, {}
         self.inheritance = []
         self.metagraph = []
@@ -1391,6 +1392,26 @@ class Waffle:
                     res.append(f'{fname}.{k}' if layer >= 1 else k)
         return res
 
+    def check_cardinality_values(self, form_inputs):
+        unvalidated = {}
+        # Write data from form fields to global namespace.
+        for key, value in form_inputs.items():
+            split = key.split('.', 1)
+            if split[0] in ['Fcard', 'Gcard']:
+                name = split[1]
+                field = split[0]
+                res, err = self.check_card_value(name, value, field)
+                if res is False:
+                    unvalidated.update({key: err})
+            else:
+                name = key
+                field = 'Value'
+            if unvalidated == {}:
+                err = self.update_metadata(name, field, value)
+                if err is not None:
+                    unvalidated.update({key: err})
+        return unvalidated
+
     def handle_gcards(self, name, md, value):
         if value not in ['xor', 'or']:
             if not isinstance(value, list):
@@ -1464,16 +1485,7 @@ class Waffle:
         return res
 
     def get_next_constraints(self, step):
-        ret = []
-        for index in range(self.seq.index(step) + 1, len(self.seq)):
-            if ((elem := self.seq[index]).startswith('Constraint_')):
-                for constraint in self.constraints.values():
-                    if constraint['ID'] == elem:
-                        ret.append({'Parent Feature': constraint['Metadata']['ParentFeature'],
-                                    'Expression': constraint['Metadata']['Expression']})
-            else:
-                break
-        return ret
+        return [] if step not in self.group_constraints.keys() else self.group_constraints[step]
 
     def validate_constraints(self, step):
         print('---------------------Validating constraints-------------------------')
@@ -1787,15 +1799,15 @@ class Waffle:
         res (type = dict): final result
         """
 
-        res = self.get_product(self.metamodel, {})
+        self.feature_product = self.get_product(self.metamodel, {})
         logging.info('Final result was successfully created.')
-        logging.debug(f'Final Model {res}')
+        logging.debug(f'Final Model {self.feature_product}')
         with open('./core/output/configuration.json', 'w', encoding='utf-8') as f:
-            json.dump(res, f, ensure_ascii=False, indent=4)
+            json.dump(self.feature_product, f, ensure_ascii=False, indent=4)
 
         # TODO: Pickling WFML for dynamicity
         # self.pickle_wfml_data()
-        return res
+        return self.feature_product
 
     # merge function to  merge all sublist having common elements.
     def merge_common(self, lists):
@@ -1827,9 +1839,6 @@ class Waffle:
         for key in md.keys():
             if key != '__self__':
                 self.build_feature_metagraph_deps(f'{feature}.{key}', feature)
-
-    def get_json(self):
-        return open('./core/output/configuration.json', 'r')
 
     def build_metagraph(self):
         deps = []
@@ -1943,11 +1952,9 @@ class Waffle:
                         group_filtered.append(elem)
                 groups.append(group_filtered)
         self.groups = {}
-        print('++++++++++++++++++++')
 
         for index, group in enumerate(list(self.merge_common(groups))):
             self.groups.update({f'Inner_Waffle_Group_{index}': group})
-        print(self.groups)
         new_deps = []
         rm_deps = []
         rm_deps_dict = {}
@@ -1973,8 +1980,6 @@ class Waffle:
             del self.metagraph[i]
         self.metagraph.extend(new_deps)
         self.seq, self.cycles = self.topo_sort(self.metagraph)
-        pprint.pprint(self.seq)
-        print('-=============================-')
         for i_constr in indep_constraints:
             self.seq.remove(i_constr)
             index_last = 0
@@ -2002,13 +2007,27 @@ class Waffle:
                     self.seq[seq_index] = constr_names_new[enum_index]
         logging.debug('-----------------------------------')
         logging.debug(pprint.pformat(self.inheritance))
-        pprint.pprint(self.groups)
         print('-------------CONFIGURATION SEQUENCE------------------')
         for part in self.seq:
             if part.startswith('Constraint'):
                 print(self.constraints[part]['Metadata']['Expression'])
             else:
                 print(part)
+
+        self.sequence_filtered = []
+        for step in self.seq:
+            if not step.startswith('Constraint_'):
+                self.sequence_filtered.append(step)
+
+        for group_name in self.groups.keys():
+            self.group_constraints.update({group_name: []})
+            for index in range(self.seq.index(step) + 1, len(self.seq)):
+                if ((elem := self.seq[index]).startswith('Constraint_')):
+                    for constraint in self.constraints.values():
+                        if constraint['ID'] == elem:
+                            self.group_constraints[group_name].append((f'{constraint['Metadata']['ParentFeature']} - ',
+                                                                       f'{constraint['Metadata']['Expression']}'))
+
         logging.debug(pprint.pformat(self.metagraph))
         logging.debug(pprint.pformat(self.seq))
         logging.debug(pprint.pformat(self.groups))
@@ -2064,4 +2083,3 @@ class Waffle:
         logging.debug('Metamodels for constraints')
         for constraint in self.constraints.values():
             logging.debug(pprint.pformat(constraint))
-        return self.seq

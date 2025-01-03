@@ -6,42 +6,87 @@ import io
 import pstats
 
 from collections import OrderedDict
+from core.auxiliary import read_metadata
 from core.waffle import Waffle
 from django import forms
-from django.http import HttpResponseRedirect
 from django.http.response import HttpResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from formtools.wizard.views import CookieWizardView
 
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 # profiling library
 import cProfile
 
 debug_mode = False
 debug_logger = False
-
-
 profiling = False
-factory_forms = None
-validated_steps = []
-prev_steps = ['0']
-successfully_validated_steps = []
-model_stages = []
-init_factory_forms = {}
-valid = False
-tlf = None
 
 if debug_logger is True:
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(pathname)s:%(lineno)d - %(funcName)s(): %(message)s', level=logging.DEBUG, datefmt='%m/%d/%Y %I:%M:%S %p')
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(pathname)s:%(lineno)d - %(funcName)s(): %(message)s',
+                        level=logging.DEBUG,
+                        datefmt='%m/%d/%Y %I:%M:%S %p')
 else:
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
-api = Waffle(debug_mode)
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
+                        level=logging.INFO,
+                        datefmt='%m/%d/%Y %I:%M:%S %p')
 
 
 class WizardStepForm(forms.Form):
     """
     Form that is used to construct and validate each wizard step.
     """
+
+    def add_error(self, field, error):
+        """
+        Update the content of `self._errors`.
+
+        The `field` argument is the name of the field to which the errors
+        should be added. If it's None, treat the errors as NON_FIELD_ERRORS.
+
+        The `error` argument can be a single error, a list of errors, or a
+        dictionary that maps field names to lists of errors. An "error" can be
+        either a simple string or an instance of ValidationError with its
+        message attribute set and a "list or dictionary" can be an actual
+        `list` or `dict` or an instance of ValidationError with its
+        `error_list` or `error_dict` attribute set.
+
+        If `error` is a dictionary, the `field` argument *must* be None and
+        errors will be added to the fields that correspond to the keys of the
+        dictionary.
+        """
+        if not isinstance(error, ValidationError):
+            # Normalize to ValidationError and let its constructor
+            # do the hard work of making sense of the input.
+            error = ValidationError(error)
+
+        if hasattr(error, "error_dict"):
+            if field is not None:
+                raise TypeError(
+                    "The argument `field` must be `None` when the `error` "
+                    "argument contains errors for multiple fields."
+                )
+            else:
+                error = error.error_dict
+        else:
+            error = {field or NON_FIELD_ERRORS: error.error_list}
+        print('ADD ERROR FUCNITOTOn')
+        for field, error_list in error.items():
+            print(f'{field} || {error_list}')
+            if field not in self.errors:
+                if field != NON_FIELD_ERRORS and field not in self.fields:
+                    raise ValueError(
+                        "'%s' has no field named '%s'."
+                        % (self.__class__.__name__, field)
+                    )
+                if field == NON_FIELD_ERRORS:
+                    self._errors[field] = self.error_class(
+                        error_class="nonfield", renderer=self.renderer
+                    )
+                else:
+                    self._errors[field] = self.error_class(renderer=self.renderer)
+            self._errors[field].extend(error_list)
+            if hasattr(self, 'cleaned_data') and field in self.cleaned_data:
+                del self.cleaned_data[field]
 
     def clean(self):
         """
@@ -56,6 +101,10 @@ class WizardStepForm(forms.Form):
     def is_valid(self):
         logging.debug('VALIDATION FUNCTION CALL')
         self.validate()
+        print('22232323232323232')
+        print(self.is_bound)
+        print(not self.errors)
+        print(self.is_bound and not self.errors)
         """Return True if the form has no errors, or False otherwise."""
         return self.is_bound and not self.errors
 
@@ -81,7 +130,7 @@ class WizardStepForm(forms.Form):
                     except ValueError:
                         pass
             else:
-                attr_type = api.read_metadata(k, 'Attribute')
+                attr_type = self.api.read_metadata(k, 'Attribute')
                 logging.debug(f'Attribute type for field {k}: {attr_type}')
                 if any([x in attr_type for x in ['array', 'Array']]):
                     v = v.replace(' ', '').split(',')
@@ -110,41 +159,25 @@ class WizardStepForm(forms.Form):
         RETURN
         cd (type = dict): cleaned data, that was printed to form fields.
         """
-        global valid, validated_steps, successfully_validated_steps
-        logging.info(f'Validating form with validation state "{valid}": {self.__dict__}. ')
+        logging.info(f'Validating form: {self.__dict__}. ')
         if profiling is True:
             ob = cProfile.Profile()
             ob.enable()
 
         self.parse_form_manually()
-        api.current_stage = tlf
+        self.api.current_stage = self.label
         cd = copy.deepcopy(self.manually_cleaned_data)
-        self.up = {}
         logging.debug(f'Label: {self.label}')
         logging.debug(f'Cleaned Data: {cd}')
-        # Write data from form fields to global namespace.
-        for key, value in cd.items():
-            split = key.split('.', 1)
-            if split[0] in ['Fcard', 'Gcard']:
-                name = split[1]
-                field = split[0]
-                res, err = api.check_card_value(name, value, field)
-                if res is False:
-                    self.up.update({key: err})
-            else:
-                name = key
-                field = 'Value'
-            if self.up == {}:
-                err = api.update_metadata(name, field, value)
-                if err is not None:
-                    self.up.update({key: err})
+        self.up = self.api.check_cardinality_values(cd)
+
         if self.up == {}:
-            self.validation_pipeline()
+            res, exception_type = self.api.validate_constraints(self.label)
+            self.display_validation_feedback(res, exception_type)
         else:
             for k, v in self.up.items():
                 self.add_error(k, f'This field returned error: {v}')
-            api.restore_stage_snap()
-        valid = True
+            self.api.restore_stage_snap()
         if profiling is True:
             ob.disable()
             sec = io.StringIO()
@@ -155,10 +188,9 @@ class WizardStepForm(forms.Form):
             logging.debug(sec.getvalue())
         return cd
 
-    def validation_pipeline(self):
-        res, exception_type = api.validate_constraints(tlf)
-        self.error_md = api.constr_err_md
-        self.constr_md = api.constr_md
+    def display_validation_feedback(self, res, exception_type):
+        self.error_md = self.api.constr_err_md
+        self.constr_md = self.api.constr_md
         if res is not True:
             fields = self.fields.keys()
             msg, elems = res.args
@@ -166,36 +198,11 @@ class WizardStepForm(forms.Form):
                 self.add_error(None, f'{exception_type}: {msg}')
             else:
                 for elem in elems:
-                    attr_type = api.read_metadata(elem, 'Attribute')
+                    attr_type = self.api.read_metadata(elem, 'Attribute')
                     for field in self.fields.keys():
                         if attr_type != 'predefined' and (elem == field or f'Fcard.{elem}' == field or f'Gcard.{elem}' == field):
                             self.add_error(field, f'{exception_type}: {msg}')
-            api.restore_stage_snap()
-        else:
-            if self.prefix not in successfully_validated_steps:
-                successfully_validated_steps.append(self.prefix)
-
-        # # Assign unvalidated parameters error to appropriate fields.
-        # for param in self.up:
-        #     element = param['element']
-        #     field_flag = False
-        #     for subparam in param['params']:
-        #         original = api.get_original_name(subparam)
-        #         param_type = api.namespace[original.split('.')[0]]['Features'][original]['Type']
-        #         for field in self.fields.keys():
-        #             if param_type != 'predefined' and (subparam == field or f'Fcard.{subparam}' == field or f'Gcard.{subparam}' == field):
-        #                 self.add_error(field, f'This field returned error: {param["error"]}')
-        #                 field_flag = True
-        #     if param['params'] == () or param['params'] == [] or field_flag is False:
-        #         self.add_error(None, f'Feature`s {param["element"]} returned error: {param["error"]}')
-        # if self.up != []:
-        #     api.restore_stage_snap()
-        # elif self.up == [] and not (cd != {} and list(cd.keys())[0].split('.')[0] in ['Fcard', 'Gcard']):
-        #     if self.label in cycles.keys():
-        #         for element in cycles[self.label]:
-        #             api.namespace[element]['Validated'] = True
-        #     else:
-        #         api.namespace[self.label]['Validated'] = True
+            self.api.restore_stage_snap()
 
 
 class ModelInputForm(forms.Form):
@@ -215,15 +222,21 @@ class WizardClass(CookieWizardView):
         RETURN
         redirection to final page.
         """
-        res = api.save_json()
-        logging.info(f'! Final result: {res}')
+        feature_product = self.api.save_json()
+        logging.info(f'! Final result: {feature_product}')
+        self.request.session['FeatureProduct'] = feature_product
+        self.request.session['ConfigurationProduct'] = self.api.configuration_history
+        self.request.session['Metamodel'] = self.api.metamodel
 
+        configuration_history_view = json.dumps(self.api.configuration_history, indent=4)
+        collapsable_view = list(self.api.configuration_history.keys())
+        metadata_view = json.dumps(self.api.metamodel, indent=4)
         return render(self.request, 'done.html', {
-            'form_data': res,
-            'history': json.dumps(api.configuration_history, indent=4),
+            'form_data': feature_product,
+            'history': configuration_history_view,
             'history_selected': {},
-            'collapsable': list(api.configuration_history.keys()),
-            'metadata': json.dumps(api.metamodel, indent=4),
+            'collapsable': collapsable_view,
+            'metadata': metadata_view,
             'metadata_selected': {},
             'selected_feature': None
         })
@@ -239,26 +252,16 @@ class WizardClass(CookieWizardView):
         """
 
         # Create form object.
-        global model_stages, step_current, tlf, init_factory_forms, prev_steps, successfully_validated_steps
         if step is None:
             step = self.steps.current
-        step_current = step
-
+        self.step_number = step
         self.form = super(WizardClass, self).get_form(step, data, files)
 
-        self.current_step = model_stages[int(step)]
+        self.current_step = self.api.sequence_filtered[int(step)]
         logging.info(f'Wizard step {step} | {self.current_step}.')
-        tlf = self.current_step
 
-        self.form.stages_number = len(init_factory_forms)
-        init_factory_forms[self.current_step] = int(step_current) + 1
-        prev = list(init_factory_forms.keys()).index(self.current_step) - 1
-        if prev < 0:
-            gap = 0
-        else:
-            gap = int(init_factory_forms[list(init_factory_forms.keys())[prev]])
-        self.form.stage = list(init_factory_forms.keys()).index(self.current_step) + 1
-        self.form.stage_step = int(step_current) - gap + 1
+        self.form.stages_number = len(self.api.sequence_filtered)
+        self.form.stage_step = int(self.step_number) + 1
 
         # Fill form label and head.
         self.form.label = self.current_step
@@ -266,11 +269,6 @@ class WizardClass(CookieWizardView):
         self.form.step_id = id(self)
 
         self.construct_step_form(self.current_step, files)
-
-        if (step_current in successfully_validated_steps or step_current in prev_steps) and len(prev_steps) > 1:
-            del prev_steps[-1]
-        self.form.prev_step = prev_steps[-1]
-
         return self.form
 
     def construct_step_form(self, step_id, files):
@@ -290,49 +288,49 @@ class WizardClass(CookieWizardView):
         # If step contains cycle, then get all cycle items and perform field initialization for all of them.
         if self.current_step in cycles.keys():
             for element in (cycle_elems := cycles[self.current_step]):
-                tlf_involved.append(api.get_original(element.split('-')[0].split('.')[0]))
+                tlf_involved.append(self.api.get_original(element.split('-')[0].split('.')[0]))
                 features_involved.append(element)
             logging.debug(f'Making cycle form group {self.current_step} || {cycle_elems}')
         elif 'Inner_Waffle_Group' in self.current_step:
-            for element in (group_elems := api.groups[self.current_step]):
-                tlf_involved.append(api.get_original(element.split('-')[0].split('.')[0]))
+            for element in (group_elems := self.api.groups[self.current_step]):
+                tlf_involved.append(self.api.get_original(element.split('-')[0].split('.')[0]))
                 features_involved.append(element)
             logging.debug(f'Making form group {self.current_step} || {group_elems}')
         else:
-            tlf_involved.append(api.get_original(step_id.split('-')[0].split('.')[0]))
+            tlf_involved.append(self.api.get_original(step_id.split('-')[0].split('.')[0]))
             features_involved.append(step_id)
             logging.debug(f'Making single form {self.current_step}')
 
-        if step_current not in api.stage_snap.keys():
+        if self.step_number not in self.api.stage_snap.keys():
             form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
             for tlf in tlf_involved:
-                unconfigured_features = api.get_undefined_features(tlf)
+                unconfigured_features = self.api.get_undefined_features(tlf)
                 for ftype, features in unconfigured_features.items():
                     for feature in features:
                         if feature not in form_data[ftype]:
                             form_data[ftype].append(feature)
-            api.save_stage_snap(step_current, form_data)
-            logging.debug(f'Initializing form for {step_current}')
+            self.api.save_stage_snap(self.step_number, form_data)
+            logging.debug(f'Initializing form for {self.step_number}')
         else:
-            form_data = api.stage_snap[step_current]['Fields']
+            form_data = self.api.stage_snap[self.step_number]['Fields']
             if files is None:
-                logging.debug(f'Updating form for {step_current}')
-                api.restore_stage_snap(step_current)
+                logging.debug(f'Updating form for {self.step_number}')
+                self.api.restore_stage_snap(self.step_number)
                 logging.debug('Namespace was restored')
                 self.form.full_clean()
-                logging.debug(f'Cleaning form {step_current}')
+                logging.debug(f'Cleaning form {self.step_number}')
                 form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
                 for tlf in tlf_involved:
-                    unconfigured_features = api.get_undefined_features(tlf)
+                    unconfigured_features = self.api.get_undefined_features(tlf)
                     for ftype, features in unconfigured_features.items():
                         for feature in features:
                             if feature not in form_data[ftype]:
                                 form_data[ftype].append(feature)
-                api.save_stage_snap(step_current, form_data)
+                self.api.save_stage_snap(self.step_number, form_data)
         if form_data is None:
             return
 
-        logging.debug(f'DATA {form_data} | tlf {tlf_involved} | step {step_current}')
+        logging.debug(f'DATA {form_data} | tlf {tlf_involved} | step {self.step_number}')
         logging.debug(f'Features involved: {features_involved}')
         data_filtered = {
             'Fcard': [],
@@ -341,7 +339,7 @@ class WizardClass(CookieWizardView):
         }
         for feature_type, features in form_data.items():
             for feature_name in features:
-                if f'{api.get_original(feature_name)}-{feature_type}' in features_involved:
+                if f'{self.api.get_original(feature_name)}-{feature_type}' in features_involved:
                     data_filtered[feature_type].append(feature_name)
         logging.debug(f'Filtered features: {data_filtered}')
 
@@ -358,7 +356,7 @@ class WizardClass(CookieWizardView):
         else:
             self.form.head = 'Empty step'
 
-        self.form.next_constraints = api.get_next_constraints(self.current_step)
+        self.form.next_constraints = self.api.get_next_constraints(self.current_step)
         logging.info(f"Finish preparing form {self.current_step}")
 
     def construct_feature_cardinality_forms(self, feature_cardinalities):
@@ -369,7 +367,7 @@ class WizardClass(CookieWizardView):
         feature_cardinalities (type = dict): dict with all feature cardinalities.
         """
         for fcard in feature_cardinalities:
-            value = api.read_metadata(fcard, 'Fcard')
+            value = self.api.read_metadata(fcard, 'Fcard')
             allowed = None
             if value == '*':
                 allowed = '0..inf'
@@ -393,8 +391,8 @@ class WizardClass(CookieWizardView):
         # Create fields for each gcard record.
         for gcard in group_cardinalities:
             # Create appropriate fields in form.
-            value = api.read_metadata(gcard, 'Gcard')
-            options_full = api.get_feature_childrens(gcard)
+            value = self.api.read_metadata(gcard, 'Gcard')
+            options_full = self.api.get_feature_childrens(gcard)
             options = [x.rsplit('.', 1)[-1] for x in options_full]
             choises_list = []
             for option in options:
@@ -414,7 +412,7 @@ class WizardClass(CookieWizardView):
 
     def construct_attribute_value_forms(self, attribute_values):
         for feature in attribute_values:
-            feature_type = api.read_metadata(feature, 'Attribute')
+            feature_type = self.api.read_metadata(feature, 'Attribute')
             # Check if this field is allowed by chosen group cardinality.
             if feature_type == 'integer':
                 self.form.fields[feature] = forms.IntegerField(label=f'{feature}  (Type: {feature_type})')
@@ -444,6 +442,24 @@ class WizardClass(CookieWizardView):
         logging.debug('PROCESS STEP FUNCTION CALL')
         return self.get_form_step_data(form)
 
+    def get(self, request, *args, **kwargs):
+        """
+        This method handles GET requests.
+
+        If a GET request reaches this point, the wizard assumes that the user
+        just starts at the first step or wants to restart the process.
+        The data of the wizard will be reset before rendering the first step
+        """
+        self.storage.reset()
+
+        # reset the current step to the first step.
+        self.storage.current_step = self.steps.first
+        first_step_form = self.get_form()
+        if first_step_form.fields != {}:
+            return self.render(self.get_form())
+        else:
+            return self.render_next_step(first_step_form)
+
     def render_next_step(self, form, **kwargs):
         """
         This method gets called when the next step/form should be rendered.
@@ -453,12 +469,6 @@ class WizardClass(CookieWizardView):
         # (if available).
         res = False
         skip = True
-        global validated_steps, valid, prev_steps
-        valid = True
-        if '0' not in validated_steps:
-            validated_steps.append('0')
-        if self.steps.current not in prev_steps:
-            prev_steps.append(self.steps.current)
         while res is False:
             logging.info(f'Rendering next step {self.steps.next}.')
             next_step = self.steps.next
@@ -467,19 +477,18 @@ class WizardClass(CookieWizardView):
                 data=self.storage.get_step_data(next_step),
                 files=self.storage.get_step_files(next_step),
             )
-            if new_form.fields != {} or skip is False or next_step == self.steps.last or 'Inner_Waffle_Group_' in model_stages[int(next_step)]:
+            if new_form.fields != {} or skip is False or 'Inner_Waffle_Group_' in self.api.sequence_filtered[int(next_step)]:
                 res = True
             else:
-                new_form.is_valid()
-                if next_step not in validated_steps:
-                    validated_steps.append(next_step)
+                validation = new_form.is_valid()
+                if next_step == self.steps.last and validation is True:
+                    return self.done(form_list=[])
+                elif validation is True:
+                    res = True
+
             # change the stored current step
             self.storage.current_step = next_step
-        if next_step in validated_steps:
-            valid = False
-        if next_step not in validated_steps:
-            validated_steps.append(next_step)
-        logging.info(f'STEP {next_step} | {validated_steps} | {id(self)}')
+        logging.info(f'STEP {next_step} | {id(self)}')
         return self.render(new_form, **kwargs)
 
     def render_done(self, form, **kwargs):
@@ -490,24 +499,6 @@ class WizardClass(CookieWizardView):
         If everything is fine call `done`.
         """
         final_forms = OrderedDict()
-        # walk through the form list and try to validate the data again.
-        # logging.info('RENDERIND PREV STEP')
-        # for form_key in self.get_form_list():
-        #     try:
-        #         form_obj = self.get_form(
-        #             step=form_key,
-        #             data=self.storage.get_step_data(form_key),
-        #             files=self.storage.get_step_files(form_key)
-        #         )
-        #     except KeyError:
-        #         pass
-        #     # if not form_obj.is_valid():
-        #     #     return self.render_revalidation_failure(form_key, form_obj, **kwargs)
-        #     final_forms[form_key] = form_obj
-
-        # render the done view and reset the wizard before returning the
-        # response. This is needed to prevent from rendering done with the
-        # same data twice.
         done_response = self.done(list(final_forms.values()), form_dict=final_forms, **kwargs)
         self.storage.reset()
         return done_response
@@ -526,28 +517,8 @@ def initial_page(request, *args, **kwargs):
         form = ModelInputForm(request.POST)
         if form.is_valid():
             model = form.cleaned_data['model_field']
-            if 'Manual' in request.POST.keys():
-                global model_stages, validated_steps, step_current, factory_forms, tlf, init_factory_forms, successfully_validated_steps, valid
-                valid = True
-                step_current, tlf = None, None
-                validated_steps, model_stages, factory_forms = [], [], []
-                successfully_validated_steps = []
-                init_factory_forms = {}
-
-                logging.info(f'Model: {model}')
-                model_stages_unfiltered = api.initialize_product(model)
-                for stage in model_stages_unfiltered:
-                    if not stage.startswith('Constraint_'):
-                        factory_forms.append(WizardStepForm)
-                        init_factory_forms.update({stage: 0})
-                        model_stages.append(stage)
-                return HttpResponseRedirect(reverse('factory_wizard'))
-            else:
-                api.generate_product(model)
-                res = api.save_json()
-                return render(request, 'done.html', {
-                    'form_data': res,
-                })
+            request.session['feature_model'] = model
+            return redirect('factory_wizard')
 
     elif request.method == 'GET':
         form = ModelInputForm()
@@ -563,15 +534,28 @@ def factory_wizard(request, *args, **kwargs):
     wizard
     """
     if request.method == 'POST' and 'mybtn2' in request.POST.keys():
-        res = api.save_json()
-        logging.info(f'! Product configuration was not finished. You can always continue from this place: {res}')
+        # res = api.save_json()
+        logging.info('! Product configuration was not finished. You can always continue from this place.')
 
         return render(request, 'done.html', {
-            'form_data': res,
+            'form_data': 'Configuration metafile will be added later.',
         })
     else:
+        model = request.session.get('feature_model')
+        logging.info(f'Model: {model}')
+        waffle_api = Waffle(debug_mode)
+        waffle_api.initialize_product(model)
+
+        class WizardStepFormR(WizardStepForm):
+            api = waffle_api
+
+        factory_forms = []
+        for _ in waffle_api.sequence_filtered:
+            factory_forms.append(WizardStepFormR)
+
         class ReturnClass(WizardClass):
             form_list = factory_forms
+            api = waffle_api
         return ReturnClass.as_view()(request, *args, **kwargs)
 
 def redirect_to_homepage(request):
@@ -581,7 +565,7 @@ def redirect_to_homepage(request):
 def download_file(request):
     # Define Django project base directory
     filename = 'configuration.json'
-    path = api.get_json()
+    path = open('./core/output/configuration.json', 'r')
     # Set the mime type
     mime_type, _ = mimetypes.guess_type(filename)
     # Set the return value of the HttpResponse
@@ -592,20 +576,32 @@ def download_file(request):
     return response
 
 def configure_metadata_output(request):
+    feature_product = request.session.get('FeatureProduct')
+    configuration_history = request.session.get('ConfigurationProduct')
+    metamodel = request.session.get('Metamodel')
+
+    configuration_history_view = json.dumps(configuration_history, indent=4)
+    collapsable_view = list(configuration_history.keys())
+    metadata_view = json.dumps(metamodel, indent=4)
     if request.method == 'POST':
+        logging.debug('Post method configure output')
         selected_feature = request.POST.get('feature-list')
+        request.session['SelectedFeature'] = selected_feature
         print(f'POST: {selected_feature}')
-        history_selected = json.dumps(api.configuration_history[selected_feature], indent=4)
-        metadata_selected = json.dumps(api.read_metadata(selected_feature.split('-')[0]), indent=4)
+        history_selected_view = json.dumps(configuration_history[selected_feature], indent=4)
+        metadata_selected_view = json.dumps(read_metadata(metamodel, selected_feature.split('-')[0]), indent=4)
     else:
-        history_selected, metadata_selected = {}, {}
-        selected_feature = None
+        history_selected_view, metadata_selected_view = {}, {}
+        try:
+            selected_feature = request.session.get('SelectedFeature')
+        except Exception:
+            selected_feature = None
     return render(request, 'done.html', {
-        'form_data': api.save_json(),
-        'history': json.dumps(api.configuration_history, indent=4),
-        'history_selected': history_selected,
-        'collapsable': list(api.configuration_history.keys()).sort(),
-        'metadata': json.dumps(api.metamodel, indent=4),
-        'metadata_selected': metadata_selected,
+        'form_data': feature_product,
+        'history': configuration_history_view,
+        'history_selected': history_selected_view,
+        'collapsable': collapsable_view,
+        'metadata': metadata_view,
+        'metadata_selected': metadata_selected_view,
         'selected_feature': selected_feature.split('-')[0]
     })

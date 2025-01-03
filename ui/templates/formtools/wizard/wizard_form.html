@@ -14,7 +14,7 @@
 
 {% block content %}
 <main style="margin-left: 1.5%; margin-top: 10px; margin-right: 1.5%;">
-<p>Stage {{ wizard.form.stage }} of {{ wizard.form.stages_number }}; Step {{wizard.form.stage_step}}; Previous configured step {{wizard.form.prev_step}}</p>
+<p>Step {{wizard.form.stage_step}} of {{ wizard.form.stages_number }}</p>
 <p>{{wizard.form.head}} {{wizard.form.label}}</p>
 <form action="" method="post">{% csrf_token %}
 <table>
