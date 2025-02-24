@@ -78,7 +78,8 @@ class FeatureInitializer:
                     'Abstract': None,
                     'Inheritance': None,
                     'Attribute': None,
-                    'Constraints': None
+                    'Constraints': None,
+                    'State': 'NotConfigured'
                 }}})
             mm = mm[level]
 
@@ -94,7 +95,8 @@ class FeatureInitializer:
             'Abstract': abstract,
             'Inheritance': inheritance.replace(':', '') if inheritance is not None else None,
             'Attribute': attribute.replace('->', '') if attribute is not None else None,
-            'Constraints': None
+            'Constraints': None,
+            'State': 'NotConfigured'
         }})
 
         # Update inheritance dependency list if there is

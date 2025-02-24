@@ -53,10 +53,8 @@ class Workspace:
 
     def register_dependency_graph_layout(self, graph_data):
         self.dependency_graph_data = graph_data
-        print(graph_data['nodes'])
         for node in self.dependency_graph_data['nodes']:
             if node['label_long'].startswith('Waffle_Constraint_Group_'):
-                print(self.constraint_groups_w)
                 node['data'] = self.constraint_groups_w[node['label_long']]
             elif node['label_long'].startswith('Constraint_'):
                 node['data'] = self.constraints[node['label_long']]['Metadata']['Expression']

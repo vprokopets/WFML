@@ -252,7 +252,10 @@ class DependencyGraph:
                 elif layout_type == 'Random':
                     pos = nx.random_layout(Gtemp),
                 elif layout_type == 'Hierarchical':
-                    pos = self._hierarchy_pos(categorized_dependencies[node_set_name], 1)
+                    try:
+                        pos = self._hierarchy_pos(categorized_dependencies[node_set_name], 1)
+                    except TypeError:
+                        pos = nx.spring_layout(Gtemp)
                 else:
                     raise ValueError(f"Unsupported layout type: {layout_type}")
 

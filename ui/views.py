@@ -12,6 +12,8 @@ from django import forms
 from django.http.response import HttpResponse
 from django.shortcuts import redirect, render
 from formtools.wizard.views import CookieWizardView
+from django.views.generic import View
+from django.http import JsonResponse
 
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 # profiling library
@@ -600,3 +602,38 @@ def configure_metadata_output(request):
         'metadata_selected': metadata_selected_view,
         'selected_feature': selected_feature.split('-')[0]
     })
+
+class ContactForm1(forms.Form):
+    name = forms.CharField(max_length=100)
+    email = forms.EmailField()
+
+class ContactForm2(forms.Form):
+    message = forms.CharField(widget=forms.Textarea)
+
+
+class MyWizardView(View):
+    form_list = [ContactForm1, ContactForm2]
+    template_name = 'wizard-form.html'
+
+    def get(self, request, step=0):
+        if step >= len(self.form_list):
+            return JsonResponse({"success": "true", "message": "All forms submitted."})
+        form = self.form_list[step]()
+        return render(request, self.template_name, {"form": form, "step": step, "form_count": len(self.form_list)})
+
+    def post(self, request, step=0):
+        print(f'POST Step {step} || {len(self.form_list)}')
+        if step >= len(self.form_list):
+            return JsonResponse({"success": "true", "message": "All forms submitted."})
+        form = self.form_list[step](request.POST)
+        if form.is_valid():
+            print(f'VALID FORM')
+            if step + 1 >= len(self.form_list):
+                print(f'WHYYYY')
+                return JsonResponse({"success": "true", "message": "All forms submitted."})
+            next_form = self.form_list[step + 1]()
+            print(f'NEXT FORM {next_form}')
+            return render(request, self.template_name, {"form": next_form, "step": step+1, "form_count": len(self.form_list)})
+        else:
+            print(f'INVALID FORM')
+            return render(request, self.template_name, {"form": form, "step": step, "form_count": len(self.form_list)})
