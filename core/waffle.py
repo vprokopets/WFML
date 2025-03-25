@@ -113,8 +113,6 @@ class Waffle:
         # for element placing using different compositions (e.g., hierarchical and random)
         self.dependency_graph.define_graph_layout(self.storage.dependencies)
 
-        
-
         # must be done after dependency graph definicion to avoid missing or multiple graph elements
         # i.e., creating workspace for features with cardinality >1, disabling features with cardinality ==0, etc.
         # (since cardinality is a feature property, not self-sufficient graph element)

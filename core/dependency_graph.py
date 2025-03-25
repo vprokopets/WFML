@@ -53,7 +53,7 @@ class DependencyGraph:
                     self.constraint_edges.append(dependency)
                     break
 
-        values = [self.val_map.get(node, 0.25) for node in self.graph_obj.nodes()]
+        # values = [self.val_map.get(node, 0.25) for node in self.graph_obj.nodes()]
         # edge_colours = ['black' if edge not in self.constraint_edges else 'red'
         #                 for edge in G.edges()]
         # black_edges = [edge for edge in G.edges() if edge not in red_edges]

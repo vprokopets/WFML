@@ -23,7 +23,7 @@ class term(ExpressionElement):
 
             replace_patterns = ['[', ']', '{', '}', "'", '"', ' ']
             for pattern in replace_patterns:
-                op = op.replace_patternsace(pattern, '')
+                op = op.replace(pattern, '')
             res = [self._autoconvert(x) for x in op.split(',')] if is_list is True else self._autoconvert(op)
             if self.mapping_md['FilterFlag'] is not None:
                 op = self._get_value({'Fname': res, 'Ftype': 'Value', 'IsFeature': False})

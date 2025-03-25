@@ -183,9 +183,9 @@
   <div id="properties-container"> <p>Click on a node or edge to see its properties.</p></div>
 
   <script>
-      console.log('{{ wizard.form.graph_data|safe }}')
+      // ('{{ wizard.form.graph_data|safe }}')
       var data = JSON.parse('{{ wizard.form.graph_data|safe }}');
-      console.log(data)
+      // console.log(data)
       const nodes = data.nodes.map(node => {
           return { id: node.id, label: node.label_short, x: node.x * 200, y: node.y * 200, color: node.color, data: node.data };
       });
@@ -241,7 +241,7 @@
               }
           } else if (properties.edges.length > 0) {
             const edgeId = properties.edges[0]
-            console.log(properties.edges[0])
+            // console.log(properties.edges[0])
               const edge = edges.find(edge => edge.id === edgeId);
               if (edge) {
                   propertiesContainer.innerHTML = `

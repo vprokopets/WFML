@@ -115,6 +115,11 @@ class ProductInitializer:
                                 else:
                                     if feature_name not in constraint['Metadata'][assign_type][feature_type]:
                                         constraint['Metadata'][assign_type][feature_type].append(feature_name)
+                                if assign_type == 'Assign':
+                                    if feature_type == 'Fcard':
+                                        constraint['Metadata']['Read']['Gcard'].append(feature_name.rsplit('.', 1)[0])
+                                    else:
+                                        constraint['Metadata']['Read']['Fcard'].append(feature_name)
                         # special handling for filter x where y operation
                         # this constraint should be executed after affected in 'y' children features are configured
                         # not after feature 'x' is configured
@@ -258,7 +263,7 @@ class ProductInitializer:
         groups = []
         for element, data in sequence_restrictions.items():
             if element.startswith('Constraint_'):
-                group = data['After']
+                group = data['After'] + data['Before']
                 group_filtered = []
                 # TODO wrong logic - need to split groups in some cases (see brise.wfl in examples)
                 # to filter 'After' dependencies, i.e., if some element should be configured after

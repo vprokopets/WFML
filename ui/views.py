@@ -4,6 +4,7 @@ import mimetypes
 import json
 import io
 import pstats
+import pprint
 
 from collections import OrderedDict
 from core.auxiliary import read_metadata
@@ -106,11 +107,22 @@ class WizardStepForm(forms.Form):
         """Return True if the form has no errors, or False otherwise."""
         return self.is_bound and not self.errors
 
+    def querydict_to_dict(self, query_dict):
+        data = {}
+        for key in query_dict.keys():
+            v = query_dict.getlist(key)
+            if len(v) == 1:
+                v = v[0]
+            data[key] = v
+        return data
+
     def parse_form_manually(self):
         self.manually_cleaned_data = {}
         input_data = {}
-        for k, v in self.data.items():
+        raw_data = self.querydict_to_dict(copy.deepcopy(self.data))
+        for k, v in raw_data.items():
             if (k.startswith((prefix := f'{self.prefix}-'))):
+                print(f'Parsing input form {k} with value {v}')
                 logging.debug(f'Parsing input form {k} with value {v}')
                 input_data.update({k.split(prefix)[-1]: v})
         logging.debug(f'Input for manual processing {input_data}')
@@ -164,11 +176,9 @@ class WizardStepForm(forms.Form):
             ob.enable()
 
         self.parse_form_manually()
-
         cd = copy.deepcopy(self.manually_cleaned_data)
         logging.debug(f'Label: {self.label}')
         logging.debug(f'Cleaned Data: {cd}')
-
         validation_errors, error_type = self.api.validate_form(self.label, cd)
         self.display_validation_feedback(validation_errors, error_type)
 
@@ -312,6 +322,8 @@ class WizardClass(CookieWizardView):
                     for feature in features:
                         if feature not in form_data[ftype]:
                             form_data[ftype].append(feature)
+            print('-==================CONFIGURATION FOR ROMAN======================-')
+            pprint.pprint(form_data)
             self.api.storage.save_stage_snap(self.step_number, form_data)
             logging.debug(f'Initializing form for {self.step_number}')
         else:

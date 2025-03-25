@@ -1,0 +1,12 @@
+variables {
+	variable {
+		name -> string
+	}
+}
+equations {
+	equation {
+		name -> string
+		localvariables -> array
+		[all localvariables in (unique name in variables)]
+	}
+}

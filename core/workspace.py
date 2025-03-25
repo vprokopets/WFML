@@ -57,7 +57,7 @@ class Workspace:
             if node['label_long'].startswith('Waffle_Constraint_Group_'):
                 node['data'] = self.constraint_groups_w[node['label_long']]
             elif node['label_long'].startswith('Constraint_'):
-                node['data'] = self.constraints[node['label_long']]['Metadata']['Expression']
+                node['data'] = self.constraints[node['label_long']]['Metadata']['Expression'].replace("'", '"').replace('"', r'\"')
             else:
                 node['data'] = self.read_metadata(node['label_long'].split('-')[0])
 
@@ -87,7 +87,9 @@ class Workspace:
         elif field == 'Gcard':
             if self.api.validator.cardinality_validator.check_cardinality_value(name, value, field) == (True, ''):
                 self.handle_gcards(name, metadata, value)
-                self.update_child_history_cards(name, field, value, metadata)
+                list_value = list(value) if not isinstance(value, list) else value
+                for gcard_value in list_value:
+                    self.update_child_history_cards(name, field, gcard_value, metadata)
 
     def update_child_history_cards(self, parent_feature, card_type, card_value, md, prefix=None):
         for fname, fmetadata in md.items():
