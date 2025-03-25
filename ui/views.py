@@ -322,8 +322,6 @@ class WizardClass(CookieWizardView):
                     for feature in features:
                         if feature not in form_data[ftype]:
                             form_data[ftype].append(feature)
-            print('-==================CONFIGURATION FOR ROMAN======================-')
-            pprint.pprint(form_data)
             self.api.storage.save_stage_snap(self.step_number, form_data)
             logging.debug(f'Initializing form for {self.step_number}')
         else:

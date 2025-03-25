@@ -122,7 +122,7 @@ class Workspace:
             par_md.update(repl_md)
             for k, v in par_md.items():
                 index = k.rsplit('_', 1)
-                if k != '__self__' and index[0] in fname:
+                if isinstance(index, int) and (k != '__self__' and index[0] in fname):
                     v['__self__']['ActiveF'] = False if len(index) > 1 and ((index[1].isdigit() and int(index[1]) >= repeats)
                                                                             or repeats == 1) else True
                     self.update_active_state(k if tlf is True else f'{pname}.{k}')
@@ -178,10 +178,14 @@ class Workspace:
     def update_active_state(self, name):
         md = self.read_metadata(name)['__self__']
         md['Active'] = md['ActiveF'] and md['ActiveG'] if md['Abstract'] is None else False
-        logging.debug(f'Update active state for {name}: {md['ActiveF']} | {md['ActiveG']} | {md['Active']}')
+        logging.info(f'Update active state for {name}: {md['ActiveF']} | {md['ActiveG']} | {md['Active']}')
 
     def get_product(self, md, res):
         for k, v in md.items():
+            if '__self__' in v.keys():
+                print(f'Feature {k}: {v['__self__']}')
+            else:
+                print(f'Feature {k} || {v}')
             if k != '__self__' and v['__self__']['Active'] is True:
                 self_value = {} if v['__self__']['Value'] is None else v['__self__']['Value']
                 res.update({k: self_value})
