@@ -193,12 +193,12 @@ class WizardStepForm(forms.Form):
         return cd
 
     def display_validation_feedback(self, validation_errors, error_type):
-        self.error_md = self.api.constr_err_md
-        self.constr_md = self.api.constr_md
         for res in validation_errors:
             if res is not True:
                 fields = self.fields.keys()
                 msg, elems = res[0].args
+                self.error_md = self.api.workspace.constr_err_md
+                self.constr_md = res[2]
                 if not any([elem in fields or f'Fcard.{elem}' in fields or f'Gcard.{elem}' in fields for elem in elems]):
                     # TODO check naming bug with _0 index in the name suffix
                     self.add_error(None, f'{error_type}: {msg}')
@@ -230,22 +230,8 @@ class WizardClass(CookieWizardView):
         """
         feature_product = self.api.save_json()
         logging.info(f'! Final result: {feature_product}')
-        self.request.session['FeatureProduct'] = feature_product
-        self.request.session['ConfigurationProduct'] = self.api.configuration_history
-        self.request.session['Metamodel'] = self.api.metamodel
-
-        configuration_history_view = json.dumps(self.api.configuration_history, indent=4)
-        collapsable_view = list(self.api.configuration_history.keys())
-        metadata_view = json.dumps(self.api.metamodel, indent=4)
-        return render(self.request, 'done.html', {
-            'form_data': feature_product,
-            'history': configuration_history_view,
-            'history_selected': {},
-            'collapsable': collapsable_view,
-            'metadata': metadata_view,
-            'metadata_selected': {},
-            'selected_feature': None
-        })
+        self.update_configuration_metadata(feature_product)
+        return render(self.request, 'done.html', self.configuration_metadata)
 
     def get_form(self, step=None, data=None, files=None):
         """
@@ -283,6 +269,25 @@ class WizardClass(CookieWizardView):
         self.form.graph_data = json.dumps(self.api.workspace.dependency_graph_data)
 
         return self.form
+
+    def update_configuration_metadata(self, feature_product):
+        self.request.session['FeatureProduct'] = feature_product
+        self.request.session['ConfigurationProduct'] = self.api.workspace.configuration_history
+        self.request.session['Metamodel'] = self.api.workspace.features
+
+        self.form.configuration_history_view = json.dumps(self.api.workspace.configuration_history, indent=4)
+        self.form.collapsable_view = list(self.api.workspace.configuration_history.keys())
+        self.form.metadata_view = json.dumps(self.api.workspace.features, indent=4)
+        self.form.configuration_sequence_view = list(self.api.storage.configuration_sequence)
+        self.configuration_metadata = {
+            'history': self.form.configuration_history_view,
+            'history_selected': {},
+            'collapsable': self.form.collapsable_view,
+            'metadata': self.form.metadata_view,
+            'metadata_selected': {},
+            'selected_feature': None,
+            'configuration_sequence': self.form.configuration_sequence_view
+        }
 
     def construct_step_form(self, step_id, files):
         """
@@ -370,6 +375,8 @@ class WizardClass(CookieWizardView):
             self.form.head = 'Empty step'
 
         self.form.next_constraints = self.api.get_next_constraints(self.current_step)
+        self.update_configuration_metadata('')
+        self.form.configuration_metadata = self.configuration_metadata
         logging.info(f"Finish preparing form {self.current_step}")
 
     def construct_feature_cardinality_forms(self, feature_cardinalities):
@@ -582,36 +589,6 @@ def download_file(request):
     response['Content-Disposition'] = "attachment; filename=%s" % filename
     # Return the response value
     return response
-
-def configure_metadata_output(request):
-    feature_product = request.session.get('FeatureProduct')
-    configuration_history = request.session.get('ConfigurationProduct')
-    metamodel = request.session.get('Metamodel')
-
-    configuration_history_view = json.dumps(configuration_history, indent=4)
-    collapsable_view = list(configuration_history.keys())
-    metadata_view = json.dumps(metamodel, indent=4)
-    if request.method == 'POST':
-        logging.debug('Post method configure output')
-        selected_feature = request.POST.get('feature-list')
-        request.session['SelectedFeature'] = selected_feature
-        history_selected_view = json.dumps(configuration_history[selected_feature], indent=4)
-        metadata_selected_view = json.dumps(read_metadata(metamodel, selected_feature.split('-')[0]), indent=4)
-    else:
-        history_selected_view, metadata_selected_view = {}, {}
-        try:
-            selected_feature = request.session.get('SelectedFeature')
-        except Exception:
-            selected_feature = None
-    return render(request, 'done.html', {
-        'form_data': feature_product,
-        'history': configuration_history_view,
-        'history_selected': history_selected_view,
-        'collapsable': collapsable_view,
-        'metadata': metadata_view,
-        'metadata_selected': metadata_selected_view,
-        'selected_feature': selected_feature.split('-')[0]
-    })
 
 class ContactForm1(forms.Form):
     name = forms.CharField(max_length=100)

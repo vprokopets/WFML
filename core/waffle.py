@@ -28,7 +28,6 @@ class Waffle:
     def reset(self):
         self.prec_bool = ['prec23', 'prec22', 'prec21', 'prec20', 'prec19', 'prec18', 'prec14', 'prec11', 'prec0', 'term']
         self.metamodel, self.stage_snap, self.last_snap = {}, {}, {}
-        self.constr_err_md, self.constr_md = {}, {}
         self.initial_fcards, self.groups = {}, {}
         self.features_to_configure = {}
         self.configuration_history = {}

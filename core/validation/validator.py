@@ -33,8 +33,8 @@ class Validator:
                     validation_errors.append((Exception(err, [field]), 'Waffle validation error'))
                     return validation_errors, 'Value assignment error(s)'
 
-        ret, err_type = self.constraint_validator.validate_constraints()
+        ret, err_type, constraint_metadata = self.constraint_validator.validate_constraints()
         if ret is not True:
-            validation_errors.append((ret, err_type))
+            validation_errors.append((ret, err_type, constraint_metadata))
             return validation_errors, 'Constraint validation error(s)'
         return validation_errors, 'No validation errors'

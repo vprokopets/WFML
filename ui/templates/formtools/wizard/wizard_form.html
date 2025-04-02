@@ -175,6 +175,288 @@
   <div class="result">
     <pre id="json">{{wizard.form.error_md | pprint}}</pre>
   </div>
+
+  <br>
+  <br>
+
+  <button type="button" class="collapsible">Open configuration history</button>
+  <div class="result">
+      <br>
+  
+      {# --- Dropdown for Selection --- #}
+      <label for="feature-list">Choose a configuration element:</label>
+      <br>
+      <select class="feature-list-class" name="feature-list" id="feature-list">
+        {% for m in wizard.form.collapsable_view %}
+            {# Ensure the value is the exact key needed for lookup #}
+            <option value="{{ m }}">{{ m }}</option>
+        {% endfor %}
+      </select>
+      <br>
+  
+      {# --- Display Area for Filtered History --- #}
+      <div class="selected-md" id="selected-history-feature-label">History selected for feature ...</div>
+      <pre id="json-history"><code id="json-history-code">{}</code></pre> {# Starts empty or with default #}
+  
+      {# --- Display Area for Metadata (Assuming similar logic might apply later) --- #}
+      <div class="selected-md" id="selected-metadata-feature-label">Metadata selected for feature ...</div>
+      <pre id="json-metamodel"><code id="json-metamodel-code">{{metadata_selected|default:"{}"}}</code></pre>
+  
+      {# --- Collapsible Full History (Data Source for JS) --- #}
+      <button type="button" class="collapsible">Open full history</button>
+      <div class="result">
+          <pre id="json-history-full-display"><code id="json-history-full-code">{{wizard.form.configuration_history_view}}</code></pre>
+      </div>
+  
+      {# --- Collapsible Full Metamodel --- #}
+      <button type="button" class="collapsible">Open full metamodel</button>
+
+      
+    <div class="result">
+        {# Embed metadata using json_script - Preferred method #}
+        {{ wizard.form.metadata_view|json_script:"full-metadata-data" }}
+
+        {# Optional: display the full metadata in a pre block if needed for viewing #}
+        <pre id="json-metamodel-full-display"><code id="json-metamodel-full-code">{{wizard.form.metadata_view}}</code></pre>
+    </div>
+  
+    <button type="button" class="collapsible">Open configuration sequence</button>
+    <div class="result">
+      {# Ensure no leading/trailing whitespace inside the code tag #}
+      <pre id="json-history-full-display"><code id="json-history-full-code">{% for item in wizard.form.configuration_sequence_view %}
+    [{{ forloop.counter }}]: {{ item }}
+    {% endfor %}</code></pre>
+    </div>
+  </div>
+  
+  <script>
+      document.addEventListener('DOMContentLoaded', function() {
+    // --- Get references to ALL necessary elements ---
+    const selectElement = document.getElementById('feature-list');
+
+    // History elements
+    const historySelectedCodeElement = document.getElementById('json-history-code');
+    const selectedHistoryFeatureLabel = document.getElementById('selected-history-feature-label');
+
+    // Metadata elements
+    const metadataSelectedCodeElement = document.getElementById('json-metamodel-code'); // New ID
+    const selectedMetadataFeatureLabel = document.getElementById('selected-metadata-feature-label'); // New ID
+
+    // Optional form input
+    const finalSelectionInput = document.getElementById('final_selected_feature_input');
+
+    // --- Data stores ---
+    let fullHistoryData = {};
+    let fullMetadataData = {}; // For metadata
+
+    // --- Helper Function: Safely get nested property ---
+    // path: array of strings representing keys
+    // obj: the object to traverse
+    function getNestedProperty(obj, path) {
+    // console.log(`Attempting to get path [${path.join(', ')}] from object:`, obj); // Log input
+    try {
+        let currentLevel = obj; // Use a separate variable for clarity inside reduce
+        for (let i = 0; i < path.length; i++) {
+            const key = path[i];
+            // console.log(`  Level ${i}: Current Object:`, currentLevel); // Log current object state
+            // console.log(`  Level ${i}: Checking for key: "${key}"`);    // Log key being checked
+
+            // Check if currentLevel is a valid object/array to traverse further
+            if (currentLevel && typeof currentLevel === 'object' && key in currentLevel) {
+                 currentLevel = currentLevel[key]; // Move to the next level
+            } else {
+                 // Path broke here!
+                 console.warn(`getNestedProperty: Path broken at key "${key}" (index ${i}).`);
+                 console.warn(`  Reason: currentLevel is not an object or key "${key}" not found.`);
+                 console.warn(`  currentLevel type: ${typeof currentLevel}`);
+                 console.warn(`  currentLevel value:`, currentLevel); // Log the value that broke the chain
+                 return undefined; // Stop traversal and return undefined
+            }
+        }
+        // If loop completed, currentLevel holds the final value
+        // console.log(`getNestedProperty: Successfully found value for path [${path.join(', ')}]:`, currentLevel);
+        return currentLevel;
+
+    } catch (e) {
+        // Catch any unexpected errors during access
+        console.error(`getNestedProperty: Unexpected error accessing path [${path.join(', ')}]:`, e);
+        return undefined;
+    }
+}
+
+
+    // --- 1a. Load and Parse the Full History Data ---
+    try {
+        const historyDataElement = document.getElementById('full-history-data'); // From json_script
+        if (historyDataElement) {
+            fullHistoryData = JSON.parse(historyDataElement.textContent);
+        } else {
+             const historyFullCodeElement = document.getElementById('json-history-full-code'); // Fallback
+             if (historyFullCodeElement) {
+                 fullHistoryData = JSON.parse(historyFullCodeElement.textContent || historyFullCodeElement.innerText);
+             } else { throw new Error("Could not find history data source."); }
+        }
+    } catch (error) {
+        console.error("Error parsing full history JSON:", error);
+        if(historySelectedCodeElement) historySelectedCodeElement.textContent = 'Error: Could not load source history data.';
+        // Consider disabling select if crucial data is missing
+        if(selectElement) selectElement.disabled = true;
+    }
+
+    // --- 1b. Load and Parse the Full Metadata Data ---
+try {
+    const metadataDataElement = document.getElementById('full-metadata-data'); // From json_script
+
+    if (metadataDataElement) {
+        const rawJsonString = metadataDataElement.textContent;
+        console.log("Raw textContent from metadata element:", rawJsonString);
+        console.log("Type BEFORE parsing:", typeof rawJsonString);
+
+        // First parse (removes outer quotes and handles escapes)
+        let intermediateResult = JSON.parse(rawJsonString);
+        console.log("Type AFTER first parse:", typeof intermediateResult); // Should log 'string' based on your logs
+
+        // Check if the first parse resulted in a string (as expected)
+        if (typeof intermediateResult === 'string') {
+            console.log("First parse resulted in a string, attempting second parse...");
+            // --- *** Second parse *** ---
+            fullMetadataData = JSON.parse(intermediateResult);
+            console.log("Type AFTER second parse:", typeof fullMetadataData); // SHOULD NOW BE 'object'
+        } else {
+             // If the first parse already gave an object (unlikely based on logs, but safe to handle)
+             console.log("First parse resulted in an object directly.");
+             fullMetadataData = intermediateResult;
+        }
+
+        // Final check and logging
+        if (typeof fullMetadataData === 'object' && fullMetadataData !== null) {
+             console.log("Parsing successful. Initial keys:", Object.keys(fullMetadataData));
+        } else {
+             console.error("Parsing FAILED: fullMetadataData is not an object after processing.", fullMetadataData);
+             throw new Error("Final data is not an object."); // Trigger the catch block
+        }
+
+    } else {
+         throw new Error("Could not find metadata data source element ('full-metadata-data').");
+    }
+} catch (error) {
+    console.error("Error loading/parsing full metadata JSON:", error);
+    if(metadataSelectedCodeElement) metadataSelectedCodeElement.textContent = 'Error: Could not load source metadata.';
+    if(selectElement) selectElement.disabled = true;
+}
+
+    console.log(selectElement)
+    // --- 2. Combined Update Function ---
+    function updateDisplays() {
+        if (!selectElement) return; // Exit if select element is missing
+
+        const selectedKey = selectElement.value; // e.g., "a.b-Value"
+
+        // --- Update History Display ---
+        if (historySelectedCodeElement && selectedHistoryFeatureLabel) {
+            selectedHistoryFeatureLabel.textContent = `History selected for feature ${selectedKey}`;
+            if (fullHistoryData && fullHistoryData.hasOwnProperty(selectedKey)) {
+                try {
+                    historySelectedCodeElement.textContent = JSON.stringify(fullHistoryData[selectedKey], null, 2);
+                } catch(e) {
+                    historySelectedCodeElement.textContent = 'Error displaying history.';
+                    console.error("Error stringifying history:", e);
+                }
+            } else {
+                historySelectedCodeElement.textContent = '{}';
+            }
+        } else {
+            console.warn("History display elements not found.");
+        }
+
+        // --- Update Metadata Display ---
+        if (metadataSelectedCodeElement && selectedMetadataFeatureLabel) {
+            selectedMetadataFeatureLabel.textContent = `Metadata selected for feature ${selectedKey}`;
+
+            // Process the key to find the path for metadata
+            const keyParts = selectedKey.split('.'); // e.g., ["a", "b-Value"]
+            let finalKeyPart = '';
+            let navigationPath = [];
+
+            if (keyParts.length > 0) {
+                // Use all parts except the last for initial navigation
+                navigationPath = keyParts.slice(0, -1); // e.g., ["a"]
+
+                // Process the last part to get the final key
+                const lastPart = keyParts[keyParts.length - 1]; // e.g., "b-Value"
+                const hyphenIndex = lastPart.indexOf('-');
+                if (hyphenIndex > -1) {
+                    finalKeyPart = lastPart.substring(0, hyphenIndex); // e.g., "b"
+                } else {
+                    finalKeyPart = lastPart; // Use as is if no hyphen (e.g., "a.c")
+                }
+                 // Add the processed final key part to the navigation path
+                navigationPath.push(finalKeyPart); // e.g., navigationPath becomes ["a", "b"]
+            }
+
+            console.log(`Selected key: ${selectedKey}, Nav Path: ${navigationPath.join('.')}`); // Debugging
+
+            // Traverse the metadata object using the constructed path
+            const targetObject = getNestedProperty(fullMetadataData, navigationPath);
+            console.log(targetObject)
+            console.log(JSON.stringify(targetObject.__self__, null, 2))
+            // Check if we found the target object and if it has '__self__'
+            if (targetObject && typeof targetObject === 'object' && targetObject.hasOwnProperty('__self__')) {
+                try {
+                    metadataSelectedCodeElement.textContent = JSON.stringify(targetObject.__self__, null, 2);
+                } catch (e) {
+                     metadataSelectedCodeElement.textContent = 'Error displaying metadata.';
+                     console.error("Error stringifying metadata __self__:", e);
+                }
+            } else {
+                // Handle cases where the path is invalid or __self__ is missing
+                metadataSelectedCodeElement.textContent = '{}';
+                // console.warn(`Metadata path "${navigationPath.join('.')}" or "__self__" key not found for "${selectedKey}".`);
+            }
+        } else {
+            console.warn("Metadata display elements not found.");
+        }
+
+        // --- Update Optional Form Input ---
+        if (finalSelectionInput) {
+            finalSelectionInput.value = selectedKey;
+        }
+    }
+
+    // --- 3. Attach Event Listener ---
+    if (selectElement && !selectElement.disabled) {
+        selectElement.addEventListener('change', updateDisplays);
+
+        // --- 4. Initial Update on Page Load ---
+        updateDisplays();
+    } else if (!selectElement) {
+         console.error("Select element 'feature-list' not found.");
+    } else {
+         console.warn("Select element is disabled, likely due to data loading errors.");
+    }
+});
+  </script>
+
+<style>
+
+  .selected-md {
+    background-color: #555;
+    color: white;
+    cursor: pointer;
+    padding: 18px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 15px;
+  }
+
+  .feature-list-class {
+    width: 80%;
+    height: 50px;
+  }
+</style>
+
 </div>
 
 <div id="graph-container" class="content-div">

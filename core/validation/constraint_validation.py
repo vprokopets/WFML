@@ -40,13 +40,13 @@ class ConstraintValidator:
                                     values = constraint['Object'].name.mapping_md['Current'].values()
                                     ret = Exception(msg, list(values))
                                     exception_type = 'Python exception'
-                                return ret, exception_type
+                                return ret, exception_type, constraint['Metadata']
                         else:
                             constraint['Object'].name.validate_constraint(constraint_metadata)
                         break
             else:
                 break
-        return True, None
+        return True, None, None
 
     def _get_constraint_mappings(self, constraint):
 

@@ -76,7 +76,8 @@ class Workspace:
             self.configuration_history[f'{name}-{field}'].append({
                 "Type": field,
                 "Value": value,
-                "Source": f"Stage {self.current_stage}" if constraint is None else f"From constraint {constraint}"
+                "Source": f"Stage {self.current_stage}" if constraint is None else f"From constraint {constraint}",
+                "Stage": self.api.storage.configuration_sequence.index(self.current_stage) + 1
             })
         if field == 'Inheritance':
             self.inheritance.append((name, value))
@@ -101,7 +102,8 @@ class Workspace:
                     self.configuration_history[f'{nfname}-{'Fcard'}'].append({
                         "Type": 'Fcard',
                         "Value": 0,
-                        "Source": f"Parent feature {parent_feature} || {card_type} with value {card_value}"
+                        "Source": f"Parent feature {parent_feature} || {card_type} with value {card_value}",
+                        "Stage": self.api.storage.configuration_sequence.index(self.current_stage) + 1
                     })
                     if isinstance(fmetadata, dict):
                         self.update_child_history_cards(parent_feature, card_type, card_value, fmetadata, nfname)
@@ -178,14 +180,10 @@ class Workspace:
     def update_active_state(self, name):
         md = self.read_metadata(name)['__self__']
         md['Active'] = md['ActiveF'] and md['ActiveG'] if md['Abstract'] is None else False
-        logging.info(f'Update active state for {name}: {md['ActiveF']} | {md['ActiveG']} | {md['Active']}')
+        logging.debug(f'Update active state for {name}: {md['ActiveF']} | {md['ActiveG']} | {md['Active']}')
 
     def get_product(self, md, res):
         for k, v in md.items():
-            if '__self__' in v.keys():
-                print(f'Feature {k}: {v['__self__']}')
-            else:
-                print(f'Feature {k} || {v}')
             if k != '__self__' and v['__self__']['Active'] is True:
                 self_value = {} if v['__self__']['Value'] is None else v['__self__']['Value']
                 res.update({k: self_value})
