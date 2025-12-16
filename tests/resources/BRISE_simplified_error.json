@@ -1,0 +1,75 @@
+{
+    "feature_model": "Model {\r\n    xor Surrogate {\r\n        TPE {\r\n            AccuracyThreshold -> float\r\n            [AccuracyThreshold > 0.7]\r\n        }\r\n        GPR {\r\n            AccuracyThreshold -> float\r\n            [AccuracyThreshold > 0.8]\r\n        }\r\n    }\r\n}\r\nContext {\r\n    SearchSpace {\r\n        xor Structure {\r\n            Flat {\r\n                [fcard.Model.Surrogate = 1]\r\n            }\r\n            Hierarchical {\r\n                [fcard.Model.Surrogate = 2]\r\n            }\r\n        }\r\n    }\r\n}",
+    "configuration": {
+        "1": {
+            "data": {},
+            "errors": []
+        },
+        "2": {
+            "data": {},
+            "errors": []
+        },
+        "3": {
+            "data": {},
+            "errors": []
+        },
+        "4": {
+            "data": {},
+            "errors": []
+        },
+        "5": {
+            "data": {
+                "Gcard.Context.SearchSpace.Structure": "Hierarchical"
+            },
+            "errors": []
+        },
+        "6": {
+            "data": {},
+            "errors": []
+        },
+        "7": {
+            "data": {},
+            "errors": []
+        },
+        "8": {
+            "data": {},
+            "errors": []
+        },
+        "9": {
+            "data": {
+                "Gcard.Model.Surrogate_0": "TPE",
+                "Gcard.Model.Surrogate_1": "GPR"
+            },
+            "errors": []
+        },
+        "10": {
+            "data": {},
+            "errors": []
+        },
+        "11": {
+            "data": {},
+            "errors": []
+        },
+        "12": {
+            "data": {},
+            "errors": []
+        },
+        "13": {
+            "data": {
+                "Model.Surrogate_0.TPE.AccuracyThreshold": 0.4,
+                "Model.Surrogate_1.GPR.AccuracyThreshold": 0.85
+            },
+            "errors": [
+                {
+                    "msg": "Expression (0.4 > 0.7).\nConstraint expression: [AccuracyThreshold > 0.7]\nError position: Line 5, Column 14-37\n",
+                    "elems": [
+                        "Model.Surrogate_0.TPE",
+                        "Model",
+                        "Model.Surrogate_0.TPE.AccuracyThreshold",
+                        "Model.Surrogate_0"
+                    ]
+                }
+            ]
+        }
+    }
+}

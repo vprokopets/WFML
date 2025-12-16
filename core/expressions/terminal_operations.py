@@ -18,7 +18,7 @@ class term(ExpressionElement):
             logging.debug(f"Operation object: {op} with value {type(op)}")
             res = self._get_value(op._parse(self.mapping_md, self.constr_md))
             return self._get_value(op._parse(self.mapping_md, self.constr_md))
-        elif isinstance(op, str) and op not in self.api.workspace.keywords:
+        elif isinstance(op, str) and op not in self.api.workspace.KEYWORDS:
             is_list = True if any(op.startswith(x[0]) and op.endswith(x[1]) for x in [('[', ']'), ('{', '}')]) else False
 
             replace_patterns = ['[', ']', '{', '}', "'", '"', ' ']
@@ -44,7 +44,7 @@ class term(ExpressionElement):
             obj_md = constr_md['Features'][obj_id]
             fname = mapping_md['Current'][(orig := list(obj_md.keys())[0])]
             ftype = list(obj_md.values())[0]
-            ret = self.api.workspace.read_metadata(fname)['__self__']
+            ret = self.api.workspace.read_feature_data(fname)['__self__']
             childs = self.api.workspace.get_feature_childrens(fname)
             ret.update({'GFcard': len(set(itertools.chain.from_iterable([sub[orig]] for sub in mapping_md['All']))),
                         'Fname': fname,

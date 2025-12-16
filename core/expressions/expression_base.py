@@ -101,7 +101,7 @@ class ExpressionElement(object):
         """
         if not isinstance(feature_metadata, bool):
             try:
-                return self.api.workspace.feature_is_active(feature_metadata['Fname'])
+                return self.api.workspace.is_feature_active(feature_metadata['Fname'])
             except Exception:
                 return True
         else:
@@ -156,7 +156,7 @@ class ExpressionElement(object):
 
     def _filter_stub(self, feature_metadata):
         if feature_metadata['Fname'] in self.mapping_md['FilterFlag'].keys():
-            feature_metadata_new = self.api.workspace.read_metadata(self.mapping_md['FilterFlag'][feature_metadata['Fname']])['__self__']
+            feature_metadata_new = self.api.workspace.read_feature_data(self.mapping_md['FilterFlag'][feature_metadata['Fname']])['__self__']
             feature_metadata_new.update({
                 'IsFeature': True,
                 'Ftype': feature_metadata['Ftype'],

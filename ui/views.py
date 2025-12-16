@@ -4,19 +4,15 @@ import mimetypes
 import json
 import io
 import pstats
-import pprint
 
 from collections import OrderedDict
-from core.auxiliary import read_metadata
 from core.waffle import Waffle
 from django import forms
 from django.http.response import HttpResponse
 from django.shortcuts import redirect, render
 from formtools.wizard.views import CookieWizardView
-from django.views.generic import View
-from django.http import JsonResponse
-
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+
 # profiling library
 import cProfile
 
@@ -122,8 +118,7 @@ class WizardStepForm(forms.Form):
         raw_data = self.querydict_to_dict(copy.deepcopy(self.data))
         for k, v in raw_data.items():
             if (k.startswith((prefix := f'{self.prefix}-'))):
-                print(f'Parsing input form {k} with value {v}')
-                logging.debug(f'Parsing input form {k} with value {v}')
+                logging.info(f'Parsing input form {k} with value {v}')
                 input_data.update({k.split(prefix)[-1]: v})
         logging.debug(f'Input for manual processing {input_data}')
         for k, v in input_data.items():
@@ -140,7 +135,7 @@ class WizardStepForm(forms.Form):
                     except ValueError:
                         pass
             else:
-                attr_type = self.api.workspace.read_metadata(k, 'Attribute')
+                attr_type = self.api.workspace.read_feature_data(k, 'Attribute')
                 logging.debug(f'Attribute type for field {k}: {attr_type}')
                 if any([x in attr_type for x in ['array', 'Array']]):
                     v = v.replace(' ', '').split(',')
@@ -179,7 +174,7 @@ class WizardStepForm(forms.Form):
         cd = copy.deepcopy(self.manually_cleaned_data)
         logging.debug(f'Label: {self.label}')
         logging.debug(f'Cleaned Data: {cd}')
-        validation_errors, error_type = self.api.validate_form(self.label, cd)
+        validation_errors, error_type = self.api.validate_form(self.stage_step, self.meta, cd)
         self.display_validation_feedback(validation_errors, error_type)
 
         if profiling is True:
@@ -204,7 +199,7 @@ class WizardStepForm(forms.Form):
                     self.add_error(None, f'{error_type}: {msg}')
                 else:
                     for elem in elems:
-                        attr_type = self.api.workspace.read_metadata(elem, 'Attribute')
+                        attr_type = self.api.workspace.read_feature_data(elem, 'Attribute')
                         for field in self.fields.keys():
                             if attr_type != 'predefined' and (elem == field or f'Fcard.{elem}' == field or f'Gcard.{elem}' == field):
                                 self.add_error(field, f'{error_type}: {msg}')
@@ -248,37 +243,48 @@ class WizardClass(CookieWizardView):
             step = self.steps.current
         self.step_number = step
         self.form = super(WizardClass, self).get_form(step, data, files)
-
-        self.current_step = self.api.storage.sequence_filtered[int(step)]
+        try:
+            self.configuration_sequence
+        except AttributeError:
+            self.configuration_sequence = self.api.storage.test_sequence
+        self.current_step = self.configuration_sequence[int(step)]
         logging.info(f'Wizard step {step} | {self.current_step}.')
 
-        self.form.stages_number = len(self.api.storage.sequence_filtered)
-        self.form.stage_step = int(self.step_number) + 1
-
+        self.form.stages_number = len(self.configuration_sequence)
+        self.form.stage_step = int(self.step_number)
+        constr = []
+        for constraint in self.current_step['constraints']:
+            constr.append(self.api.workspace.get_constraint_expression(constraint).replace('[', '').replace(']', ''))
+        label = f'{self.current_step["features"]}'
+        sublabel = f'Constraints to validate: {constr}'
         # Fill form label and head.
-        self.form.label = self.current_step
+        self.form.meta = self.current_step
+        self.form.label = label
+        self.form.sublabel = sublabel
         self.form.head = ''
         self.form.step_id = id(self)
 
         self.construct_step_form(self.current_step, files)
-        if self.form.fields != {}:
-            self.api.workspace.change_dependency_graph_state(self.current_step, 'In Progress')
-        else:
-            self.api.workspace.change_dependency_graph_state(self.current_step, 'Skipped')
+        # TODO update graph
+        # if self.form.fields != {}:
+        #     self.api.workspace.change_dependency_graph_state(self.current_step, 'In Progress')
+        # else:
+        #     self.api.workspace.change_dependency_graph_state(self.current_step, 'Skipped')
         # TODO update graph state call
         self.form.graph_data = json.dumps(self.api.workspace.dependency_graph_data)
 
         return self.form
 
     def update_configuration_metadata(self, feature_product):
-        self.request.session['FeatureProduct'] = feature_product
-        self.request.session['ConfigurationProduct'] = self.api.workspace.configuration_history
-        self.request.session['Metamodel'] = self.api.workspace.features
 
         self.form.configuration_history_view = json.dumps(self.api.workspace.configuration_history, indent=4)
         self.form.collapsable_view = list(self.api.workspace.configuration_history.keys())
         self.form.metadata_view = json.dumps(self.api.workspace.features, indent=4)
         self.form.configuration_sequence_view = list(self.api.storage.configuration_sequence)
+        self.form.feature_product = json.dumps(feature_product, indent=4)
+        self.form.constraint_metadata = json.dumps(self.api.workspace.constraint_metadata, indent=4)
+        self.form.constraint_groups = json.dumps(self.api.storage.constraint_groups_representation, indent=4)
+        self.form.constraint_groups_full_data = json.dumps(self.api.storage.constraint_groups, indent=4)
         self.configuration_metadata = {
             'history': self.form.configuration_history_view,
             'history_selected': {},
@@ -286,7 +292,11 @@ class WizardClass(CookieWizardView):
             'metadata': self.form.metadata_view,
             'metadata_selected': {},
             'selected_feature': None,
-            'configuration_sequence': self.form.configuration_sequence_view
+            'configuration_sequence': self.form.configuration_sequence_view,
+            'feature_product': self.form.feature_product,
+            'constraint_metadata': self.form.constraint_metadata,
+            'constraint_groups': self.form.constraint_groups,
+            'constraint_groups_full_data': self.form.constraint_groups_full_data
         }
 
     def construct_step_form(self, step_id, files):
@@ -304,25 +314,29 @@ class WizardClass(CookieWizardView):
         # cycles = api.cycles
         cycles = {}
         # If step contains cycle, then get all cycle items and perform field initialization for all of them.
-        if self.current_step in cycles.keys():
-            for element in (cycle_elems := cycles[self.current_step]):
-                tlf_involved.append(self.api.workspace.get_original(element.split('-')[0].split('.')[0]))
-                features_involved.append(element)
-            logging.debug(f'Making cycle form group {self.current_step} || {cycle_elems}')
-        elif 'Waffle_Constraint_Group_' in self.current_step:
-            for element in (group_elems := self.api.storage.constraint_groups[self.current_step]):
-                tlf_involved.append(self.api.workspace.get_original(element.split('-')[0].split('.')[0]))
-                features_involved.append(element)
-            logging.debug(f'Making form group {self.current_step} || {group_elems}')
-        else:
-            tlf_involved.append(self.api.workspace.get_original(step_id.split('-')[0].split('.')[0]))
-            features_involved.append(step_id)
-            logging.debug(f'Making single form {self.current_step}')
+        # if self.current_step in cycles.keys():
+        #     for element in (cycle_elems := cycles[self.current_step]):
+        #         tlf_involved.append(self.api.workspace.get_feature_base_name(element.split('-')[0].split('.')[0]))
+        #         features_involved.append(element)
+        #     logging.debug(f'Making cycle form group {self.current_step} || {cycle_elems}')
+        # elif 'Waffle_Constraint_Group_' in self.current_step:
+        #     for element in (group_elems := self.api.storage.constraint_groups[self.current_step]):
+        #         tlf_involved.append(self.api.workspace.get_feature_base_name(element.split('-')[0].split('.')[0]))
+        #         features_involved.append(element)
+        #     logging.debug(f'Making form group {self.current_step} || {group_elems}')
+        # else:
+        #     tlf_involved.append(self.api.workspace.get_feature_base_name(step_id.split('-')[0].split('.')[0]))
+        #     features_involved.append(step_id)
+        #     logging.debug(f'Making single form {self.current_step}')
 
+        for element in (group_elems := step_id['features']):
+            tlf_involved.append(self.api.workspace.get_feature_base_name(element.split('-')[0].split('.')[0]))
+            features_involved.append(element)
+        logging.debug(f'Making form group {self.current_step} || {group_elems}')
         if self.step_number not in self.api.storage.stage_snap.keys():
             form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
             for tlf in tlf_involved:
-                unconfigured_features = self.api.workspace.get_undefined_features(tlf)
+                unconfigured_features = self.api.workspace.get_unconfigured_features(tlf)
                 for ftype, features in unconfigured_features.items():
                     for feature in features:
                         if feature not in form_data[ftype]:
@@ -339,7 +353,7 @@ class WizardClass(CookieWizardView):
                 logging.debug(f'Cleaning form {self.step_number}')
                 form_data = {'Fcard': [], 'Gcard': [], 'Value': []}
                 for tlf in tlf_involved:
-                    unconfigured_features = self.api.workspace.get_undefined_features(tlf)
+                    unconfigured_features = self.api.workspace.get_unconfigured_features(tlf)
                     for ftype, features in unconfigured_features.items():
                         for feature in features:
                             if feature not in form_data[ftype]:
@@ -357,7 +371,7 @@ class WizardClass(CookieWizardView):
         }
         for feature_type, features in form_data.items():
             for feature_name in features:
-                if f'{self.api.workspace.get_original(feature_name)}-{feature_type}' in features_involved:
+                if f'{self.api.workspace.get_feature_base_name(feature_name)}-{feature_type}' in features_involved:
                     data_filtered[feature_type].append(feature_name)
         logging.debug(f'Filtered features: {data_filtered}')
 
@@ -368,13 +382,13 @@ class WizardClass(CookieWizardView):
         if 'Waffle_Constraint_Group_' in self.current_step:
             self.form.head = 'Combined step for constraint feature group'
         elif len(data_filtered['Value']) > 0:
-            self.form.head = 'Values configuration for subtree of feature'
+            self.form.head = 'Features to configure: '
         elif len(data_filtered['Fcard']) > 0 or len(data_filtered['Gcard']) > 0:
-            self.form.head = 'Cardinalities configuration for subtree of feature'
+            self.form.head = 'Cardinalities to configure: '
         else:
             self.form.head = 'Empty step'
 
-        self.form.next_constraints = self.api.get_next_constraints(self.current_step)
+        self.form.next_constraints = step_id['constraints']
         self.update_configuration_metadata('')
         self.form.configuration_metadata = self.configuration_metadata
         logging.info(f"Finish preparing form {self.current_step}")
@@ -387,7 +401,7 @@ class WizardClass(CookieWizardView):
         feature_cardinalities (type = dict): dict with all feature cardinalities.
         """
         for fcard in feature_cardinalities:
-            value = self.api.workspace.read_metadata(fcard, 'Fcard')
+            value = self.api.workspace.read_feature_data(fcard, 'Fcard')
             allowed = None
             if value == '*':
                 allowed = '0..inf'
@@ -411,7 +425,7 @@ class WizardClass(CookieWizardView):
         # Create fields for each gcard record.
         for gcard in group_cardinalities:
             # Create appropriate fields in form.
-            value = self.api.workspace.read_metadata(gcard, 'Gcard')
+            value = self.api.workspace.read_feature_data(gcard, 'Gcard')
             options_full = self.api.workspace.get_feature_childrens(gcard)
             options = [x.rsplit('.', 1)[-1] for x in options_full]
             choises_list = []
@@ -432,7 +446,7 @@ class WizardClass(CookieWizardView):
 
     def construct_attribute_value_forms(self, attribute_values):
         for feature in attribute_values:
-            feature_type = self.api.workspace.read_metadata(feature, 'Attribute')
+            feature_type = self.api.workspace.read_feature_data(feature, 'Attribute')
             # Check if this field is allowed by chosen group cardinality.
             if feature_type == 'integer':
                 self.form.fields[feature] = forms.IntegerField(label=f'{feature}  (Type: {feature_type})')
@@ -489,7 +503,8 @@ class WizardClass(CookieWizardView):
         # (if available).
         res = False
         skip = True
-        self.api.workspace.change_dependency_graph_state(self.current_step, 'Configured')
+        # TODO update graph
+        # self.api.workspace.change_dependency_graph_state(self.current_step, 'Configured')
         while res is False:
             logging.info(f'Rendering next step {self.steps.next}.')
             next_step = self.steps.next
@@ -498,7 +513,7 @@ class WizardClass(CookieWizardView):
                 data=self.storage.get_step_data(next_step),
                 files=self.storage.get_step_files(next_step),
             )
-            if new_form.fields != {} or skip is False or 'Waffle_Constraint_Group_' in self.api.storage.sequence_filtered[int(next_step)]:
+            if new_form.fields != {} or skip is False or 'Waffle_Constraint_Group_' in self.api.storage.test_sequence[int(next_step)]:
                 res = True
             else:
                 new_form.is_valid()
@@ -541,7 +556,7 @@ def initial_page(request, *args, **kwargs):
             waffle_api = Waffle(debug_mode)
             waffle_api.initialize_product(model)
             factory_forms = []
-            for _ in waffle_api.storage.sequence_filtered:
+            for _ in waffle_api.storage.test_sequence:
                 factory_forms.append(WizardStepForm)
             return redirect('factory_wizard')
 
@@ -589,38 +604,3 @@ def download_file(request):
     response['Content-Disposition'] = "attachment; filename=%s" % filename
     # Return the response value
     return response
-
-class ContactForm1(forms.Form):
-    name = forms.CharField(max_length=100)
-    email = forms.EmailField()
-
-class ContactForm2(forms.Form):
-    message = forms.CharField(widget=forms.Textarea)
-
-
-class MyWizardView(View):
-    form_list = [ContactForm1, ContactForm2]
-    template_name = 'wizard-form.html'
-
-    def get(self, request, step=0):
-        if step >= len(self.form_list):
-            return JsonResponse({"success": "true", "message": "All forms submitted."})
-        form = self.form_list[step]()
-        return render(request, self.template_name, {"form": form, "step": step, "form_count": len(self.form_list)})
-
-    def post(self, request, step=0):
-        print(f'POST Step {step} || {len(self.form_list)}')
-        if step >= len(self.form_list):
-            return JsonResponse({"success": "true", "message": "All forms submitted."})
-        form = self.form_list[step](request.POST)
-        if form.is_valid():
-            print(f'VALID FORM')
-            if step + 1 >= len(self.form_list):
-                print(f'WHYYYY')
-                return JsonResponse({"success": "true", "message": "All forms submitted."})
-            next_form = self.form_list[step + 1]()
-            print(f'NEXT FORM {next_form}')
-            return render(request, self.template_name, {"form": next_form, "step": step+1, "form_count": len(self.form_list)})
-        else:
-            print(f'INVALID FORM')
-            return render(request, self.template_name, {"form": form, "step": step, "form_count": len(self.form_list)})

@@ -57,7 +57,7 @@ class Storage:
         self.stage_snap.update({step: copy.deepcopy(self.last_snap)})
 
     def register_initialization_data(self, dependencies, configuration_sequence, sequence_filtered,
-                                     constraint_groups, constraint_groups_representation):
+                                     constraint_groups, constraint_groups_representation, test_sequence):
 
         self.dependencies = dependencies
         self.configuration_sequence = configuration_sequence
@@ -65,3 +65,4 @@ class Storage:
         self.constraint_groups = constraint_groups
         self.constraint_groups_representation = constraint_groups_representation
         self.workspace.constraint_groups_w = constraint_groups
+        self.test_sequence = test_sequence

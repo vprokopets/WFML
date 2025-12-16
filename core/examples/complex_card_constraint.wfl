@@ -1,4 +1,4 @@
-xor b 2..3 {
+xor b 2..5, 8 {
     e 2..3 {
         b -> integer 2..3
         c -> integer

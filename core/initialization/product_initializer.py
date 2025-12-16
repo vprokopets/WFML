@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from core.auxiliary import cname, topo_sort
 from core.initialization.feature_initializer import FeatureInitializer
+from core.test_scheduler import TestScheduler
 
 
 class ProductInitializer:
@@ -17,19 +18,61 @@ class ProductInitializer:
         self.constraint_groups_representation = {}
 
     def build_metagraph(self):
+        logging.info('Dependencies analysis')
         # tree dependencies analysis (parent-child relations + fcard-gcard/value relations)
         for tlf, md in self.workspace.features.items():
             if md['__self__']['Abstract'] is None:
                 self._tree_dependencies_analysis(tlf)
-
+        print('----------------------------')
+        logging.info('Tree dependencies')
+        pprint.pprint(self.dependencies)
         # cross-tree dependencies analysis (from constraints)
         cross_tree_dependencies, parent_dependencies, independent_features = self._cross_tree_dependencies_analysis()
+
+        print('----------------------------')
+        logging.info('Cross-tree dependencies')
+        pprint.pprint(cross_tree_dependencies)
+
+        print('----------------------------')
+        logging.info('Parent dependencies')
+        pprint.pprint(parent_dependencies)
         self.dependencies.extend(cross_tree_dependencies)
+        self.dependencies.extend(parent_dependencies)
 
         # define restrictions, e.g., feature A.B must be configured after feature A but before constraint A.B > 2
-        sequence_restrictions = self._sequence_restriction_analysis(parent_dependencies)
+        sequence_restrictions = self._sequence_restriction_analysis()
+
+        print('----------------------------')
+        logging.info('Sequence restrictions')
+        pprint.pprint(sequence_restrictions)
         # group constraints and features that are connected with cross-tree dependencies
         # to resolve them during single wizard step
+        test_sequence_solver = TestScheduler()
+        self.test_sequence = test_sequence_solver.create_configuration_schedule_v4(sequence_restrictions)
+        test_features = ['Context.ExperimentRegions.Regionss-Value']
+        islands = test_sequence_solver.find_dependency_islands(sequence_restrictions)
+        test = test_sequence_solver.find_all_affected_features_final(sequence_restrictions, test_features)
+        print('------TEST NEW FUNCTIONS----------')
+        print('Dependency islands')
+        pprint.pprint(islands)
+
+        print(f'All dependencies affected by a feature(s) {test_features}')
+        print(test)
+
+        # --- Output ---
+        if self.test_sequence:
+            print('----------------------------')
+            logging.info('Configuration sequence:')
+            for i, step_data in enumerate(self.test_sequence):
+                print(f'Step {i+1}:')
+                if step_data['features']:
+                    print(f'  Features: {step_data['features']}')
+                if step_data['constraints']:
+                    print(f'  Constraints: {step_data['constraints']}')
+                if not step_data['features'] and not step_data['constraints']:
+                    print('  (Empty step - should not happen with current logic)') # Should be filtered
+        else:
+            logging.info('Could not generate schedule due to errors.')
         self.constraint_groups = self._group_constraint_dependencies(sequence_restrictions)
 
         # for example of constraint [A.B > 2] with parent feature A
@@ -37,21 +80,21 @@ class ProductInitializer:
         # dependencies_to_remove are required to adjust configuration sequence for constraints
         dependencies_to_remove = self._replace_dependencies_that_are_in_group()
         self._define_configuration_sequence(independent_features, dependencies_to_remove)
-
         self.storage.register_initialization_data(
             self.dependencies,
             self.configuration_sequence,
             self.sequence_filtered,
             self.constraint_groups,
-            self.constraint_groups_representation
+            self.constraint_groups_representation,
+            self.test_sequence
         )
 
     def define_inheritance(self, parsing_objects):
         seq, _ = topo_sort(self.workspace.inheritance, rev=True)
         for feature in seq:
-            md = self.workspace.read_metadata(feature)
+            md = self.workspace.read_feature_data(feature)
             if (super_feature := md['__self__']['Inheritance']) is not None:
-                md_copy = copy.deepcopy(self.workspace.read_metadata(super_feature))
+                md_copy = copy.deepcopy(self.workspace.read_feature_data(super_feature))
                 if parsing_objects == 'Feature':
                     del md_copy['__self__']
                     md.update(md_copy)
@@ -79,11 +122,13 @@ class ProductInitializer:
         # Since constraints need to collect information of adhered features, we firstly need to initialize whole feature workspace
         # ('Feature' loop) and only then assign constraints ('Constraint' loop)
         for parsing_objects in ['Feature', 'Constraint']:
+            logging.info(f'Parsing objects of type {parsing_objects}')
             for element in model.elements:
                 # Skip parsing of global constraints
                 # TODO add parsing of global constraints
                 if cname(element) == 'Feature':
                     self.feature_initializer.parse_feature(element, parsing_objects=parsing_objects)
+            logging.info(f'Performing inheritance for objects of type {parsing_objects}')
             self.define_inheritance(parsing_objects)
 
     def _cross_tree_dependencies_analysis(self):
@@ -138,9 +183,9 @@ class ProductInitializer:
                         independent_constraint_flag = False
                 for k, v in constraint['Metadata']['Read'].items():
                     dependencies.extend([(f'{x}-{k}', f'{constraint['ID']}') for x in v])
-                    dependencies.extend([(f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{x}-{k}') for x in v])
+                    # dependencies.extend([(f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{x}-{k}') for x in v])
                 parent_dependencies.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
-                dependencies.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
+                # dependencies.append((f'{constraint['Metadata']['ParentFeature']}-Fcard', f'{constraint['ID']}'))
                 if independent_constraint_flag is True:
                     independent_constraints.append(constraint['ID'])
 
@@ -149,12 +194,23 @@ class ProductInitializer:
         return filtered_dependencies, parent_dependencies, independent_constraints
 
     def _tree_dependencies_analysis(self, feature, parent=None):
-        md = self.workspace.read_metadata(feature)
+        md = self.workspace.read_feature_data(feature)
         self.dependencies.append((f'{feature}-Fcard', f'{feature}-{'Gcard' if md['__self__']['Attribute'] is None else 'Value'}'))
         if parent is not None:
-            md_par = self.workspace.read_metadata(parent)
-            self.dependencies.append((f'{parent}-{'Gcard' if md_par['__self__']['Attribute'] is None else 'Value'}',
-                                      f'{feature}-Fcard'))
+            md_par = self.workspace.read_feature_data(parent)
+            # TODO update the logic for else clause in form generation function
+            # Currently only True clause is working
+            flag = True
+            if flag is True:
+                self.dependencies.append((f'{parent}-{'Gcard' if md_par['__self__']['Attribute'] is None else 'Value'}',
+                                        f'{feature}-Fcard'))
+            else:
+                if md_par['__self__']['Attribute'] is None:
+                    self.dependencies.append((f'{feature}-Fcard', f'{parent}-Gcard'))
+                    self.dependencies.append((f'{parent}-Fcard', f'{feature}-Fcard'))
+                    self.dependencies.append((f'{parent}-Gcard', f'{feature}-Gcard'))
+                else:
+                    self.dependencies.append((f'{parent}-Gcard', f'{feature}-Value'))
         for key in md.keys():
             if key != '__self__':
                 self._tree_dependencies_analysis(f'{feature}.{key}', feature)
@@ -217,7 +273,7 @@ class ProductInitializer:
                         if first_part_type != 'Childs':
                             full_name = f'{first_part_name}.{second_part}' if second_part is not None else first_part_name
                             try:
-                                self.workspace.read_metadata(full_name)
+                                self.workspace.read_feature_data(full_name)
                                 constraint['Metadata'][assign_type][feature_type].append(full_name)
                                 if feature_name not in constraint['Metadata']['FilterStub'].keys():
                                     constraint['Metadata']['FilterStub'].update({feature_name: {}})
@@ -233,7 +289,7 @@ class ProductInitializer:
                     if first_part_type != 'Childs':
                         full_name = f'{first_part_name}.{second_part}' if second_part is not None else first_part_name
                         try:
-                            self.workspace.read_metadata(full_name)
+                            self.workspace.read_feature_data(full_name)
                             constraint['Metadata'][assign_type]['Value'].append(full_name)
                             if second_part not in constraint['Metadata']['FilterStub'].keys():
                                 constraint['Metadata']['FilterStub'].update({second_part: {}})
@@ -242,7 +298,7 @@ class ProductInitializer:
                         except KeyError:
                             pass
 
-    def _sequence_restriction_analysis(self, parent_dependencies):
+    def _sequence_restriction_analysis(self):
         sequence_restrictions = {}
         element_pattern = {
             'Before': [],
@@ -251,12 +307,11 @@ class ProductInitializer:
 
         # define restrictions, e.g., feature A.B must be configured after feature A but before constraint A.B > 2
         for dependency in self.dependencies:
-            if dependency not in parent_dependencies:
-                for index, element in enumerate(dependency):
-                    if element not in sequence_restrictions.keys():
-                        sequence_restrictions.update({element: copy.deepcopy(element_pattern)})
-                    connection = 'Before' if index == 0 else 'After'
-                    sequence_restrictions[element][connection].append(dependency[0 if connection == 'After' else 1])
+            for index, element in enumerate(dependency):
+                if element not in sequence_restrictions.keys():
+                    sequence_restrictions.update({element: copy.deepcopy(element_pattern)})
+                connection = 'Before' if index == 0 else 'After'
+                sequence_restrictions[element][connection].append(dependency[0 if connection == 'After' else 1])
         return sequence_restrictions
 
     def _group_constraint_dependencies(self, sequence_restrictions):
@@ -271,7 +326,7 @@ class ProductInitializer:
                 for elem in group:
                     include = True
                     for elem_alt in group:
-                        if (a := elem.split('-')[0]) in (b := elem_alt.split('-')[0]) and a != b:
+                        if (a := elem.split('-')[0]) in (b := elem_alt.split('-')[0]) and a != b and len(a.split('.')) != len(b.split('.')):
                             include = False
                     if include is True:
                         group_filtered.append(elem)

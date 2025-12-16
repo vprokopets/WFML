@@ -6,7 +6,7 @@ class CardinalityValidator:
         self.workspace = workspace
 
     def check_cardinality_in_constraints(self, value, card_type, name):
-        # Currently, this fuction is not used - needs to be reimplemented in the future
+        # TODO Currently, this fuction is not used - needs to be reimplemented in the future
         for constraint in self.constraints.values():
             constr_md = constraint['Metadata']
             check = self.get_feature_mappings(constr_md['ParentFeature'], self.metamodel)
@@ -18,7 +18,7 @@ class CardinalityValidator:
                                 check1 = self.get_feature_mappings(feature, self.metamodel)
                                 # TODO new cardinality check mechanism
                                 if feature in constr_md['FeaturesPrec'].keys():
-                                    if check1 == [] and any([x not in self.prec_bool
+                                    if check1 == [] and any([x not in self.PREC_BOOL
                                                              and not (x == 'prec12' and feature_type == 'Fcard')
                                                              for x in constr_md['FeaturesPrec'][feature]]):
                                         raise Exception(f'{card_type} cardinality value {value} for feature {name}'
@@ -26,7 +26,7 @@ class CardinalityValidator:
                                                         name)
 
     def check_cardinality_value(self, name, value, card_type):
-        md = self.workspace.read_metadata(name)
+        md = self.workspace.read_feature_data(name)
         error_msg = ''
         old_value = md['__self__'][card_type]
 
@@ -34,8 +34,8 @@ class CardinalityValidator:
         check_new = is_card_defined(value)
 
         if check_curr is False and check_new is True:
-            if old_value in self.workspace.card_boundaries.keys():
-                card_boundaries = self.workspace.card_boundaries[old_value]
+            if old_value in self.workspace.CARD_BOUNDARIES.keys():
+                card_boundaries = self.workspace.CARD_BOUNDARIES[old_value]
             else:
                 card_boundaries = []
                 for card_interval in old_value.split(','):

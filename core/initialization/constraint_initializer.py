@@ -94,7 +94,7 @@ class ConstraintInitializer:
                     subres = self._parse_constraint_helper(op, parent_feature)
 
                     # feature processing pipeline for appropriate elements of an object tree
-                    if isinstance(subres, str) and len(elements) >= 1 and subres not in self.workspace.keywords:
+                    if isinstance(subres, str) and len(elements) >= 1 and subres not in self.workspace.KEYWORDS:
                         fnames, card_keyword, childs_keyword, fname_keyword, is_feature = self._parse_feature_name(subres,
                                                                                                                    parent_feature)
                         if is_feature is True:
@@ -128,7 +128,7 @@ class ConstraintInitializer:
                                     self.pattern['FeaturesPrec'].update({fname: [cname]})
                                 else:
                                     self.pattern['FeaturesPrec'][fname].append(cname)
-                                if cname in self.workspace.prec_bool:
+                                if cname in self.workspace.PREC_BOOL:
                                     md[fname] = 'Fcard'
                     self.pattern['Precedence'].update({id(constraint): res})
                 return id(constraint) if len(elements) > 1 else subres
@@ -226,11 +226,11 @@ class ConstraintInitializer:
         # check whether this is a feature (is it present in the workspace)
         for check in [self_name, full_name, name]:
             try:
-                self.workspace.read_metadata(check)
+                self.workspace.read_feature_data(check)
                 is_feature = True
                 res = check
                 break
-            except KeyError:
+            except ValueError:
                 res = name
                 is_feature = False
                 # TODO proper logging

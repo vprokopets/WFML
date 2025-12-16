@@ -9,43 +9,41 @@ class ConstraintValidator:
         self.storage = storage
 
     def validate_constraints(self):
-        print('---------------------Validating constraints-------------------------')
-        for index in range(self.storage.configuration_sequence.index(self.workspace.current_stage) + 1,
-                           len(self.storage.configuration_sequence)):
-            if ((elem := self.storage.configuration_sequence[index]).startswith('Constraint_')):
-                logging.debug(f'Constraint {elem}')
-                for constraint in self.workspace.constraints.values():
-                    if constraint['ID'] == elem:
-                        constraint_metadata = constraint['Metadata']
-                        logging.debug('======================================================')
-                        logging.info(f'Evaluating constraint {constraint_metadata['Expression']}')   
-                        self._get_constraint_mappings(constraint)
-                        self.workspace.constr_err_md = {}
-                        if self.workspace.debug_mode is False:
+        logging.info('Validating constraints...')
+        for elem in self.workspace.current_stage['constraints']:
+            logging.debug(f'Constraint {elem}')
+            for constraint in self.workspace.constraints.values():
+                if constraint['ID'] == elem:
+                    constraint_metadata = constraint['Metadata']
+                    logging.debug('======================================================')
+                    logging.info(f'Validating constraint {constraint_metadata['Expression']}')   
+                    self._get_constraint_mappings(constraint)
+                    self.workspace.constr_err_md = {}
+                    if self.workspace.debug_mode is False:
 
-                            try:
-                                constraint['Object'].name.validate_constraint(constraint_metadata)
-                            except Exception as e:
-                                mapping_md = constraint['Object'].name.mapping_md
-                                for feature, mapping in mapping_md['Current'].items():
-                                    if feature in constraint_metadata['FeaturesPrec'].keys():
-                                        self.workspace.constr_err_md.update({feature: self.workspace.read_metadata(mapping)})
-                                logging.exception("Constraint validation was unsuccessfull!")
-                                try:
-                                    msg, _ = e.args
-                                    ret = e
-                                    exception_type = 'Waffle validation error'
-                                except ValueError:
-                                    msg = constraint['Object'].name.get_error_message(f'{e}')
-                                    values = constraint['Object'].name.mapping_md['Current'].values()
-                                    ret = Exception(msg, list(values))
-                                    exception_type = 'Python exception'
-                                return ret, exception_type, constraint['Metadata']
-                        else:
+                        try:
                             constraint['Object'].name.validate_constraint(constraint_metadata)
-                        break
-            else:
-                break
+                        except Exception as e:
+                            mapping_md = constraint['Object'].name.mapping_md
+                            for feature, mapping in mapping_md['Current'].items():
+                                if feature in constraint_metadata['FeaturesPrec'].keys():
+                                    self.workspace.constr_err_md.update({feature: self.workspace.read_feature_data(mapping)})
+                            logging.exception("Constraint validation was unsuccessfull!")
+                            try:
+                                msg, _ = e.args
+                                ret = e
+                                exception_type = 'Waffle validation error'
+                            except ValueError:
+                                msg = constraint['Object'].name.get_error_message(f'{e}')
+                                values = constraint['Object'].name.mapping_md['Current'].values()
+                                ret = Exception(msg, list(values))
+                                exception_type = 'Python exception'
+                            return ret, exception_type, constraint['Metadata']
+                    else:
+                        constraint['Object'].name.validate_constraint(constraint_metadata)
+                    break
+        if len(self.workspace.current_stage['constraints']) == 0:
+            logging.info('No active constraints for current step')
         return True, None, None
 
     def _get_constraint_mappings(self, constraint):
@@ -83,11 +81,11 @@ class ConstraintValidator:
 
         features_to_configure = []
         for tlf in self.workspace.features.keys():
-            features_to_configure.append(self.workspace.get_undefined_features(tlf, all_features=True))
+            features_to_configure.append(self.workspace.get_unconfigured_features(tlf, all_features=True))
         for k, v in features.items():
             for feature in set(v):
                 if feature in constraint['Metadata']['FeaturesPrec'].keys():
-                    filter = False if (any([x in self.workspace.prec_bool for x in constraint['Metadata']['FeaturesPrec'][feature]])
+                    filter = False if (any([x in self.workspace.PREC_BOOL for x in constraint['Metadata']['FeaturesPrec'][feature]])
                                        or feature in constraint['Metadata']['Read']['Fcard']
                                        or feature in constraint['Metadata']['Assign']['Fcard']) else True
                 else:
@@ -99,7 +97,7 @@ class ConstraintValidator:
                     for mapps in full_mapps:
                         for i, _ in enumerate(mapps_spl := mapps.split('.')):
                             mapps_compose = '.'.join(mapps_spl[:i + 1])
-                            if (mapps_orig := self.workspace.get_original(mapps_compose)) not in all_mappings.keys():
+                            if (mapps_orig := self.workspace.get_feature_base_name(mapps_compose)) not in all_mappings.keys():
                                 all_mappings.update({mapps_orig: []})
                             if mapps_compose not in all_mappings[mapps_orig]:
                                 all_mappings[mapps_orig].append(mapps_compose)
@@ -135,7 +133,7 @@ class ConstraintValidator:
             if str(comb) not in constraint['Metadata']['Mappings'].keys():
                 subres = {}
                 for feature in comb:
-                    subres.update({self.workspace.get_original(feature): feature})
+                    subres.update({self.workspace.get_feature_base_name(feature): feature})
                 constraint['Metadata']['Mappings'].update({str(comb): {
                     'Comb': subres,
                     'Active': True,
@@ -149,12 +147,12 @@ class ConstraintValidator:
                 for tlf_features_to_configure in features_to_configure:
                     for x in v:
                         if (x in tlf_features_to_configure[kw]
-                           and self.workspace.get_original(x) not in constraint['Metadata']['Assign']['Fcard']):
+                           and self.workspace.get_feature_base_name(x) not in constraint['Metadata']['Assign']['Fcard']):
                             matched_features.append(x)
         for mapping in constraint['Metadata']['Mappings'].values():
             parent_feature = mapping['Comb'][constraint['Metadata']['ParentFeature']]
 
-            parent_check = self.workspace.read_metadata(parent_feature)['__self__']['Active']
+            parent_check = self.workspace.read_feature_data(parent_feature)['__self__']['Active']
             match_check = any([mf in mapping['Comb'].values() for mf in matched_features])
 
             mapping['Active'] = False if (match_check is True or parent_check is False) else True
@@ -180,7 +178,7 @@ class ConstraintValidator:
                 name_split = elem.split('.')
                 for index, _ in enumerate(name_split):
                     fname = '.'.join(name_split[:index+1])
-                    if (fname_orig := self.workspace.get_original(fname)) not in valid_elems:
+                    if (fname_orig := self.workspace.get_feature_base_name(fname)) not in valid_elems:
                         valid_elems.update({fname_orig: fname})
                     else:
                         if valid_elems[fname_orig] != fname:

@@ -141,11 +141,11 @@ class prec50(ExpressionElement):
         right = self.op[2]._parse(self.mapping_md, self.constr_md)['Fname']
         left = self._get_value(self.op[1]._parse(self.mapping_md, self.constr_md))
 
-        a = self.api.workspace.get_feature_childrens(right, True)
+        a = self.api.get_feature_childrens(right, full_tree=True)
         b = [x for x in a if x.rsplit('.')[-1] == left]
         values = []
         for feature in b:
-            values.append(self.api.workspace.read_metadata(feature, 'Value'))
+            values.append(self.api.workspace.read_feature_data(feature, 'Value'))
         ret = list(set(values))
         logging.debug(f"Level 5 unique {left} in {right} result: {ret}")
         return ret

@@ -7,7 +7,7 @@ class FeatureInitializer:
     def __init__(self, workspace):
         self.workspace = workspace
 
-        # Every constraint is associated with some feature 
+        # Every constraint is associated with some feature
         # TODO:(currently global constraints are not supported)
         self.constraint_initializer = ConstraintInitializer(workspace)
 
@@ -69,8 +69,8 @@ class FeatureInitializer:
             if level not in mm.keys():
                 mm.update({level: {'__self__': {
                     'DeactStandard': False,
-                    'ActiveF': True,
-                    'ActiveG': True,
+                    'ActiveByFcard': True,
+                    'ActiveByGcard': True,
                     'Active': True,
                     'Fcard': 1,
                     'Gcard': 'all',
@@ -86,8 +86,8 @@ class FeatureInitializer:
         # Update feature attributes with pre-defined values
         mm.update({'__self__': {
             'DeactStandard': False,
-            'ActiveF': True,
-            'ActiveG': True,
+            'ActiveByFcard': True,
+            'ActiveByGcard': True,
             'Active': True,
             'Fcard': fcard if fcard is not None else 1,
             'Gcard': gcard if gcard is not None else 'all',

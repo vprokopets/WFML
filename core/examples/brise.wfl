@@ -10,13 +10,13 @@ abstract SamplingStrategy {
         MersenneTwister
     }
     [test > 2]
-   [RegionID in Context.ExperimentRegions.Regionss]
+   [RegionID in Context.ExperimentRegions.RegionList]
 }
 
 Context {
     ExperimentRegions {
-        Regionss -> array
-		[fcard.Regions = size Regionss]
+        RegionList -> array
+		[fcard.Regions = size RegionList]
 		Regions: Region
     }
 }
