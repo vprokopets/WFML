@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dynamic Form Wizard</title>
+    <style>
+      #form-container{
+        margin: 20px;
+        padding: 10px;
+        border: 1px solid #ccc;
+      }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Form Wizard</h1>
+    <div id="form-container">
+        {% include "form_template.html" %}
+    </div>
+    {% if step < form_count %}
+       <button id="next-btn">Next</button>
+    {% endif %}
+    <div id="submission-status"></div>
+
+    <script>
+       document.addEventListener('DOMContentLoaded', function() {
+        const formContainer = document.getElementById('form-container');
+        const nextButton = document.getElementById('next-btn');
+        const submissionStatus = document.getElementById('submission-status');
+
+        function updateForm(html) {
+            formContainer.innerHTML = html;
+        }
+
+        function handleSubmit(event){
+           event.preventDefault();
+            submissionStatus.textContent = "Submitting...";
+            let formData = new FormData(document.querySelector('form'));
+            let step = parseInt('{{ step }}');
+            let url = '/wizard/test/' + step + '/';
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers:{
+                'X-CSRFToken': '{{ csrf_token }}',
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+              if (html.includes("All forms submitted.")) {
+                  submissionStatus.textContent = "All forms submitted."
+                   formContainer.innerHTML = ''
+                } else {
+                     updateForm(html)
+                     submissionStatus.textContent = ""
+                 }
+
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                submissionStatus.textContent = "Submission failed.";
+            });
+        }
+
+        if (nextButton){
+            nextButton.addEventListener('click', handleSubmit)
+           }
+
+        });
+    </script>
+</body>
+</html>

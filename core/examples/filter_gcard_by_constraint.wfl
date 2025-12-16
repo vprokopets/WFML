@@ -1,4 +1,4 @@
-Model 3 {
+Model 2 {
     xor SurrogateType {
         Single
         Compositional
@@ -13,20 +13,9 @@ Model 3 {
             Type -> predefined
             [Type = "GaussianProcessRegressor"]
         }
-        [if gcard.parent.SurrogateType == "Compositional" then size childs.Context.Objectives == size childs.self]
 
     }
     [if gcard.self.SurrogateType == "Single" then gcard.self.Surrogate = 'xor']
     [if gcard.self.SurrogateType == "Single" then fcard.self.Surrogate.GaussianProcessRegressor = 1]
     [if gcard.self.SurrogateType == "Single" then fcard.self.Surrogate.LinearRegression = 1]
-    [if gcard.self.SurrogateType == "Compositional" then gcard.self.Surrogate = 'or']
-    [if gcard.self.SurrogateType == "Portfolio" then gcard.self.Surrogate = 'or']
-}
-
-Context {
-    Objectives {
-        Objective 1..3 {
-            test -> integer
-        }
-    }
 }

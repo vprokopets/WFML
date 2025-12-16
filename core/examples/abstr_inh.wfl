@@ -1,0 +1,11 @@
+abstract a {
+    b -> integer
+    [b > 2]
+}
+
+abstract b: a {
+    c -> integer
+    [c > 2]
+}
+
+d : b

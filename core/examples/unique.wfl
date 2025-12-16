@@ -1,0 +1,16 @@
+a {
+	b -> predefined
+	[b = unique name at d]
+}
+
+abstract c {
+	name -> string
+}
+
+d {
+	e: c
+	f {
+		g: c
+	}
+	h: c
+}
